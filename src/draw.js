@@ -310,18 +310,48 @@ function drawBeam(x1, y1, x2, y2, k, w, color) {
   ctx.globalAlpha = 1;
 }
 
-// Super Washer's spinning jet (user): a wavy, foamy stream instead of a laser's crisp line.
-function drawWaterJet(x, y, a, len) {
-  const t = performance.now() / 80;
-  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-  const path = () => {
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    for (let i = 1; i <= 8; i++) { const f = i / 8, wob = Math.sin(f * 10 + t) * 5 * f; ctx.lineTo(len * f, wob); }
-  };
-  ctx.strokeStyle = COL.superwasher; ctx.globalAlpha = 0.35; ctx.lineWidth = 9; path(); ctx.stroke();
-  ctx.strokeStyle = COL.player; ctx.globalAlpha = 0.8; ctx.lineWidth = 2.5; path(); ctx.stroke();
+// A cartoon water spray (user's reference: a converging jet fanning out into a splashy burst, a bright core
+// stripe, and droplets round the tip), drawn along local +x out to `len`, from the Powerwash pack. `seed` keeps
+// the splash's wobble and the droplets' scatter stable frame to frame (no per-frame flicker); `alpha` fades it.
+// The golden-ratio steps below give each droplet a stable, well-spread "random" position without Math.random().
+function waterSpray(len, w1, col, seed, alpha = 1) {
+  const t = performance.now() / 500, w0 = Math.min(4, w1 * 0.2);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.5 * alpha; ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(0, -w0); ctx.lineTo(len * 0.8, -w1 * 0.85); ctx.lineTo(len, -w1 * 0.3);
+  ctx.lineTo(len, w1 * 0.3); ctx.lineTo(len * 0.8, w1 * 0.85); ctx.lineTo(0, w0);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 0.85 * alpha; ctx.fillStyle = COL.player;   // the bright core stripe down the middle
+  ctx.beginPath();
+  ctx.moveTo(0, -w0 * 0.4); ctx.lineTo(len * 0.85, -w1 * 0.22); ctx.lineTo(len * 0.85, w1 * 0.22); ctx.lineTo(0, w0 * 0.4);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 0.45 * alpha; ctx.fillStyle = col;           // the splash, a wobbling spiky burst at the tip
+  const spikes = 10, R = w1 * 0.85;
+  ctx.beginPath();
+  for (let i = 0; i <= spikes; i++) {
+    const a = (i / spikes) * TAU, wob = 0.65 + 0.35 * Math.sin(a * 3 + t * 3 + seed);
+    const r = R * wob;
+    const x = len + Math.cos(a) * r * 0.55, y = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = col;                                          // droplets flung out round the splash
+  for (let j = 0; j < 8; j++) {
+    const rj = (j * 0.618034) % 1, a0 = rj * TAU + seed, bob = Math.sin(t * 2 + j * 2 + seed) * 2;
+    const dl = len * (0.6 + 0.4 * ((j * 7) % 5) / 5), r0 = w1 * (0.4 + 0.5 * ((j * 3) % 5) / 5);
+    const x = dl + Math.cos(a0) * r0 * 0.4, y = Math.sin(a0) * r0 + bob;
+    ctx.globalAlpha = (0.3 + 0.35 * ((j * 5) % 5) / 5) * alpha;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a0);
+    ctx.beginPath(); ctx.ellipse(0, 0, 3, 1.6, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+}
+// Super Washer's spinning jet (user): the water spray above, sweeping round the player.
+function drawWaterJet(x, y, a, len, seed) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  waterSpray(len, Math.max(16, len * 0.16), COL.superwasher, seed);
   ctx.restore();
 }
 
@@ -479,11 +509,13 @@ function draw() {
     const color = COL[pr.card], t = pr.trail;
     if (pr.look === 'ice') { drawIceShot(pr); continue; }   // Cryo Magus (silica.js)
     if (pr.look === 'bubble') {                              // Soap Gun (user): a transparent, soapy bubble
+      // A floaty sway (user): drawn a little off its real (hit-tested) position, drifting on its own stable phase.
+      const st = performance.now() / 260 + (pr.sway || 0), bx = pr.x + Math.sin(st) * 2.5, by = pr.y + Math.cos(st * 0.8) * 1.6;
       ctx.globalAlpha = 0.85; ctx.strokeStyle = color; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, TAU); ctx.stroke();
-      ctx.globalAlpha = 0.14; ctx.fillStyle = color; circle(pr.x, pr.y, pr.r);
+      ctx.beginPath(); ctx.arc(bx, by, pr.r, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 0.14; ctx.fillStyle = color; circle(bx, by, pr.r);
       ctx.globalAlpha = 0.6; ctx.fillStyle = COL.player;
-      ctx.beginPath(); ctx.ellipse(pr.x - pr.r * 0.35, pr.y - pr.r * 0.35, Math.max(1, pr.r * 0.3), Math.max(1, pr.r * 0.18), -0.6, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(bx - pr.r * 0.35, by - pr.r * 0.35, Math.max(1, pr.r * 0.3), Math.max(1, pr.r * 0.18), -0.6, 0, TAU); ctx.fill();
       ctx.globalAlpha = 1;
       continue;
     }
@@ -592,30 +624,14 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  // Pressure Washer (user): a misty cone with a few wavy jet streaks, more water than energy weapon. WASH CONE!
-  // wipes across as it appears (`wipe`) instead of popping in all at once.
+  // Pressure Washer (user's reference: a converging jet fanning into a splashy burst): the shared water-spray
+  // shape, angled to the cone's centre. WASH CONE! wipes across as it appears (`wipe`) instead of popping in all
+  // at once; its width follows the cone's actual arc, so the splash lands exactly where the hit-test reaches.
   for (const s of game.sprays) {
-    const col = COL[s.card], fade = Math.max(0, s.life / s.max), q = 1 - fade;
+    const fade = Math.max(0, s.life / s.max), q = 1 - fade;
     const reveal = s.wipe ? Math.min(1, q / 0.45) : 1, half = (s.arc / 2) * reveal, rng = s.range * (0.7 + 0.3 * reveal);
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
-    ctx.fillStyle = col; ctx.globalAlpha = 0.22 * fade;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, rng, -half, half); ctx.closePath(); ctx.fill();
-    ctx.globalCompositeOperation = 'lighter';
-    const jets = 5, t = performance.now() / 60;
-    for (let j = 0; j < jets; j++) {
-      const ja = jets > 1 ? -half + (j / (jets - 1)) * half * 2 : 0, nx = Math.cos(ja + Math.PI / 2), ny = Math.sin(ja + Math.PI / 2);
-      ctx.strokeStyle = col; ctx.lineCap = 'round';
-      ctx.globalAlpha = 0.4 * fade; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(0, 0);
-      for (let i = 1; i <= 5; i++) {
-        const f = i / 5, wob = Math.sin(f * 9 + j * 2 + t) * 4 * f;
-        ctx.lineTo(Math.cos(ja) * rng * f + nx * wob, Math.sin(ja) * rng * f + ny * wob);
-      }
-      ctx.stroke();
-      ctx.globalAlpha = 0.75 * fade; ctx.strokeStyle = COL.player; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(ja) * rng * 0.4, Math.sin(ja) * rng * 0.4); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'source-over';
+    waterSpray(rng, rng * Math.min(3, Math.tan(half)), COL[s.card], s.seed, fade);
     ctx.restore();
   }
   ctx.globalAlpha = 1;
@@ -644,7 +660,7 @@ function draw() {
       ctx.beginPath(); ctx.moveTo(pp.x, pp.y); ctx.arc(pp.x, pp.y, sw.len, a - trail, a); ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
     }
-    if (water) drawWaterJet(pp.x, pp.y, a, sw.len);
+    if (water) drawWaterJet(pp.x, pp.y, a, sw.len, sw.a0);
     else drawBeam(pp.x, pp.y, pp.x + Math.cos(a) * sw.len, pp.y + Math.sin(a) * sw.len, 1, 5, COL[sw.card]);
   }
 

@@ -153,7 +153,7 @@ function spray(card, angle, arc, range, o = {}) {
     hitEnemy({ card, look: 'spray', dmg, knock, vx: dx / (d || 1), vy: dy / (d || 1), x: e.x, y: e.y }, e);
   }
   const life = o.wipe ? 0.36 : 0.22;
-  game.sprays.push({ x: p.x, y: p.y, a: angle, arc, range, card, life, max: life, wipe: !!o.wipe });
+  game.sprays.push({ x: p.x, y: p.y, a: angle, arc, range, card, life, max: life, wipe: !!o.wipe, seed: Math.random() * 10 });
   const col = COL[card];   // droplets flicked out along the cone
   for (let k = 0, n = o.wipe ? 14 : 7; k < n; k++) {
     const da = angle + (Math.random() - 0.5) * arc, s = 90 + Math.random() * 140;
@@ -328,6 +328,7 @@ function shoot(card, e, o = {}) {
     homeDelay: o.noHome ? Infinity : (o.homeDelay ?? (steer ? TUNE.missile.curve : 0)), split: o.split || 0, field: o.field || null,
     turn: steer ? TUNE.missile.turn * speed / spec.speed : 0,   // faster missiles turn faster, so they still curve in the same space
     flown: 0, maxDist: rangeOf(card) * (steer ? 2.2 : 1.35), age: 0, stun: o.stun || 0,   // Soap Gun ×3 (user): stuns on a hit
+    sway: Math.random() * TAU,   // Soap Gun (user): a stable per-bubble phase for its floaty sway (draw.js), unused otherwise
     x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [], owner: ownerId(),
   });
   if (o.quiet) return;
