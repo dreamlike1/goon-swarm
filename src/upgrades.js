@@ -53,7 +53,7 @@ function resetStats() {
 
 /* ---------- what the stats do (combat.js reads these) ---------- */
 const maxHp = () => PLAYER.hp + stats.hp;
-const moveSpeed = () => PLAYER.speed * (1 + Math.min(STATS.speed.cap, stats.speed));
+const moveSpeed = () => PLAYER.speed * (1 + Math.min(STATS.speed.cap, stats.speed)) * (game.soakT > 0 ? TUNE.soakTrail.speedMul : 1);   // SOAK TRAIL! (user)
 const damageOf = base => Math.max(1, Math.round(base * (1 + stats.dmg)));
 const critChance = () => Math.min(STATS.crit.cap, stats.crit);
 const critHit = dmg => Math.max(dmg + 1, Math.round(dmg * (1 + stats.critDmg)));   // a crit always adds at least 1

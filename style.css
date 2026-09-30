@@ -61,6 +61,8 @@
   --obi-hilt-dark: #3a3e46;
   --saber: #4fc3ff;
   --saber-core: #effbff;
+  --saber-2: #ff4d4d;      /* phase 2 (user): the blade turns red */
+  --saber-2-core: #fff1e6;
   /* card colours, one per card id (placeholders until card visuals are designed) */
   --laser: #3ee6ff;
   --arcane: #b28cff;
@@ -83,6 +85,10 @@
   --turtle-skin: #8fd08e;
   --chimera: #c0603f;
   --chimera-wing: #6b3fa0;
+  /* the Powerwash pack (user) */
+  --pressurewasher: #4ad9ff;   /* a bright water jet */
+  --soapgun: #ffdff7;          /* pale soap-bubble pink-white */
+  --superwasher: #21c4c4;      /* a deeper teal for the twin spinning sprays */
   /* rarity colours, used for rarity labels and reveal glows */
   --r-common: #8fa3b0;
   --r-uncommon: #6fcf97;
@@ -391,7 +397,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 
 /* Card packs: a foil pack with a crimped top strip (the part that tears off when you open it).
    Every pack uses this look: the starter pack and the store's packs. --pc is the pack's colour. */
-:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); --pack-silica: #9fb8ff; }
+:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); --pack-silica: #9fb8ff; --pack-powerwash: var(--pressurewasher); }
 .screen:focus { outline: none; }
 .start:disabled { opacity: .45; cursor: default; filter: none; }
 .pack-art {
@@ -405,6 +411,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .pack-artillery { --pc: var(--pack-artillery); }
 .pack-magus { --pc: var(--pack-magus); }
 .pack-silica { --pc: var(--pack-silica); }
+.pack-powerwash { --pc: var(--pack-powerwash); }
 .pack-top, .pack-body {
   display: block;
   background:

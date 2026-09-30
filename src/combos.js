@@ -43,6 +43,13 @@ const COMBOS = {
                  7: { name: 'BLIZZARD!',     does: 'Spinning ice circles you, growing out from you to a large ring. It hits and slows what it touches.' } },
   shifter:     { 3: { name: 'QUAKE!',        does: 'Summon a turtle whose stomping shakes the ground and damages enemies around it.' },
                  7: { name: 'CHIMERA!',      does: 'Summon a chimera that screams while bombs rain down on nearby enemies.' } },
+  // The Powerwash pack (user). Their attacks are in combat.js (spray, popBubble, superSweep).
+  pressurewasher: { 3: { name: 'WASH CONE!', does: 'One wide cone of spray, like a slash.' },
+                    7: { name: 'DELUGE!',    does: '7 long sprays, each in a random direction.' } },
+  soapgun:        { 3: { name: 'BUBBLE RUSH!', does: '9 rapid bubbles that stun on a hit.' },
+                    7: { name: 'BUBBLE TRAP!', does: 'One giant bubble in a single direction that traps enemies inside, then pops, pushing them out.' } },
+  superwasher:    { 3: { name: 'TRIPLE SPIN!', does: '3 rapid full spins around you.' },
+                    7: { name: 'SOAK TRAIL!', does: '7 seconds of extra speed with an exploding bubble trail, both sprays spinning the whole time.' } },
 };
 const TUNE = {
   rapidGap: 0.1,                                     // Bullet ×3: seconds between shots
@@ -63,6 +70,13 @@ const TUNE = {
   missile: { spread: 0.75, curve: 0.16, turn: 7 },    // Arcane Missiles: fan-out angle, straight time, turn rate (rad/s, grows)
   barrage: { count: 4, spread: 1.25 },                // Arcane Missiles ×2
   storm: { count: 7, speedMul: 2.2, split: 2 },       // Arcane Missiles ×7: each splits into `split` on a hit
+  // The Powerwash pack (user).
+  washCone: { arc: 1.7 },                                       // Pressure Washer ×3: the cone's width (radians)
+  deluge: { count: 7, gap: 0.12 },                              // Pressure Washer ×7
+  bubbleRush: { count: 9, gap: 0.09, stun: 0.6 },                // Soap Gun ×3
+  bubbleTrap: { r: 18, stun: 1.1, radius: 110, knock: 520 },   // Soap Gun ×7
+  tripleSpin: { count: 3, gap: 0.5 },                            // Super Washer ×3
+  soakTrail: { time: 7, speedMul: 1.6, every: 1.1, dropEvery: 0.18, trailDelay: 0.5, trailRadius: 55 },   // Super Washer ×7
 };
 
 // The combo that starts at `pos` in this sequence, if any: { card, n, name }.
@@ -210,5 +224,37 @@ function runCombo(cb, echo = false) {
       });
       break;
     }
+    // The Powerwash pack (user).
+    case 'pressurewasher3':                            // WASH CONE!: one wide cone of spray
+      spray(card, e0 ? aimAngle(e0) : 0, TUNE.washCone.arc, range, { dmg: spec.dmg });
+      break;
+    case 'pressurewasher7': {                          // DELUGE!: 7 long sprays, each a random direction
+      const D = TUNE.deluge;
+      for (let k = 0; k < D.count; k++) later(k * D.gap, () => spray(card, Math.random() * Math.PI * 2, spec.arc, range * 1.3, { dmg: spec.dmg, quiet: k > 0 }));
+      game.shake = Math.max(game.shake, 0.1);
+      break;
+    }
+    case 'soapgun3': {                                 // BUBBLE RUSH!: 9 rapid bubbles that stun on a hit
+      const R = TUNE.bubbleRush;
+      for (let k = 0; k < R.count; k++) later(k * R.gap, () => {
+        const e = (e0 && game.enemies.includes(e0)) ? e0 : inRange(card);
+        if (e) shoot(card, e, { r: spec.r - 1, dmg: Math.round(spec.dmg * 0.6), split: 0, stun: R.stun, quiet: k > 0 });
+      });
+      break;
+    }
+    case 'soapgun7': {                                 // BUBBLE TRAP!: one giant bubble that traps, then pops, pushing enemies out
+      const T = TUNE.bubbleTrap, a = aim(e0);
+      launch(card, a, e0, { r: T.r, dmg: spec.dmg, endBlast: { radius: T.radius, dmg: damageOf(spec.dmg), stun: T.stun, knock: T.knock }, big: true });
+      game.shake = Math.max(game.shake, 0.16);
+      break;
+    }
+    case 'superwasher3': {                             // TRIPLE SPIN!: 3 rapid full spins around you
+      const S = TUNE.tripleSpin;
+      for (let k = 0; k < S.count; k++) later(k * S.gap, () => superSweep(card, range, spec.dmg));
+      break;
+    }
+    case 'superwasher7':                               // SOAK TRAIL!: speed boost + exploding bubble trail, both sprays spinning
+      startSoak(card, range, spec.dmg);
+      break;
   }
 }

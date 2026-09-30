@@ -253,6 +253,7 @@ const PACK_EMBLEM = {
   artillery: '<path d="M3.5 13.5l13-6 2.2 4.4-13 6z"/><circle cx="8.5" cy="17.5" r="3"/><path d="M8.5 17.5h.01M19.5 8l1.5-.8M19.8 10.6l1.7.2"/>',
   silica: '<path d="M12 2.5l7.5 4.3v8.6L12 19.8l-7.5-4.4V6.8z"/><path d="M12 2.5v17.3M4.5 6.8l15 8.6M19.5 6.8l-15 8.6"/>',   // a crystal
   magus: '<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M18.5 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
+  powerwash: '<path d="M4 13h8l4-4"/><path d="M12 13l4 4"/><circle cx="17" cy="6.5" r="1"/><circle cx="19.5" cy="9" r=".8"/><circle cx="20.5" cy="5" r=".7"/>',
 };
 function packArt(key, { big = false } = {}) {
   const name = key === 'starter' ? STARTER.short : PACKS[key].short, n = key === 'starter' ? starterCards().length : PACKS[key].size;
@@ -416,6 +417,7 @@ function placeDummies() {
   for (const e of pr.dummies) clampTo(e, e.r);
   game.enemies = pr.dummies.slice();
   game.mines = []; game.projectiles = []; game.timers = []; game.sweeps = [];
+  game.sprays = []; game.trails = []; game.soakT = 0;
   resetSilica();
 }
 function practiceAttacks(card) {
@@ -842,6 +844,7 @@ function resetRun() {
     projectiles: [], particles: [], rings: [], floaters: [], orbs: [], muzzle: null, shake: 0, kills: 0, over: false,
     level: 1, xp: 0, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], upQueue: [], mines: [], potions: [], diamonds: [], won: [], timers: [], shield: 0, shieldHit: 0,
     beams: [], sweeps: [], swooshes: [], practice: null, goldBonus: 0,
+    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [],
   });
   resetStats();
   resetBoss();

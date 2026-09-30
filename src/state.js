@@ -30,6 +30,10 @@ const game = {
   timers: [],         // scheduled combo shots: { t, fn }
   beams: [],          // laser zaps being drawn: { x1, y1, x2, y2, life, max, w, card }
   sweeps: [],         // Laser ×7 sweeps in progress
+  sprays: [],         // Pressure Washer / Super Washer spray wedges being drawn (user)
+  trails: [],         // SOAK TRAIL!'s bubbles, ticking down to their pop: { x, y, t, card }
+  soakT: 0,           // SOAK TRAIL! (Super Washer ×7): seconds of extra speed left …
+  soakCard: null, soakRange: 0, soakDmg: 0, soakSweep: 0, soakDrop: 0,   // … and its own timers
   cineHold: false,    // MAKORA's scene is holding while the window is away (arena.js autoPause)
   practice: null,     // the store's test mode: { pack, card, dummies, dmg }
   shield: 0,          // mini shield time left (seconds)
@@ -43,6 +47,7 @@ const game = {
   obiDue: false, obiDone: false,
   sabers: [],         // his lightsaber while it's thrown
   bolts: [],          // your shots, knocked back at you while he blocks
+  debris: [],         // phase 2: the force rains debris down; red circle telegraphs, then a hit (user)
   defl: 0,            // DEFLECT: seconds of shield left …
   deflCd: 0,          // … seconds until it can go up again …
   deflAge: 9,         // … and seconds since it went up (a hit this soon is a perfect deflect)

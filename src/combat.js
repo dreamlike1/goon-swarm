@@ -140,6 +140,50 @@ function dropMine(card, a = 0, dist = 0, quiet = false) {
   if (!quiet) SFX.fire(card);
 }
 
+// Pressure Washer (user): an instant cone of spray from the player, hitting and pushing back everything inside.
+function spray(card, angle, arc, range, o = {}) {
+  const p = game.player, dmg = damageOf(o.dmg ?? CARDS[card].dmg), knock = knockOf(o.knock ?? CARDS[card].knock);
+  for (const e of game.enemies.slice()) {
+    const q = hitPoint(e, p.x, p.y), dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
+    if (d > range + e.r) continue;
+    let diff = Math.atan2(dy, dx) - angle;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    if (Math.abs(diff) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
+    hitEnemy({ card, look: 'spray', dmg, knock, vx: dx / (d || 1), vy: dy / (d || 1), x: e.x, y: e.y }, e);
+  }
+  game.sprays.push({ x: p.x, y: p.y, a: angle, arc, range, card, life: 0.22, max: 0.22 });
+  if (!o.quiet) SFX.fire(card);
+}
+function updateSprays(dt) {
+  for (let i = game.sprays.length - 1; i >= 0; i--) if ((game.sprays[i].life -= dt) <= 0) game.sprays.splice(i, 1);
+}
+// Super Washer (user): two sprays spin a full turn around you (reuses Laser ×7's sweep, twice, offset by half a turn).
+function superSweep(card, range, dmg) {
+  const a0 = Math.random() * Math.PI * 2;
+  sweep(card, a0, range, damageOf(dmg));
+  sweep(card, a0 + Math.PI, range, damageOf(dmg));
+}
+// SOAK TRAIL! (Super Washer ×7, user): `soakTrail.time` s of extra speed (upgrades.js moveSpeed), both sprays
+// re-spinning every `every` s, and a trail of bubbles dropped behind you that explode after `trailDelay` s.
+function startSoak(card, range, dmg) {
+  const S = TUNE.soakTrail;
+  Object.assign(game, { soakT: S.time, soakCard: card, soakRange: range, soakDmg: dmg, soakSweep: 0, soakDrop: 0 });
+  superSweep(card, range, dmg);
+}
+function updateSoak(dt) {
+  if (!(game.soakT > 0)) return;
+  const S = TUNE.soakTrail, p = game.player;
+  game.soakT = Math.max(0, game.soakT - dt);
+  if ((game.soakSweep -= dt) <= 0) { game.soakSweep = S.every; superSweep(game.soakCard, game.soakRange, game.soakDmg); }
+  if ((game.soakDrop -= dt) <= 0) { game.soakDrop = S.dropEvery; game.trails.push({ x: p.x, y: p.y, t: S.trailDelay, card: game.soakCard }); }
+}
+function updateTrails(dt) {
+  for (let i = game.trails.length - 1; i >= 0; i--) {
+    const t = game.trails[i];
+    if ((t.t -= dt) <= 0) { game.trails.splice(i, 1); blast(t.x, t.y, t.card, TUNE.soakTrail.trailRadius, damageOf(CARDS[t.card].dmg), { knock: 140 }); }
+  }
+}
+
 // Laser: an instant zap from the player to `e`, drawn as a beam for a moment (draw.js).
 function zap(card, e, o = {}) {
   const spec = CARDS[card], p = game.player, dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
@@ -185,12 +229,14 @@ function updateSweeps(dt) {
 }
 
 // An area hit: every enemy within `radius` of (x, y) takes `dmg` and is thrown outward. `skip` is an enemy
-// that was already hit directly. `big` adds the heavier effects (sound, shake, particles).
-function blast(x, y, card, radius, dmg, { skip = null, knock = 160, big = false } = {}) {
+// that was already hit directly. `big` adds the heavier effects (sound, shake, particles). `stun` (Soap Gun's
+// BUBBLE TRAP!, user): everything caught freezes in place for this long before the knockback throws it out.
+function blast(x, y, card, radius, dmg, { skip = null, knock = 160, big = false, stun = 0 } = {}) {
   for (const e of game.enemies.slice()) {
     if (e === skip) continue;
     const q = hitPoint(e, x, y), dx = q.x - x, dy = q.y - y, d = Math.hypot(dx, dy) || 1;
     if (d > radius + e.r) continue;
+    if (stun) e.stun = Math.max(e.stun || 0, stun);
     hitEnemy({ card, look: 'blast', dmg, knock: knockOf(knock), vx: dx / d, vy: dy / d, x: e.x, y: e.y }, e);
   }
   game.rings.push({ x, y, r: 6, max: radius, life: big ? 0.45 : 0.3, color: COL[card] });
@@ -250,6 +296,9 @@ function shoot(card, e, o = {}) {
   if (spec.look === 'mine') { dropMine(card); return; }
   if (spec.silica && !o.raw) { silicaShot(card, e, o); return; }   // the Silica pack's weapons (silica.js)
   if (spec.look === 'laser') { zap(card, e, o); return; }
+  if (spec.look === 'spray') { spray(card, e ? Math.atan2(e.y - p.y, e.x - p.x) : 0, o.arc ?? spec.arc, rangeOf(card), o); return; }
+  if (spec.look === 'orbit') { superSweep(card, rangeOf(card), o.dmg ?? spec.dmg); return; }   // Super Washer (user)
+  if (spec.pops && o.split == null) o = { ...o, split: spec.pops };   // Soap Gun (user): pops into more bubbles on a hit
   if (spec.volley && !o.one && e) {                          // Arcane Missiles: 2, fanned out to the sides, each at its own target
     const ts = targets(spec.volley, rangeOf(card)), a0 = Math.atan2(e.y - p.y, e.x - p.x);
     for (let k = 0; k < spec.volley; k++) shoot(card, ts[k] || e, { ...o, one: true, angle: a0 + (k % 2 ? 1 : -1) * TUNE.missile.spread, quiet: o.quiet || k > 0 });
@@ -271,7 +320,7 @@ function shoot(card, e, o = {}) {
     // missiles fly out to the side for a moment, then steer in (a turn rate rather than snapping round)
     homeDelay: o.noHome ? Infinity : (o.homeDelay ?? (steer ? TUNE.missile.curve : 0)), split: o.split || 0, field: o.field || null,
     turn: steer ? TUNE.missile.turn * speed / spec.speed : 0,   // faster missiles turn faster, so they still curve in the same space
-    flown: 0, maxDist: rangeOf(card) * (steer ? 2.2 : 1.35), age: 0,
+    flown: 0, maxDist: rangeOf(card) * (steer ? 2.2 : 1.35), age: 0, stun: o.stun || 0,   // Soap Gun ×3 (user): stuns on a hit
     x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [], owner: ownerId(),
   });
   if (o.quiet) return;
@@ -287,7 +336,8 @@ function splitMissile(pr, hit) {
   const a0 = Math.atan2(pr.vy, pr.vx);
   for (let k = 0; k < pr.split; k++) {
     const e = others[k % Math.max(1, others.length)] || null, side = k % 2 ? 1 : -1;
-    const o = { one: true, from: { x: pr.x, y: pr.y }, angle: a0 + side * 1.1, quiet: true, skip: hit, speedMul: 1.3, r: 3 };
+    // split: 0 (user's Soap Gun, via `spec.pops`): a split child never re-splits, however many enemies are around.
+    const o = { one: true, from: { x: pr.x, y: pr.y }, angle: a0 + side * 1.1, quiet: true, skip: hit, speedMul: 1.3, r: 3, split: 0 };
     if (e) shoot(pr.card, e, o);
     else shoot(pr.card, hit, { ...o, noHome: true });
   }
@@ -320,6 +370,7 @@ function hitEnemy(pr, e) {
   const len = Math.hypot(pr.vx, pr.vy) || 1, kr = e.boss ? BOSS.knockResist : e.makora ? MAKORA.knockResist : e.obi ? OBI.knockResist : e.mrock ? 0 : 1;
   e.kx += (pr.vx / len) * pr.knock * kr;
   e.ky += (pr.vy / len) * pr.knock * kr;
+  if (pr.stun) e.stun = Math.max(e.stun || 0, pr.stun);   // Soap Gun (user)
   if (e.boss) renderBossBar();
   if (e.makora) renderMakoraBar();
   if (e.obi) renderObiBar();
@@ -521,6 +572,7 @@ function update(dt) {
   const decay = Math.exp(-6 * dt);
   for (const e of es) {
     if (e.dummy) { e.hit = Math.max(0, e.hit - dt); continue; }   // the store's test dummies stand still and do no harm
+    if (e.stun > 0) { e.stun -= dt; e.hit = Math.max(0, e.hit - dt); continue; }   // Soap Gun (user): frozen in place
     e.born = Math.min(1, e.born + dt * (e.boss || e.makora || e.obi ? 1.5 : 4));
     if (e.boss) sizeBoss(e); else if (e.makora) sizeMakora(e); else if (e.obi) sizeObi(e);   // their hitbox follows their size
     if (NET.run) {                          // co-op: each goes after whoever is nearest (and standing)
@@ -577,6 +629,8 @@ function update(dt) {
 
   updateRocks(dt);
   updateSabers(dt); updateBolts(dt);    // OBI ONE's thrown saber and the shots he knocks back (obi.js)
+  updateDebris(dt);                     // OBI ONE phase 2: the force rains debris down (obi.js)
+  updateSprays(dt); updateSoak(dt); updateTrails(dt);   // the Powerwash pack (user)
 
   // Pickups reach: a BULL charge also scoops up anything it passes near. (Co-op: whoever gets there; see reacher.)
 
@@ -676,7 +730,7 @@ function update(dt) {
       const out = pr.x < -40 || pr.y < -40 || pr.x > W + 40 || pr.y > H + 40;
       if (end || out) {
         game.projectiles.splice(i, 1);
-        if (pr.endBlast && !out) blast(pr.x, pr.y, pr.card, pr.endBlast.radius, pr.endBlast.dmg, { knock: pr.big ? 220 : 80, big: pr.big });
+        if (pr.endBlast && !out) blast(pr.x, pr.y, pr.card, pr.endBlast.radius, pr.endBlast.dmg, { knock: pr.endBlast.knock ?? (pr.big ? 220 : 80), big: pr.big, stun: pr.endBlast.stun || 0 });
       }
       continue;
     }

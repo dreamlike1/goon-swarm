@@ -27,12 +27,28 @@ const OBI = {
   block: { every: [4.5, 7.5], first: 5, time: 1.5, chance: 0.55,
     bolt: { speed: 430, r: 6, dmg: 9, every: 0.12, max: 14, life: 3.2 } },   // what your shots turn into when he blocks
   intro: { hums: [0.15, 0.95, 1.75], spawn: 2.6, arrive: 0.7, tele: 1.1 },
+  // Phase 2 (user): faster, the blade turns red, and his moves become a fixed rotation — small slash, a stabbing
+  // dash, a big slash, then a throw that curves in on you as it flies (dodge it) — round and round. Stand too far
+  // when it's his turn and he pulls you in with the force instead (on top of the old rule: catching his saber
+  // after you dashed away from it still pulls you too, if you're still far). Camp too close for too long
+  // (`tooClose`) and the force shoves you off. Every number but the user's rules is a placeholder.
   phase2: {
-    hp: 450, focus: 1.6, push: 520, walk: 1.2, quick: 0.8, slices: 2, block: 1.9,
+    hp: 450, focus: 1.6, push: 520, walk: 1.25, quick: 0.75,
     rethrow: 0.45,                                     // after a catch, the next throw's warning (s) if you're still far
     // the force pull: `min` px away when he catches it, after you dashed away from the throw
     pull: { min: 260, speed: 185, reach: 62, press: 0.12, decay: 0.25, dmg: 26, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
+    pullFar: 360,                                      // stand this far away when he picks his next move and he pulls you in outright
+    rotation: ['smallSlash', 'stabDash', 'bigSlash', 'throw'],
+    smallSlash: { tele: 0.2, anim: 0.14, arc: 1.5, range: 95, dmg: 10, lunge: 70 },
+    bigSlash: { tele: 0.6, anim: 0.34, arc: 3.1, range: 155, dmg: 26, lunge: 100 },
+    stabDash: { tele: 0.3, time: 0.2, speed: 820, stopAt: 55, sliceTele: 0.1,
+      stab: { anim: 0.12, arc: 0.55, range: 75, dmg: 20, lunge: 130 } },
+    throwTurn: 3.2,                                    // the phase-2 throw's homing turn rate (rad/s) while it flies out
+    tooClose: { r: 95, time: 1.6, push: 640 },          // camp this close, this long, and the force shoves you off
   },
+  // The force rains debris down throughout phase 2 (user): red circles warn where, then it lands. Independent of
+  // his own attacks, like SKURTOSAURUS's rocks.
+  storm: { every: [2.6, 3.8], warn: 1.0, count: 3, spread: 160, r: 46, dmg: 22 },
   xp: 30,
 };
 // DEFLECT (user): P, or tap its icon. `time`: how long the shield lasts; `perfect`: a hit this soon after raising it
@@ -140,6 +156,11 @@ function moveObi(o, dt) {
   o.kx *= decay; o.ky *= decay;
   o.t -= dt; o.anim += dt; o.cd -= dt; o.blockCd -= dt;
   let aim = toward;
+  // Phase 2 (user): camp inside `tooClose` for too long and the force shoves you off, whatever he's doing.
+  if (P2 && o.state !== 'pull' && o.state !== 'stun' && o.state !== 'focus' && o.state !== 'arrive') {
+    if (d < P2.tooClose.r) { o.closeT = (o.closeT || 0) + dt; if (o.closeT >= P2.tooClose.time) { obiForcePush(o); o.closeT = 0; } }
+    else o.closeT = 0;
+  }
   if (o.state === 'arrive') {                                // walks in, then opens with a throw (user)
     o.vx = o.kx; o.vy = o.ky;
     if (o.t <= 0) startThrow(o, OBI.intro.tele);
@@ -148,33 +169,46 @@ function moveObi(o, dt) {
     const go = d > OBI.keep ? 1 : 0;
     o.vx = (dx / d) * speed * go + o.kx; o.vy = (dy / d) * speed * go + o.ky;
     o.step += dt * 9 * (go || 0.3);
-    if (o.cd <= 0) {
+    if (P2) {                                                // phase 2: a fixed rotation, with a distance pull carved in (user)
+      if (o.cd <= 0) {
+        if (d > P2.pullFar) startPull(o, ownerId());
+        else {
+          const move = P2.rotation[(o.rot || 0) % P2.rotation.length]; o.rot = (o.rot || 0) + 1;
+          if (move === 'smallSlash') startSlice(o, P2.smallSlash.tele * q, 1, P2.smallSlash);
+          else if (move === 'bigSlash') startSlice(o, P2.bigSlash.tele * q, 1, P2.bigSlash);
+          else if (move === 'stabDash') startDash(o, P2.stabDash);
+          else startThrow(o, OBI.throw.tele * q);
+        }
+      }
+    } else if (o.cd <= 0) {
       if (o.blockCd <= 0 && Math.random() < OBI.block.chance) startBlock(o);
-      else if (d < OBI.slice.at) startSlice(o, OBI.slice.tele * q, P2 ? P2.slices : 1);
+      else if (d < OBI.slice.at) startSlice(o, OBI.slice.tele * q, 1);
       else if (d < OBI.dash.at) startDash(o);
       else startThrow(o, OBI.throw.tele * q);
     }
   } else if (o.state === 'slice') {                          // the warning cone, then the cut (a little lunge with it)
-    const s = o.sl, S = OBI.slice;
+    const s = o.sl, S = s.spec || OBI.slice;
     s.t += dt;
     aim = s.a;
     o.vx = o.kx * 0.3; o.vy = o.ky * 0.3;
     if (!s.struck && s.t >= s.tele) { s.struck = true; obiStrike(o, s); o.kx += Math.cos(s.a) * S.lunge; o.ky += Math.sin(s.a) * S.lunge; }
     if (s.struck && s.t >= s.tele + S.anim) {
-      if (s.n > 1) { o.sl = { t: 0, tele: S.tele * q * 0.7, a: toward, struck: false, n: s.n - 1, dir: -s.dir }; }   // phase 2: the backswing comes straight after
+      if (s.n > 1) { o.sl = { t: 0, tele: S.tele * q * 0.7, a: toward, struck: false, n: s.n - 1, dir: -s.dir, spec: S }; }   // phase 1's backswing
       else { o.sl = null; obiRest(o); }
     }
   } else if (o.state === 'dashwind') {                       // crouched, saber drawn back; the line shows where he'll go
+    const D = o.dashSpec || OBI.dash;
     o.vx = o.kx; o.vy = o.ky;
-    if (o.t > OBI.dash.tele * q * 0.25) o.dir = toward;      // it locks just before he goes
+    if (o.t > D.tele * q * 0.25) o.dir = toward;             // it locks just before he goes
     aim = o.dir;
-    if (o.t <= 0) { o.state = 'dash'; o.t = OBI.dash.time; SFX.bullDash(); }
+    if (o.t <= 0) { o.state = 'dash'; o.t = D.time; SFX.bullDash(); }
   } else if (o.state === 'dash') {
+    const D = o.dashSpec || OBI.dash;
     aim = o.dir;
-    o.vx = Math.cos(o.dir) * OBI.dash.speed; o.vy = Math.sin(o.dir) * OBI.dash.speed;
+    o.vx = Math.cos(o.dir) * D.speed; o.vy = Math.sin(o.dir) * D.speed;
     o.step += dt * 28;
     if (!reducedMotion && Math.random() < 0.8) game.particles.push({ x: o.x, y: o.y + o.r, vx: -o.vx * 0.12, vy: -25 * Math.random(), life: 0.3, color: COL.rock });
-    if (o.t <= 0 || d < OBI.dash.stopAt) startSlice(o, OBI.dash.sliceTele, 1);   // … and slices as he arrives
+    if (o.t <= 0 || d < D.stopAt) startSlice(o, D.sliceTele, 1, D.stab);   // … and slices (or, mid-phase 2, stabs) as he arrives
   } else if (o.state === 'throwwind') {                      // arm back, the other pointing: the lane shows (user: an indicator)
     const th = o.th;
     th.t += dt;
@@ -213,17 +247,17 @@ function moveObi(o, dt) {
 }
 function obiRest(o) { o.state = 'rest'; o.t = OBI.rest * obiQuick(o); }
 
-function startSlice(o, tele, n) {
+function startSlice(o, tele, n, spec = OBI.slice) {
   const p = game.player;
   o.state = 'slice';
-  o.sl = { t: 0, tele, a: Math.atan2(p.y - o.y, p.x - o.x), struck: false, n, dir: 1 };
+  o.sl = { t: 0, tele, a: Math.atan2(p.y - o.y, p.x - o.x), struck: false, n, dir: 1, spec };
   o.cd = 0;
 }
 // The cut: everyone inside the cone is hit.
 function obiStrike(o, s) {
   SFX.saberSwing();
   game.shake = Math.max(game.shake, 0.08);
-  const S = OBI.slice;
+  const S = s.spec || OBI.slice;
   eachLiving(() => {
     const p = game.player, dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy);
     let diff = Math.atan2(dy, dx) - s.a;
@@ -235,11 +269,21 @@ function obiStrike(o, s) {
   });
 }
 
-function startDash(o) {
+function startDash(o, spec = OBI.dash) {
   const p = game.player;
-  o.state = 'dashwind'; o.t = OBI.dash.tele * obiQuick(o);
+  o.state = 'dashwind'; o.t = spec.tele * obiQuick(o); o.dashSpec = spec;
   o.dir = Math.atan2(p.y - o.y, p.x - o.x);
   SFX.saberHum();
+}
+// The force shoves you off (phase 2, user): camp inside `tooClose` for too long and this fires, whatever he's doing.
+function obiForcePush(o) {
+  const p = game.player, T = OBI.phase2.tooClose, dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy) || 1;
+  p.kx = (p.kx || 0) + (dx / d) * T.push; p.ky = (p.ky || 0) + (dy / d) * T.push;
+  if (game.shield > 0 || game.dash) game.shieldHit = 0.15; else p.flash = 0.2;
+  game.rings.push({ x: p.x, y: p.y, r: PLAYER.r, max: 90, life: 0.4, color: COL.saberBad });
+  game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 20, text: 'FORCE PUSH!', color: COL.saberBad, life: 0.9, vy: -34, big: true });
+  game.shake = Math.max(game.shake, 0.16);
+  SFX.forcePush();
 }
 
 function startBlock(o) {
@@ -291,6 +335,12 @@ function updateSabers(dt) {
     const s = game.sabers[i], T = OBI.throw;
     s.t += dt; s.spin += dt * T.spin;
     if (!s.back) {
+      if (o.phase === 2) {                    // it curves in on you as it flies (user): dodge it
+        const p = game.player, dx = p.x - s.x, dy = p.y - s.y, sp = Math.hypot(s.vx, s.vy);
+        const cur = Math.atan2(s.vy, s.vx), want = Math.atan2(dy, dx), turn = OBI.phase2.throwTurn * dt;
+        const diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur)), na = cur + Math.max(-turn, Math.min(turn, diff));
+        s.vx = Math.cos(na) * sp; s.vy = Math.sin(na) * sp;
+      }
       s.x += s.vx * dt; s.y += s.vy * dt;
       s.flown += Math.hypot(s.vx, s.vy) * dt;
       if (s.flown >= s.L) { s.back = true; s.hitIds = []; SFX.saberThrow(); }
@@ -312,6 +362,56 @@ function updateSabers(dt) {
       hurtPlayer(T.dmg);
     });
   }
+}
+// The force rains debris down through phase 2 (user): red circles warn where, then it lands. Runs on its own,
+// independent of his attack rotation, like SKURTOSAURUS's rocks (boss.js updateRocks).
+function updateDebris(dt) {
+  const o = game.obi;
+  if (o && o.phase === 2) {
+    o.stormT = (o.stormT ?? between(OBI.storm.every)) - dt;
+    if (o.stormT <= 0) {
+      o.stormT = between(OBI.storm.every);
+      const p = game.player, S = OBI.storm, h = Math.min(playH || H, H);
+      for (let k = 0; k < S.count; k++) {
+        const a = Math.random() * Math.PI * 2, dd = Math.random() * S.spread;
+        const x = Math.max(30, Math.min(W - 30, p.x + Math.cos(a) * dd)), y = Math.max(30, Math.min(h - 30, p.y + Math.sin(a) * dd));
+        game.debris.push({ x, y, t: 0, warn: S.warn, r: S.r, dmg: S.dmg, hit: false });
+      }
+      SFX.forceHum(1);
+    }
+  }
+  for (let i = game.debris.length - 1; i >= 0; i--) {
+    const k = game.debris[i];
+    k.t += dt;
+    if (!k.hit && k.t >= k.warn) {
+      k.hit = true;
+      game.shake = Math.max(game.shake, 0.1);
+      burst(k.x, k.y, COL.rock, 18, 240);
+      let p = game.player;
+      if (NET.run) { const c = living().find(c => Math.hypot(k.x - c.body.x, k.y - c.body.y) < k.r); if (c) usePlayer(c); p = c ? c.body : null; }
+      if (p && Math.hypot(k.x - p.x, k.y - p.y) < k.r + PLAYER.r) {
+        if (game.shield > 0 || game.dash) game.shieldHit = 0.15;
+        else { p.flash = 0.25; hurtPlayer(k.dmg); }
+      }
+    }
+    if (k.t >= k.warn + 0.4) game.debris.splice(i, 1);
+  }
+}
+// Red circles warn where the debris will land, then a burst when it does (draw.js).
+function drawDebris() {
+  for (const k of game.debris) {
+    const q = Math.min(1, k.t / k.warn);
+    if (!k.hit) {
+      ctx.globalAlpha = (0.15 + 0.25 * q) * (reducedMotion ? 1 : 0.7 + 0.3 * Math.sin(k.t * 14));
+      ctx.fillStyle = COL.bad; circle(k.x, k.y, k.r * (0.3 + 0.7 * q));
+      ctx.globalAlpha = 0.6; ctx.strokeStyle = COL.bad; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(k.x, k.y, k.r, 0, TAU); ctx.stroke();
+    } else {
+      const f = Math.max(0, 1 - (k.t - k.warn) / 0.4);
+      ctx.globalAlpha = 0.5 * f; ctx.fillStyle = COL.rock; circle(k.x, k.y, k.r * (1 + (1 - f) * 0.3));
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 // BULL just charged (boss.js tryDash): if his saber is on its way, he saw you dodge it (phase 2's force pull).
 function obiSawDash() {
@@ -480,7 +580,7 @@ function obiDown(o) {
 }
 
 function resetObi() {
-  game.obi = null; game.obiDue = false; game.obiDone = false; game.sabers = []; game.bolts = [];
+  game.obi = null; game.obiDue = false; game.obiDone = false; game.sabers = []; game.bolts = []; game.debris = [];
   game.defl = 0; game.deflCd = 0; game.deflAge = 9;
   bossBar.classList.remove('is-obi');
 }
@@ -596,17 +696,18 @@ function obiPose(o, la) {
   return ps;
 }
 // The lightsaber on its own: the hilt at (x, y) pointing along a (radians), in the current transform's units.
-function drawSaber(x, y, a, len, glow = 1) {
+function drawSaber(x, y, a, len, glow = 1, bad = false) {
   const c = Math.cos(a), s = Math.sin(a), hx = x - c * 3.5, hy = y - s * 3.5, bx = x + c * 4.5, by = y + s * 4.5;
+  const col = bad ? COL.saberBad : COL.saber, core = bad ? COL.saberBadCore : COL.saberCore;
   ctx.lineCap = 'round';
   if (len > 0) {
     const ex = bx + c * len, ey = by + s * len;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = COL.saber;
+    ctx.strokeStyle = col;
     ctx.globalAlpha = 0.22 * glow; ctx.lineWidth = 8.5; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
     ctx.globalAlpha = 0.55 * glow; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1; ctx.strokeStyle = COL.saberCore; ctx.lineWidth = 2.2;
+    ctx.globalAlpha = 1; ctx.strokeStyle = core; ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
   }
   ctx.globalAlpha = 1;
@@ -705,7 +806,7 @@ function drawObi(o) {
   // the near arm and the saber in its hand (the saber is its own piece, so it can swing, twirl or fly)
   if (ps.saber) {
     const glow = st === 'block' && !still ? 0.9 + 0.3 * Math.sin(t * 30) : 1;
-    drawSaber(fr[0], fr[1], ps.sa, 36, glow);
+    drawSaber(fr[0], fr[1], ps.sa, 36, glow, o.phase === 2);
   }
   arm(SH[1][0], SH[1][1], fr[0], fr[1], -1, ps.open && !ps.saber);
   ctx.restore();
@@ -738,7 +839,7 @@ function obiLane(o) {
 }
 // The dash's line, like SKURTOSAURUS's charge (draw.js chargeAim).
 function obiDashLine(o) {
-  const len = OBI.dash.speed * OBI.dash.time, blink = 0.35 + 0.35 * Math.sin(o.t * 30);
+  const D = o.dashSpec || OBI.dash, len = D.speed * D.time, blink = 0.35 + 0.35 * Math.sin(o.t * 30);
   ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.dir);
   ctx.fillStyle = COL.bad; ctx.globalAlpha = 0.12; ctx.fillRect(0, -o.r * 1.1, len, o.r * 2.2);
   ctx.globalAlpha = 0.3 + blink; ctx.strokeStyle = COL.bad; ctx.lineCap = 'round'; ctx.lineWidth = 6; ctx.setLineDash([16, 11]);
@@ -749,16 +850,16 @@ function obiDashLine(o) {
 }
 // A slice: the red cone as he raises it (makora.js warnCone), then a blue crescent as it cuts.
 function obiCut(o) {
-  const s = o.sl, S = OBI.slice;
+  const s = o.sl, S = s.spec || OBI.slice, bad = o.phase === 2;
   ctx.save(); ctx.translate(o.x, o.y - 6 * obiUnit(o)); ctx.rotate(s.a);
   if (!s.struck) warnCone(S.arc, S.range, Math.min(1, s.t / Math.max(0.01, s.tele)));
   else {
     const q = Math.min(1, (s.t - s.tele) / S.anim), side = s.dir || 1;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.8 * (1 - q); ctx.fillStyle = COL.saber;
+    ctx.globalAlpha = 0.8 * (1 - q); ctx.fillStyle = bad ? COL.saberBad : COL.saber;
     const a0 = -S.arc / 2, a1 = a0 + S.arc * Math.min(1, q * 2.4);
     if (side > 0) crescent(0, S.range * 0.78, a0, a1, 14); else crescent(0, S.range * 0.78, -a1, -a0, 14);
-    ctx.globalAlpha = 0.9 * (1 - q); ctx.fillStyle = COL.saberCore;
+    ctx.globalAlpha = 0.9 * (1 - q); ctx.fillStyle = bad ? COL.saberBadCore : COL.saberCore;
     if (side > 0) crescent(0, S.range * 0.78, a0, a1, 4); else crescent(0, S.range * 0.78, -a1, -a0, 4);
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -791,16 +892,17 @@ function pulledBody(id) {
 }
 // The thrown saber (spinning, with a blur) and the shots he knocked back; drawn over the enemies (draw.js).
 function drawObiShots() {
+  const bad = game.obi && game.obi.phase === 2;
   for (const s of game.sabers) {
     ctx.save(); ctx.translate(s.x, s.y);
-    ctx.globalAlpha = 0.1; ctx.fillStyle = COL.saber; circle(0, 0, 26);
+    ctx.globalAlpha = 0.1; ctx.fillStyle = bad ? COL.saberBad : COL.saber; circle(0, 0, 26);
     for (let g = 2; g >= 0; g--) {                                     // afterimages of the last moment of spin
       ctx.save(); ctx.rotate(s.spin - g * 0.4);
       ctx.globalAlpha = g ? 0.25 / g : 1;
       if (g) {
-        ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = COL.saber; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = bad ? COL.saberBad : COL.saber; ctx.lineWidth = 5; ctx.lineCap = 'round';
         ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(22, 0); ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
-      } else drawSaber(-8, 0, 0, 28);
+      } else drawSaber(-8, 0, 0, 28, 1, bad);
       ctx.restore();
     }
     ctx.restore();

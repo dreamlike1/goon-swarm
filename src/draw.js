@@ -456,6 +456,7 @@ function draw() {
     }
   }
   drawSilicaTop();                       // frost on chilled enemies, the ring of ice, falling bombs, the lion's bite
+  drawDebris();                          // OBI ONE phase 2: red circles warn where the force will drop debris (obi.js)
   drawObiShots();                        // OBI ONE's thrown saber and the shots he knocked back (obi.js)
 
   // projectiles, by look: streak (a line trail), orb and heavy (fading circles), spin (a turning square)
@@ -564,6 +565,19 @@ function draw() {
   for (const g of game.ghosts) {
     ctx.globalAlpha = (g.life / 0.2) * 0.35;
     ellipse(g.x, g.y, PLAYER.r * 1.2, PLAYER.r * 0.8, g.a);
+  }
+  ctx.globalAlpha = 1;
+
+  // Pressure Washer / Super Washer (user): a fanned wedge of spray, fading out.
+  for (const s of game.sprays) {
+    const k = Math.max(0, s.life / s.max), col = COL[s.card];
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.3 * k;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, s.range, -s.arc / 2, s.arc / 2); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.65 * k; ctx.strokeStyle = COL.player; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(-s.arc / 2) * s.range, Math.sin(-s.arc / 2) * s.range); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(s.arc / 2) * s.range, Math.sin(s.arc / 2) * s.range); ctx.stroke();
+    ctx.restore();
   }
   ctx.globalAlpha = 1;
 

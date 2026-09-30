@@ -18,8 +18,10 @@ const PACKS = {
   magus:     { name: 'Magus pack',     short: 'Magus',     size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['arcane', 'shuriken', 'missiles', 'firebolt'] },
   // The Silica pack (v0.42, user): nothing is rolled, you always get 5 of each of its 3 weapons. v0.43 (user): Legendary, 100 gold.
   silica:    { name: 'Silica pack',    short: 'Silica',    size: 15, price: 100, rarities: ['legendary'], cards: ['gatling', 'cryo', 'shifter'], fixed: { gatling: 5, cryo: 5, shifter: 5 } },
+  // Powerwash pack (user): Pressure Washer and Soap Gun (Common), Super Washer (Uncommon).
+  powerwash: { name: 'Powerwash pack', short: 'Powerwash', size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['pressurewasher', 'soapgun', 'superwasher'] },
 };
-const STORE_PACKS = ['artillery', 'magus', 'silica'];
+const STORE_PACKS = ['artillery', 'magus', 'silica', 'powerwash'];
 // Every new player (and a reset) opens this first, before anything else (user). Nothing is rolled.
 // v0.30 (user): 5 Bullets and 5 Cannons (it was Bullets and Lasers).
 const STARTER = { name: 'Starter pack', short: 'Starter', cards: { bullet: 5, cannon: 5 } };
