@@ -34,15 +34,15 @@ function resize() {
 new ResizeObserver(resize).observe(arena);
 
 /* ---------- the view and the arenas (v0.50; reversed in v0.51, user) ----------
-   Normal play is zoomed out (`VIEW.normal`): everything is drawn smaller and the whole arena, ×1/0.7 the screen each
-   way, is in view. A boss fight (its intro, the fight, MAKORA's scenes) zooms back in to full size inside a SQUARE
-   arena with a glowing wall (draw.js drawArenaWall), `VIEW.side` × the screen's longer side, and the view follows you
-   round it (bigger than the screen, so you can run a long way). The arena changes round its middle, and anything
+   Normal play is the screen at full size (`VIEW.normal`; v0.51 had it zoomed out, user: too much empty space). A
+   boss fight (its intro, the fight, MAKORA's scenes) zooms in a little closer (`VIEW.boss`) inside a SQUARE arena
+   with a glowing wall (draw.js drawArenaWall), `VIEW.side` × the screen's longer side, and the view follows you round
+   it (a bit bigger than the view, so there's room to run). The arena changes round its middle, and anything
    outside the new walls is pushed back in; the zoom and the camera ease so nothing jumps. The store's test mode stays
    at full size. In co-op the arena is already bigger than the screen and the same for everyone, so there only the
    zoom changes (out for the swarm, in for a boss) and the wall goes round the whole arena. */
 // rate: how fast the zoom eases; cam: how fast the view follows; edge: how far past a boss arena's wall the view can go
-const VIEW = { normal: 0.7, boss: 1, side: 1.3, rate: 2.4, cam: 9, edge: 110 };
+const VIEW = { normal: 1, boss: 1.15, side: 1.05, rate: 2.4, cam: 9, edge: 90 };   // v0.51.1 (user): 0.7 / 1 / 1.3 before
 let viewZoom = VIEW.normal, arenaMode = 'normal';
 const bossArena = () => !game.practice && !game.inMenu && !!(game.intro || game.boss || game.obi || game.makora || game.cine);
 const modeNow = () => (game.practice ? 'plain' : bossArena() ? 'boss' : 'normal');

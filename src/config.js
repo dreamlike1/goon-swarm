@@ -26,7 +26,8 @@ const ENEMY_TYPES = {
 // Shooters (v0.51, user): after OBI ONE is beaten, a quarter of the swarm (`share`) are green squares, and the red
 // squares come half as often (`squareMul`). A shooter keeps about `keep` px off, and every `every` s, once you're
 // within `range`, it glows for `tele` s and fires a slow, glowing red orb straight at where you are (it doesn't home).
-const SHOOTER = { share: 0.25, squareMul: 0.5, keep: 230, range: 320, every: [2.2, 3.2], tele: 0.45, shot: { speed: 150, r: 7, dmg: 12, life: 6 } };
+// `reflect`: how much faster an orb flies back when DEFLECT turns it (v0.51.1).
+const SHOOTER = { share: 0.25, squareMul: 0.5, keep: 230, range: 320, every: [2.2, 3.2], tele: 0.45, reflect: 2.4, shot: { speed: 150, r: 7, dmg: 12, life: 6 } };
 // Exploders (v0.51, user: the purple triangles don't split any more): one that gets within `trigger` px of you stops,
 // flashes faster and faster for `fuse` s with its blast ring showing, then blows up: `dmg` to you inside `r`, and
 // `enemyDmg` (and a shove) to every other enemy there too. Shot down first, it just dies.
@@ -130,7 +131,7 @@ const COL = {
   floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), frozen: tok('--frozen'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
   obiRobe: tok('--obi-robe'), obiRobeDark: tok('--obi-robe-dark'), obiUnder: tok('--obi-under'), obiBelt: tok('--obi-belt'), obiBoot: tok('--obi-boot'), obiSkin: tok('--obi-skin'), obiHair: tok('--obi-hair'), obiEye: tok('--obi-eye'), obiHilt: tok('--obi-hilt'), obiHiltDark: tok('--obi-hilt-dark'), saber: tok('--saber'), saberCore: tok('--saber-core'), saberBad: tok('--saber-2'), saberBadCore: tok('--saber-2-core'),
-  shooter: tok('--enemy-shooter'), boom: tok('--enemy-fast-split'),
+  shooter: tok('--enemy-shooter'), boom: tok('--enemy-fast-split'), deflect: tok('--saber'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),
   ...Object.fromEntries(RARITIES.map(r => [`r-${r}`, tok(`--r-${r}`)])),

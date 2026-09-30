@@ -285,18 +285,38 @@ function updateEnemyShots(dt) {
     const b = game.eshots[i];
     b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.t > SHOOTER.shot.life || b.x < -20 || b.y < -20 || b.x > W + 20 || b.y > H + 20) { game.eshots.splice(i, 1); continue; }
-    let hit = false;
+    if (b.back) {                                           // knocked back by DEFLECT: it hits enemies now
+      const e = game.enemies.find(e => !e.dead && !e.gone && !e.dummy && hitGap(e, b.x, b.y) < b.r);
+      if (e) {
+        usePlayerId(b.owner);
+        const l = Math.hypot(b.vx, b.vy) || 1;
+        hitEnemy({ card: 'deflect', look: 'blast', dmg: b.dmg, knock: 260, vx: b.vx / l, vy: b.vy / l, x: e.x, y: e.y, noCrit: true }, e);
+        burst(b.x, b.y, COL.saber, 10, 200);
+        game.eshots.splice(i, 1);
+      }
+      continue;
+    }
+    let hit = false, back = false;
     eachLiving(() => {
       const p = game.player;
       if (hit || Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
       hit = true;
+      if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; burst(b.x, b.y, COL.bad, 8, 150); return; }
+      if (game.defl > 0 && p.safe <= 0) { deflectHit(); reflectShot(b, p); back = true; return; }   // DEFLECT sends it back (user)
       burst(b.x, b.y, COL.bad, 8, 150);
-      if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
       p.flash = 0.2;
       hurtPlayer(b.dmg);
     });
-    if (hit) game.eshots.splice(i, 1);
+    if (hit && !back) game.eshots.splice(i, 1);
   }
+}
+// DEFLECT turned a shooter's orb (v0.51.1, user): it flies back, faster, at the nearest enemy (or straight back),
+// and hits enemies instead of you.
+function reflectShot(b, p) {
+  const e = nearestEnemy(b), v = SHOOTER.shot.speed * SHOOTER.reflect;
+  const a = e ? Math.atan2(e.y - b.y, e.x - b.x) : Math.atan2(-b.vy, -b.vx);
+  Object.assign(b, { back: true, owner: ownerId(), t: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, dmg: Math.max(b.dmg, damageOf(SHOOTER.shot.dmg)) });
+  b.x = p.x + Math.cos(a) * (PLAYER.r + b.r + 2); b.y = p.y + Math.sin(a) * (PLAYER.r + b.r + 2);
 }
 // An exploder close to you lights its fuse: it stops and flashes (draw.js), then blows up. True while it's lit.
 function fuseStep(e, dt, d) {

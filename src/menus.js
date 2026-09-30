@@ -47,6 +47,9 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.51.1' },
+  { tag: 'View', text: 'Normal play is back at full size (the zoom-out left too much empty space). Boss fights zoom in a little closer, in a smaller square arena.' },
+  { tag: 'Relic', text: 'DEFLECT sends a shooter’s orb back: it turns blue, flies faster at the nearest enemy and hurts it instead of you.' },
   { ver: 'v0.51' },
   { tag: 'View', text: 'The camera is zoomed out while you fight the swarm, so you see more of the arena.' },
   { tag: 'Boss', text: 'Boss fights zoom back in to a square arena with a glowing wall in the boss’s colour. It’s bigger than the screen, and the view follows you round it.' },

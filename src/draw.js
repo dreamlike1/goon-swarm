@@ -573,7 +573,7 @@ function draw() {
   // the shooters' orbs: slow, red and glowing (they don't home)
   for (const b of game.eshots) {
     const pulse = reducedMotion ? 0 : Math.sin(b.t * 10) * 1.5;
-    ctx.fillStyle = COL.bad; ctx.globalAlpha = 0.18; circle(b.x, b.y, b.r * 2.4 + pulse);
+    ctx.fillStyle = b.back ? COL.saber : COL.bad;             // (blue once DEFLECT has sent it back) ctx.globalAlpha = 0.18; circle(b.x, b.y, b.r * 2.4 + pulse);
     ctx.globalAlpha = 0.35; circle(b.x, b.y, b.r * 1.5);
     ctx.globalAlpha = 1; circle(b.x, b.y, b.r);
     ctx.fillStyle = COL.player; ctx.globalAlpha = 0.8; circle(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.4); ctx.globalAlpha = 1;
