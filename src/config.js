@@ -18,8 +18,8 @@ const ENEMY_TYPES = {
   triangle: { name: 'Triangle',   shape: 'triangle', hp: 2, hpPerLevel: 0, hpPerLevelLate: 0, speed: 200, r: 11, dmg: 5,  weight: 2,   xp: 1, from: 7 },
   big:      { name: 'Big square', shape: 'square',   hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 105, r: 20, dmg: 20, weight: 0.6, xp: 3, from: 11 },
   // v0.12: red and bigger (user); r 12 before
-  // v0.46 (user): the mini dino is now a crab (same moves)
-  raptor:   { name: 'Crab',       shape: 'crab',     hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 90,  r: 18, dmg: 12, weight: 1,   xp: 2, from: 11 },
+  // v0.46 (user): the mini dino is now a crab (same moves), half the size (r 18 before)
+  raptor:   { name: 'Crab',       shape: 'crab',     hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 90,  r: 9,  dmg: 12, weight: 1,   xp: 2, from: 11 },
 };
 // Crabs (mini dinos until v0.46; user: after level 10, they dash at you): they walk in, and once you're within `sight` they stop,
 // wind up (`windup` s, shaking, with a short aim line), dash along that line, then rest. Placeholders.
@@ -111,7 +111,7 @@ const xpNeeded = level => {
 const css = getComputedStyle(document.documentElement);
 const tok = n => css.getPropertyValue(n).trim();
 const COL = {
-  floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
+  floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), frozen: tok('--frozen'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),

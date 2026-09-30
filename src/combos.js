@@ -88,7 +88,7 @@ function combosIn(seq, pos) {
 
 // The nearest `n` enemies within `range` (repeating the nearest if there are fewer), for shots that each want their own target.
 function targets(n, range = Infinity) {
-  const p = game.player, dist = e => Math.hypot(e.x - p.x, e.y - p.y) - e.r;   // to its edge, like nearestEnemy
+  const p = game.player, dist = e => hitGap(e, p.x, p.y);   // to its edge, like nearestEnemy
   const byDist = game.enemies.filter(e => dist(e) <= range).sort((a, b) => dist(a) - dist(b));
   return Array.from({ length: n }, (_, i) => byDist[i % Math.max(1, byDist.length)]).filter(Boolean);
 }

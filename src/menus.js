@@ -47,6 +47,14 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.47' },
+  { tag: 'Store', text: 'Packs always add to your collection now: you can own up to 999 of each card Extra copies you already had are back.' },
+  { tag: 'Deck', text: 'A deck can hold up to 7 of one card (it was 5), so a whole sequence of it can fire its ×7 ult.' },
+  { tag: 'Bosses', text: 'SKURTOSAURUS and MAKORA can be hit anywhere on their body, head included, not only in the middle.' },
+  { tag: 'Bosses', text: 'MAKORA grows a little bigger every time its wheel turns, and so does where you can hit it.' },
+  { tag: 'Enemies', text: 'Crabs are half the size, with no eyes.' },
+  { tag: 'Look', text: 'Enemies slowed by the Cryo Magus turn icy blue and move in slow motion, with frost glinting off them, instead of a circle.' },
+  { tag: 'Co-op', text: 'Pick an emoji and you’re just the emoji, with no circle behind it.' },
   { ver: 'v0.46' },
   { tag: 'Co-op', text: 'Smoother online play: friends move smoothly even on a laggy connection, and the game catches up instead of falling behind.' },
   { tag: 'Co-op', text: 'Everyone’s HP bar shows under them and in the player list.' },
@@ -351,9 +359,9 @@ async function buyViewed() {
   await ripPack($('pv').querySelector('.pack-art'));
   buying = false;
   if (current !== 'scr-packview') return;
-  const extra = res.where.filter(w => w.to === 'upgrade').length;
+  const extra = res.where.filter(w => w.to === 'max').length;
   startReveal(res.ids, { eyebrow: PACKS[k].name, title: 'New cards',
-    note: `They're in your collection: add them to your deck in Loadout.${extra ? ` ${extra} went to upgrade copies (you already had 5).` : ''}`,
+    note: `They're in your collection: add them to your deck in Loadout.${extra ? ` ${extra} didn't fit: you already have ${OWN_LIMIT} of ${extra === 1 ? 'that card' : 'those cards'}.` : ''}`,
     after: () => { renderPackView(); showScreen('scr-packview'); } });
 }
 
@@ -596,7 +604,8 @@ const CARD_ICON = {                                  // a small picture of each 
   shifter: '<circle cx="12" cy="15" r="4"/><circle cx="6" cy="10" r="2"/><circle cx="10" cy="6" r="2"/><circle cx="14" cy="6" r="2"/><circle cx="18" cy="10" r="2"/>',
 };
 const RARITY_RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
-const freeCopies = id => Math.min(COPY_LIMIT, save.owned[id] || 0) - (save.equipped[id] || 0);
+const freeCopies = id => (save.owned[id] || 0) - (save.equipped[id] || 0);                // owned and not in the deck
+const canEquip = id => (save.equipped[id] || 0) < Math.min(COPY_LIMIT, save.owned[id] || 0);   // a deck takes up to 7 of each
 function renderLoadout() {
   const cards = equippedCards(), full = cards.length >= DECK_LIMIT;
   $('deck-n').textContent = cards.length;
@@ -611,8 +620,8 @@ function renderLoadout() {
   }).join('');
   $('coll').innerHTML = CARD_IDS.filter(id => save.owned[id]).map(id => {
     const k = CARDS[id], free = freeCopies(id), t = COMBOS[id] || {}, sizes = Object.keys(t).map(Number).sort((a, b) => a - b);
-    const can = free > 0 && !full;
-    return `<button type="button" role="listitem" class="ccard${free <= 0 ? ' is-used' : ''}" data-id="${id}" style="--c: var(--${id}); --rc: var(--r-${k.rarity})"`
+    const can = canEquip(id) && !full;
+    return `<button type="button" role="listitem" class="ccard${canEquip(id) ? '' : ' is-used'}" data-id="${id}" style="--c: var(--${id}); --rc: var(--r-${k.rarity})"`
       + ` title="${k.desc}" aria-label="${k.name}, ${free} free of ${save.owned[id]} owned.${can ? ' Add one to the deck' : ''}"${can ? '' : ' aria-disabled="true"'}>`
       + `<span class="ccard-dmg" title="Damage">${k.dmg}</span><span class="ccard-free" title="Free copies">×${Math.max(0, free)}</span>`
       + `<svg class="ccard-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CARD_ICON[id] || ''}</svg>`
@@ -647,10 +656,10 @@ function addCard(id) {
   if (changeDeck(id, 1)) return;
   const own = save.owned[id] || 0, name = CARDS[id].name;
   builderHint(equippedCards().length >= DECK_LIMIT ? `The deck is full: ${DECK_LIMIT} cards at most.`
-    : own >= COPY_LIMIT ? `${COPY_LIMIT} ${name} is the most a deck can hold.`
+    : (save.equipped[id] || 0) >= COPY_LIMIT ? `${COPY_LIMIT} ${name} is the most a deck can hold.`
     : `All ${own} of your ${name} cards are in the deck. Get more in the Store.`);
 }
-// Auto: your best cards first (rarest, then hardest-hitting), up to 5 of each, until the deck is full.
+// Auto: your best cards first (rarest, then hardest-hitting), up to 7 of each, until the deck is full.
 function autoDeck() {
   const ids = CARD_IDS.filter(id => save.owned[id]).sort((a, b) => RARITY_RANK[CARDS[b].rarity] - RARITY_RANK[CARDS[a].rarity] || CARDS[b].dmg - CARDS[a].dmg);
   save.equipped = {};

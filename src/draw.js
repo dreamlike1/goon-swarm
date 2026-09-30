@@ -101,7 +101,7 @@ function chargeLines(b) {
 }
 
 function drawBoss(b) {
-  const s = b.r * (0.5 + 0.5 * b.born), k = s / 30, t = b.anim, st = b.state, still = reducedMotion;
+  const s = (b.size || b.r) * (0.5 + 0.5 * b.born), k = s / 30, t = b.anim, st = b.state, still = reducedMotion;
   if (st === 'windup') chargeAim(b);
   if (b.boss && b.throwing != null) {      // the big rock's lane: a red band down the line it'll be thrown, filling as it winds up
     const q = Math.min(1, b.throwing / BOSS.throwWind), a = b.throwA ?? b.face, w = BOSS.bigRock.r * 2 + 8, L = Math.hypot(W, H);
@@ -127,7 +127,7 @@ function drawBoss(b) {
   }
 
   // Pose, from its state.
-  const facing = st === 'charge' || st === 'windup' ? Math.cos(b.dir) : game.player.x - b.x;
+  const facing = b.flip || (st === 'charge' || st === 'windup' ? Math.cos(b.dir) : game.player.x - b.x);   // the side its hitbox's head is on (boss.js sizeBoss)
   let lean = 0, crouch = 0, jaw = 0, head = 0, arm = 0, hold = 0, stride = 0, tail = still ? 0 : Math.sin(t * 3) * 3, fury = false;
   let nearPh = b.step, farPh = b.step + Math.PI, nearStride = 0;
   if (st === 'walk') {
@@ -213,11 +213,22 @@ function drawBoss(b) {
   ctx.restore();
 }
 
+// Chilled by the Cryo Magus (v0.46, user: no circle, but it should look slowed): its own colour, frosted over toward
+// ice. Cached per colour.
+const chillCache = new Map();
+function chilled(c) {
+  if (chillCache.has(c)) return chillCache.get(c);
+  const hex = s => (/^#[0-9a-f]{6}$/i.test(s) ? [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16)) : null);
+  const a = hex(c), b = hex(COL.frozen), out = a && b ? `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * 0.62)).join(',')})` : c;
+  chillCache.set(c, out);
+  return out;
+}
+
 /* ---------- the crab (v0.46, user's picture; the mini dino before) ----------
-   Front on, in a 20-unit frame (origin = the middle of its shell): a wide glossy orange-red shell with a little smile,
-   two eyes on stalks with big pale-yellow eyeballs, two pincers held up and three legs a side. It keeps the mini
-   dino's moves: it scuttles in (legs ticking, bobbing), and when it winds up a dash it shakes, snaps its pincers and
-   its pupils go red; in the dash it squashes flat and its legs blur. Its eyes follow you. */
+   Front on, in a 17-unit frame (origin = the middle of its shell): a wide glossy orange-red shell with a little smile,
+   two pincers held up and three legs a side (v0.46, user: no eyes, and half the size). It keeps the mini dino's moves:
+   it scuttles in (legs ticking, bobbing), and when it winds up a dash it shakes and snaps its pincers; in the dash it
+   squashes flat and its legs blur. Chilled by the Cryo Magus, it turns icy and moves in slow motion. */
 function crabClaw(side, open, lift, col, hi) {
   // one pincer: the arm, then a round palm with two fingers that open and close (`open` 0–1)
   ctx.save(); ctx.scale(side, 1);
@@ -235,13 +246,15 @@ function drawCrab(e) {
   const s = e.r * (0.5 + 0.5 * e.born), k = s / 17, t = e.anim || 0, st = e.state, still = reducedMotion;
   if (st === 'windup') chargeAim(e);
   if (st === 'charge') chargeLines(e);
-  const hit = e.hit > 0, body = hit ? COL.player : COL.crab, dark = hit ? COL.player : COL.crabDark, hi = COL.crabHi;
-  const walking = st === 'walk', fury = st === 'windup' || st === 'charge';
+  const hit = e.hit > 0, cold = e.chill > 0;
+  const body = hit ? COL.player : cold ? chilled(COL.crab) : COL.crab, dark = hit ? COL.player : cold ? chilled(COL.crabDark) : COL.crabDark, hi = cold ? chilled(COL.crabHi) : COL.crabHi;
+  const walking = st === 'walk';
   const step = e.step || 0, bob = walking && !still ? Math.abs(Math.sin(step)) * 1.5 : 0;
   const jit = st === 'windup' && !still ? (Math.random() - 0.5) * 2.4 : 0;
   const squash = st === 'charge' ? 0.84 : st === 'rest' ? 0.94 : 1;       // flat in a dash, sagging while it rests
   // pincers: up and slowly opening and closing as it walks; snapping fast in a wind-up; tucked in a dash
-  const open = still ? 0.4 : st === 'windup' ? 0.5 + 0.5 * Math.sin(t * 40) : st === 'charge' ? 0 : 0.35 + 0.25 * Math.sin(t * 4);
+  const tt = cold ? t * SILICA.cryo.slow : t;                             // chilled: everything in slow motion
+  const open = still ? 0.4 : st === 'windup' ? 0.5 + 0.5 * Math.sin(tt * 40) : st === 'charge' ? 0 : 0.35 + 0.25 * Math.sin(tt * 4);
   const lift = st === 'windup' ? 4 : st === 'charge' ? -6 : st === 'rest' ? -3 : 0;
 
   ctx.save();
@@ -262,22 +275,6 @@ function drawCrab(e) {
   }
 
   crabClaw(-1, open, lift, body, hi); crabClaw(1, open, lift, body, hi);
-
-  // eyes on stalks, pupils turned toward you (red when it's about to dash)
-  const tx = game.player.x - e.x, ty = game.player.y - e.y, tl = Math.hypot(tx, ty) || 1, lx = (tx / tl) * 2.2, ly = (ty / tl) * 2.2;
-  for (const side of [-1, 1]) {
-    const sx = side * 8.5, sway = still ? 0 : Math.sin(t * 5 + side) * (walking ? 1 : 0.4), ex = sx + side * 1.5 + sway, ey = -29;
-    ctx.strokeStyle = body; ctx.lineWidth = 5; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(sx * 0.8, -12); ctx.lineTo(ex, ey + 4); ctx.stroke();
-    ctx.fillStyle = body; circle(ex, ey, 8.5);                              // the stalk's round top
-    ctx.fillStyle = COL.crabEye; circle(ex, ey, 6.2);
-    ctx.fillStyle = fury ? COL.bad : COL.crabPupil; circle(ex + lx, ey + ly, fury ? 3 : 3.4);
-    ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.9; circle(ex + lx - 1.3, ey + ly - 1.4, 1.1); ctx.globalAlpha = 1;
-    if (fury) {                                                              // an angry brow across each eye
-      ctx.strokeStyle = dark; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(ex - side * 6, ey - 7); ctx.lineTo(ex + side * 4, ey - 4.5); ctx.stroke();
-    }
-  }
 
   // the shell: a wide oval, a darker lower half and a glossy highlight up and to the left
   ctx.fillStyle = body; ellipse(0, 0, 22, 17);
@@ -438,7 +435,7 @@ function draw() {
     const s = e.r * (0.4 + 0.6 * e.born);
     if (e.shape === 'crab') drawCrab(e);                     // the crab (v0.46; the mini dino before)
     else {
-      ctx.fillStyle = e.hit > 0 ? COL.player : enemyCol(e);
+      ctx.fillStyle = e.hit > 0 ? COL.player : e.chill > 0 ? chilled(enemyCol(e)) : enemyCol(e);   // chilled: frosted over
       // Splitters also carry a seam down the middle, where they'll split (so it's not colour alone).
       ctx.save(); ctx.translate(e.x, e.y);
       if (e.shape === 'triangle') {
@@ -585,8 +582,7 @@ function draw() {
   ctx.fillStyle = NET.run ? (NET.me?.down ? COL.line : NET.me?.color || COL.player) : COL.player;   // co-op: your colour; grey when down
   if (!game.inMenu) {
     ctx.globalAlpha = p.safe > 0 && !dsh && Math.floor(p.safe * 20) % 2 ? 0.45 : 1;   // blink while safe after a hit
-    if (NET.run && NET.me?.emoji) {     // co-op, with an emoji (v0.46): a ring in your colour; the emoji is drawn crisp on the text layer
-      ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER.r + 2, 0, TAU); ctx.stroke();
+    if (NET.run && NET.me?.emoji) {     // co-op, with an emoji (v0.46): only the emoji, drawn crisp on the text layer
     } else if (dsh) ellipse(p.x, p.y, PLAYER.r * 1.25, PLAYER.r * 0.82, da);
     else circle(p.x, p.y, PLAYER.r);    // the Druid summons animals separately now (silica.js)
     ctx.globalAlpha = 1;

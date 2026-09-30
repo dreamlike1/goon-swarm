@@ -776,8 +776,8 @@ NET.sfxN = 0; NET.sfxSeen = {};                        // at most 10 sounds (2 o
 toast = (text, cls) => { if (NET.host && NET.run) coopEvent({ e: 'toast', text, cls }); return toastRaw(text, cls); };
 
 /* ---------- drawing everyone ---------- */
-// Everyone else (draw.js, after your own player): a circle in their colour (a ring, if they picked an emoji: the
-// emoji itself goes on the text layer, below), a BULL wedge while charging, their HP bar, their shield, and DOWN with a
+// Everyone else (draw.js, after your own player): a circle in their colour (or just their emoji, which goes on the
+// text layer, below), a BULL wedge while charging, their HP bar, their shield, and DOWN with a
 // cross and a revive ring that fills as someone holds E.
 function coopBodies() {
   if (!NET.run) return [];
@@ -814,8 +814,8 @@ function drawCoopPlayers() {
   for (const v of coopBodies()) {
     if (v.frost) drawFrostAt(v.frost, v);
     ctx.globalAlpha = v.down ? 0.55 : v.safe > 0 && Math.floor(v.safe * 20) % 2 ? 0.45 : 1;
-    ctx.fillStyle = ctx.strokeStyle = v.down ? COL.line : v.color;
-    if (v.emoji) { ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(v.x, v.y, PLAYER.r + 2, 0, TAU); ctx.stroke(); }
+    ctx.fillStyle = v.down ? COL.line : v.color;
+    if (v.emoji) { /* just the emoji (drawCoopFaces), for a cleaner look (v0.46, user) */ }
     else if (v.dash) ellipse(v.x, v.y, PLAYER.r * 1.25, PLAYER.r * 0.82, Math.atan2(v.dash.dy, v.dash.dx));
     else circle(v.x, v.y, PLAYER.r);
     ctx.globalAlpha = 1;

@@ -4,21 +4,21 @@
 /* Kept apart from the run: opening a pack changes the collection and the equipped deck,
    never a deck that is already being played.
    Rules from docs/spec-packs-and-stores.md:
-   - The equipped deck holds at most 31 cards, with at most 5 copies of one card type.
+   - The equipped deck holds at most 31 cards, with at most 7 copies of one card type (5 until v0.47).
    - Copies 1–5 of a type are usable. Later copies count toward that type's upgrades
      (tiers and bonuses are still to be decided, so they are only counted for now).
    - Special currency and the stores are not built yet. */
 const SAVE_KEY = 'rogue.save';
 const SAVE_VERSION = 2;        // v2 (user, v0.6): the starter packs are gone, so older saves start over
 const DECK_LIMIT = 31;
-const COPY_LIMIT = 5;
+const COPY_LIMIT = 7;          // copies of one card a deck can hold (v0.47, user: 7, so a whole sequence of one card, its ×7 ult, can happen; 5 before)
+const OWN_LIMIT = 999;         // copies of one card you can own (v0.46, user: packs kept stopping at 5)
 const GOLD_PER = 15;           // 1 gold for every 15 enemies defeated in a run, paid when you die or quit (user; 50 until v0.43)
 
 function blankSave() {
   return {
     v: SAVE_VERSION,
-    owned: {},              // card id → usable copies (0–5)
-    upgradeCopies: {},      // card id → extra copies waiting for the upgrade rules
+    owned: {},              // card id → copies you own (0–999; a deck holds up to 7 of each)
     equipped: {},           // card id → copies in the deck
     gold: 100,              // for the store. A new save (or a reset) starts with 100 (v0.30, user; it was 0)
     starterDone: false,     // the starter pack has been opened (its cards are in the collection)
@@ -36,6 +36,9 @@ function loadSave() {
     const s = JSON.parse(raw);
     if (!s || s.v !== SAVE_VERSION) return blankSave();
     const out = Object.assign(blankSave(), s);
+    // v0.46: copies past 5 used to wait as "upgrade copies"; they're simply owned now (up to 999)
+    for (const [id, n] of Object.entries(out.upgradeCopies || {})) out.owned[id] = Math.min(OWN_LIMIT, (out.owned[id] || 0) + (n | 0));
+    delete out.upgradeCopies;
     for (const id of Object.keys(out.owned)) if (!CARDS[id]) delete out.owned[id];          // a card that was removed
     for (const id of Object.keys(out.equipped)) {
       if (!CARDS[id]) { delete out.equipped[id]; continue; }
@@ -63,9 +66,8 @@ function resetSave() {
 function addToCollection(ids) {
   return ids.map(id => {
     const have = save.owned[id] || 0;
-    if (have < COPY_LIMIT) { save.owned[id] = have + 1; return { id, to: 'copy', copy: have + 1 }; }
-    save.upgradeCopies[id] = (save.upgradeCopies[id] || 0) + 1;
-    return { id, to: 'upgrade' };
+    if (have < OWN_LIMIT) { save.owned[id] = have + 1; return { id, to: 'copy', copy: have + 1 }; }
+    return { id, to: 'max' };                              // already 999: nothing more to add
   });
 }
 

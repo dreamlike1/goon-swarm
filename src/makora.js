@@ -23,7 +23,10 @@
    (The user's context for it is Mahoraga, but the name must be MAKORA.) Numbers are placeholders apart from the
    user's 150 HP, level 15 and ×2. */
 const MAKORA = {
-  name: 'MAKORA', level: 15, hp: 150, mult: 2, r: 56,  // hp 20 and ×3 until v0.37 (user: 150, ×2)
+  name: 'MAKORA', level: 15, hp: 150, mult: 2, r: 56,  // hp 20 and ×3 until v0.37 (user: 150, ×2). `r`: the drawing's size
+  // v0.46 (user: its hitbox should fit it and grow with it): each wheel turn it grows `grow` bigger (up to `growMax`),
+  // and its hitbox is a capsule of radius `hit.r` from its legs up to its head (drawing units: 30 = r px)
+  grow: 0.08, growMax: 1.4, hit: { r: 30, cap: [0, 12, 0, -62] },
   furube: 'assets/furube.m4a',
   dmg: 12, touch: 8,                                   // a slice / touching it, before the ×2s
   walk: 62, walkPerTurn: 0.2,                          // slow at first (v0.37, user), faster each return
@@ -208,7 +211,7 @@ function endCine() {
 function spawnMakora() {
   const x = W / 2, y = Math.min(playH || H, H) * 0.32;
   const m = {
-    makora: true, type: 'makora', shape: 'makora', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: MAKORA.r,
+    makora: true, type: 'makora', shape: 'makora', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: MAKORA.r, size: MAKORA.r,
     hp: Math.round(MAKORA.hp * coopBossHp()), maxHp: Math.round(MAKORA.hp * coopBossHp()), dmg: MAKORA.touch,   // co-op: tougher
     hit: 0, born: 0, speed: MAKORA.walk,
     state: 'walk', t: 0, cd: 1, aim: Math.PI / 2, face: 1, step: 0, anim: 0,
@@ -216,6 +219,7 @@ function spawnMakora() {
     kickCd: 2.5,
     canDash: false, dashCd: 0, dashesSeen: 0,          // it learns to dash from watching you (makoraReturns)
   };
+  sizeMakora(m);
   game.enemies = [m];
   game.makora = m;
   game.makoraAdapted = new Set();
@@ -269,6 +273,13 @@ function makoraReturns(m) {
 }
 
 const makoraDamage = m => MAKORA.dmg * MAKORA.mult ** m.turns;
+// Its scale: growing in as it arrives, and bigger with every wheel turn. The drawing and the hitbox both follow it.
+const makoraUnit = m => ((m.size || MAKORA.r) * (0.5 + 0.5 * m.born) * Math.min(MAKORA.growMax, 1 + MAKORA.grow * m.turns)) / 30;
+function sizeMakora(m) {
+  const u = makoraUnit(m), c = MAKORA.hit.cap;
+  m.r = MAKORA.hit.r * u;
+  m.cap = [c[0] * u, c[1] * u, c[2] * u, c[3] * u];
+}
 const quick = m => Math.max(MAKORA.quickMin, MAKORA.quick ** m.turns);   // < 1: every timing, shorter each return
 const between = ([a, b]) => a + Math.random() * (b - a);
 
@@ -535,7 +546,7 @@ function resetMakora() {
    It's drawn small on its own canvas and blown up with hard edges, for the same pixelation as the rest of the arena
    (v0.37, user). Local units: 30 = its radius, feet at y ≈ 34; it faces +x. */
 function drawMakora(m) {
-  const k = (m.r * (0.5 + 0.5 * m.born)) / 30, t = m.anim, st = m.state, still = reducedMotion;
+  const k = makoraUnit(m), t = m.anim, st = m.state, still = reducedMotion;
 
   // the warning cone, then the slash itself (world space, along its aim)
   if (st === 'slice' && m.slice) {

@@ -67,6 +67,19 @@ function splitEnemy(e) {
   game.rings.push({ x: e.x, y: e.y, r: 4, max: e.r * 3, life: 0.3, color: enemyCol(e) });
 }
 
+// Where an enemy can be hit (v0.46, user: the bosses' hitboxes should fit them and grow with them). Most are a circle
+// of radius r round (x, y). SKURTOSAURUS and MAKORA are a capsule: that circle slid along a line through their body
+// (`e.cap`: its two ends, as offsets from x, y; boss.js sizeBoss, makora.js sizeMakora), so their chest and head can be
+// hit too, not only their middle. hitPoint: the point on that line nearest (x, y); hitGap: how far (x, y) is from its edge.
+function hitPoint(e, x, y) {
+  const c = e.cap;
+  if (!c) return e;
+  const ax = e.x + c[0], ay = e.y + c[1], vx = c[2] - c[0], vy = c[3] - c[1];
+  const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1)));
+  return { x: ax + vx * t, y: ay + vy * t };
+}
+const hitGap = (e, x, y) => { const q = hitPoint(e, x, y); return Math.hypot(x - q.x, y - q.y) - e.r; };
+
 // The nearest enemy to a point, skipping any in `skip`, optionally within `range`.
 // Distances are to the enemy's edge, not its middle (v0.30, user: you had to be right up against SKURTOSAURUS, whose
 // middle is 50 px in, before your cards would fire at it).
@@ -74,7 +87,7 @@ function nearestEnemy(from = game.player, skip = null, range = Infinity) {
   let best = null, bd = range;
   for (const e of game.enemies) {
     if (skip && skip.has(e)) continue;
-    const d = Math.hypot(e.x - from.x, e.y - from.y) - e.r;
+    const d = hitGap(e, from.x, from.y);
     if (d < bd) { bd = d; best = e; }
   }
   return best;
@@ -153,7 +166,7 @@ function updateSweeps(dt) {
     const a = sw.a0 + e * Math.PI * 2;
     for (const en of game.enemies.slice()) {
       if (sw.hits.has(en)) continue;
-      const dx = en.x - p.x, dy = en.y - p.y, d = Math.hypot(dx, dy);
+      const q = hitPoint(en, p.x, p.y), dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy);
       if (d > sw.len + en.r) continue;
       const ang = Math.atan2(dy, dx);
       let touched;
@@ -176,7 +189,7 @@ function updateSweeps(dt) {
 function blast(x, y, card, radius, dmg, { skip = null, knock = 160, big = false } = {}) {
   for (const e of game.enemies.slice()) {
     if (e === skip) continue;
-    const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy) || 1;
+    const q = hitPoint(e, x, y), dx = q.x - x, dy = q.y - y, d = Math.hypot(dx, dy) || 1;
     if (d > radius + e.r) continue;
     hitEnemy({ card, look: 'blast', dmg, knock: knockOf(knock), vx: dx / d, vy: dy / d, x: e.x, y: e.y }, e);
   }
@@ -502,11 +515,13 @@ function update(dt) {
   for (const e of es) {
     if (e.dummy) { e.hit = Math.max(0, e.hit - dt); continue; }   // the store's test dummies stand still and do no harm
     e.born = Math.min(1, e.born + dt * (e.boss || e.makora ? 1.5 : 4));
+    if (e.boss) sizeBoss(e); else if (e.makora) sizeMakora(e);   // their hitbox follows their size
     if (NET.run) {                          // co-op: each goes after whoever is nearest (and standing)
       if (!e.mrock && !nearestLiving(e.x, e.y)) { e.hit = Math.max(0, e.hit - dt); continue; }
       p = game.player;
     }
-    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, ox = e.x, oy = e.y;
+    let dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+    const ox = e.x, oy = e.y;
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
     else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
@@ -524,6 +539,7 @@ function update(dt) {
     e.hit = Math.max(0, e.hit - dt);
     const shielded = game.shield > 0;
     const reach = e.r + PLAYER.r + (shielded ? SHIELD.r : 0);
+    if (e.cap) { const q = hitPoint(e, p.x, p.y); dx = p.x - q.x; dy = p.y - q.y; d = Math.hypot(dx, dy) || 1; }   // a boss: its nearest part
     if (d < reach && e.state !== 'jump') {   // contact: push out, shove back, and hurt the player (unless shielded; not while the boss is in the air)
       if (e.boss || e.makora) { p.x += (dx / d) * (reach - d); p.y += (dy / d) * (reach - d); clampTo(p, PLAYER.r); }   // a boss shoves you, not the other way round
       else {
@@ -597,7 +613,7 @@ function update(dt) {
     m.t += dt;
     if (m.t < spec.arm) continue;
     // In test mode the dummies never walk onto a mine, so mines go off as soon as they're armed.
-    if (game.practice || es.some(e => Math.hypot(e.x - m.x, e.y - m.y) < (spec.trigger || spec.r) + e.r)) { game.mines.splice(i, 1); usePlayerId(m.owner); explode(m); }
+    if (game.practice || es.some(e => hitGap(e, m.x, m.y) < (spec.trigger || spec.r))) { game.mines.splice(i, 1); usePlayerId(m.owner); explode(m); }
   }
 
   // scheduled combo shots
@@ -640,7 +656,7 @@ function update(dt) {
       for (let st = 0; st < steps && !end; st++) {
         pr.x += pr.vx * dt / steps; pr.y += pr.vy * dt / steps;
         pr.flown += pr.speed * dt / steps;
-        for (const hit of es.filter(en => !pr.hits.has(en) && Math.hypot(pr.x - en.x, pr.y - en.y) < pr.r + en.r)) {
+        for (const hit of es.filter(en => !pr.hits.has(en) && hitGap(en, pr.x, pr.y) < pr.r)) {
           hitEnemy(pr, hit);
           pr.hits.add(hit);
           if (pr.pierce > 0) pr.pierce--;
@@ -662,7 +678,7 @@ function update(dt) {
     const tg = spread ? null : pr.target;
     if (spread) { pr.x += pr.vx * dt; pr.y += pr.vy * dt; }
     else if (tg) {
-      const dx = tg.x - pr.x, dy = tg.y - pr.y, d = Math.hypot(dx, dy) || 1;
+      const aim = hitPoint(tg, pr.x, pr.y), dx = aim.x - pr.x, dy = aim.y - pr.y, d = Math.hypot(dx, dy) || 1;   // the nearest part of it
       if (pr.turn && d > 70) {                        // Arcane Missiles: turn toward it at a rate that grows, so they curve in; close up
                                                       // they go straight for it (they could circle it otherwise)
         pr.age += dt;
@@ -671,14 +687,14 @@ function update(dt) {
         pr.vx = Math.cos(na) * pr.speed; pr.vy = Math.sin(na) * pr.speed;
       } else { pr.vx = (dx / d) * pr.speed; pr.vy = (dy / d) * pr.speed; }
       // Arrives this frame: land on it, so a fast shot can't step past its target.
-      if (d <= pr.speed * dt + pr.r + tg.r) { pr.x = tg.x - (dx / d) * tg.r * 0.8; pr.y = tg.y - (dy / d) * tg.r * 0.8; }
+      if (d <= pr.speed * dt + pr.r + tg.r) { pr.x = aim.x - (dx / d) * tg.r * 0.8; pr.y = aim.y - (dy / d) * tg.r * 0.8; }
       else { pr.x += pr.vx * dt; pr.y += pr.vy * dt; }
     } else {
       pr.x += pr.vx * dt; pr.y += pr.vy * dt;   // no target: fly on straight
     }
     pr.flown += pr.speed * dt;
     pr.spin += dt * 18;
-    const touching = en => !pr.hits.has(en) && Math.hypot(pr.x - en.x, pr.y - en.y) < pr.r + en.r;
+    const touching = en => !pr.hits.has(en) && hitGap(en, pr.x, pr.y) < pr.r;
     const target = (tg && touching(tg)) ? tg : es.find(touching);
     if (target) {
       hitEnemy(pr, target);

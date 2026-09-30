@@ -61,6 +61,7 @@
   --cryo: #7fd8ff;       /* ice blue */
   --shifter: #f0a23a;    /* lion gold */
   --ice: #c8f1ff;        /* frost fields, the ring of ice, chilled enemies */
+  --frozen: #6cc8ff;     /* what a chilled enemy's colour is frosted toward (v0.46) */
   --lion: #e7a846;
   --lion-mane: #a8561e;
   --turtle: #3f9e5a;
@@ -1188,10 +1189,10 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .co-players, .coop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .co-players li, .coop-list li { display: flex; align-items: center; gap: 10px; }
 .co-players li { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-weight: 600; }
-/* a player's look: a dot in their colour, or their emoji on a ring of it */
+/* a player's look: a dot in their colour, or their emoji */
 .co-players i, .coop-list i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--pc); font-style: normal; }
 .co-players i.has-emoji, .coop-list i.has-emoji {
-  width: 22px; height: 22px; display: grid; place-items: center; background: none; box-shadow: inset 0 0 0 2px var(--pc);
+  width: 22px; height: 22px; display: grid; place-items: center; background: none;   /* just the emoji (v0.46, user: cleaner) */
   font-size: 14px; line-height: 1;
 }
 .coop-list .cl-name, .co-pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

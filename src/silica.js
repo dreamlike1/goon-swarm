@@ -83,7 +83,7 @@ function updateFields(dt) {
     const f = game.fields[i];
     usePlayerId(f.owner);
     f.t += dt;
-    for (const e of game.enemies) if (Math.hypot(e.x - f.x, e.y - f.y) < f.r + e.r) chill(e, C.chill);
+    for (const e of game.enemies) if (hitGap(e, f.x, f.y) < f.r) chill(e, C.chill);
     if (f.t < f.life) continue;
     game.fields.splice(i, 1);
     if (!f.burst) continue;
@@ -109,7 +109,7 @@ function updateFrost(dt) {
   const shards = frostShards();
   for (const e of game.enemies.slice()) {
     if ((f.hits.get(e) || 0) > f.t) continue;
-    const s = shards.find(s => Math.hypot(s.x - e.x, s.y - e.y) < R.r + e.r);
+    const s = shards.find(s => hitGap(e, s.x, s.y) < R.r);
     if (!s) continue;
     f.hits.set(e, f.t + R.every);
     chill(e, R.chill);
@@ -124,7 +124,7 @@ function updateFrost(dt) {
 function summonLion(card, e) {
   const p = game.player, a = Math.atan2(e.y - p.y, e.x - p.x);
   const off = PLAYER.r + 14, sx = p.x - Math.cos(a) * off, sy = p.y - Math.sin(a) * off;   // appears just behind you
-  const stop = Math.max(0, Math.hypot(e.x - sx, e.y - sy) - e.r - 14);
+  const stop = Math.max(0, hitGap(e, sx, sy) - 14);
   game.summons.push({ owner: ownerId(), kind: 'lion', card, t: 0, life: SILICA.lion.leap + SILICA.lion.stay, face: a, x: sx, y: sy,
     leap: { x0: sx, y0: sy, x1: sx + Math.cos(a) * stop, y1: sy + Math.sin(a) * stop, target: e, done: false } });
   poof(sx, sy, '#fff');
@@ -149,7 +149,7 @@ function updateLion(s) {
   if (k >= 1) {                                               // lands and bites
     L.done = true;
     const tg = L.target;
-    if (game.enemies.includes(tg) && Math.hypot(tg.x - s.x, tg.y - s.y) < tg.r + 30) {
+    if (game.enemies.includes(tg) && hitGap(tg, s.x, s.y) < 30) {
       const d = Math.hypot(tg.x - s.x, tg.y - s.y) || 1;
       hitEnemy({ card: s.card, look: 'bite', dmg: damageOf(SILICA.lion.bite), knock: knockOf(CARDS[s.card].knock), vx: (tg.x - s.x) / d, vy: (tg.y - s.y) / d, x: tg.x, y: tg.y }, tg);
       game.bites.push({ x: (s.x + tg.x) / 2, y: (s.y + tg.y) / 2, a: s.face, life: 0.22 });
@@ -199,7 +199,7 @@ function updateSilica(dt) {
 // A bomb falls on an enemy near the chimera (or anywhere round it if there are none).
 function dropBomb(card, origin) {
   const p = origin || game.player, C = SILICA.chimera;
-  const near = game.enemies.filter(e => !e.mrock && Math.hypot(e.x - p.x, e.y - p.y) < C.reach);
+  const near = game.enemies.filter(e => !e.mrock && hitGap(e, p.x, p.y) < C.reach);
   const e = near[Math.floor(Math.random() * near.length)];
   const a = Math.random() * TAU, d = 40 + Math.random() * (C.reach - 60);
   const x = e ? e.x + (Math.random() - 0.5) * 20 : p.x + Math.cos(a) * d, y = e ? e.y + (Math.random() - 0.5) * 20 : p.y + Math.sin(a) * d;
@@ -237,14 +237,22 @@ function drawSilicaFloor() {
   }
 }
 // Over the enemies: frost on chilled enemies, the ring of ice, the bombs falling, the lion's bite.
-function drawSilicaTop() {
-  for (const e of game.enemies) {
-    if (!(e.chill > 0) || e.makora || e.boss) continue;
-    ctx.globalAlpha = 0.55; ctx.strokeStyle = COL.ice; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 3, 0, TAU); ctx.stroke();
-    ctx.globalAlpha = 0.25; ctx.fillStyle = COL.ice; circle(e.x, e.y, e.r + 1);
-    ctx.globalAlpha = 1;
+// Chilled (v0.46, user: no circle, but it should look slowed): the enemy is frosted over (draw.js `chilled`, its legs
+// and pincers in slow motion if it's a crab), with little ice sparkles drifting slowly up off it. The bosses also get
+// frost at their feet.
+function frostSparkles(e) {
+  const big = e.boss || e.makora, n = big ? 6 : 3, now = performance.now() / 1000, seed = e.fs ?? (e.fs = e._id ? (e._id * 7.31) % 100 : Math.random() * 100);
+  for (let i = 0; i < n; i++) {
+    const ph = reducedMotion ? (i + 0.5) / n : (now * 0.3 + i / n + seed) % 1;          // slow: a whole rise takes over 3 s
+    const x = e.x + Math.sin(seed * 7 + i * 2.4) * e.r * 0.9, y = e.y + e.r * 0.5 - ph * e.r * 1.9, z = (big ? 5.5 : 4) * (0.6 + 0.4 * Math.sin(ph * Math.PI));
+    ctx.globalAlpha = Math.sin(ph * Math.PI);
+    ctx.fillStyle = COL.ice; ctx.fillRect(x - z, y - 1, z * 2, 2); ctx.fillRect(x - 1, y - z, 2, z * 2);   // a little four-point glint
+    ctx.fillStyle = '#fff'; ctx.fillRect(x - 1, y - 1, 2, 2);
   }
+  ctx.globalAlpha = 1;
+}
+function drawSilicaTop() {
+  for (const e of game.enemies) if (e.chill > 0 && !e.down && !e.dummy) frostSparkles(e);
   for (const e of [game.boss, game.makora]) if (e && e.chill > 0 && !e.down) {   // the big ones: frost at their feet
     ctx.globalAlpha = 0.4; ctx.fillStyle = COL.ice; ellipse(e.x, e.y + e.r * 0.6, e.r * 0.9, e.r * 0.25); ctx.globalAlpha = 1;
   }

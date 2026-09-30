@@ -30,6 +30,9 @@ const BOSS = {
   // apart from the user's "dashes 2 times, throws 3 times".
   phase2: { hp: 200, enrage: 1.6, walk: 1.45, chargeSpeed: 1.2, windup: 0.75, dashes: 2, throws: 3, throwWind: 0.5, throwGap: 0.3, chargeEvery: 0.75, push: 520 },
   xp: 20,
+  // Its hitbox (v0.46, user: it should fit the drawing): in drawing units (30 = BOSS.r px), a capsule of radius `r`
+  // from the middle of its body up to its head, on the side it faces. `r` above is now the drawing's size.
+  hit: { r: 27, cap: [0, 4, 16, -24] },
 };
 // BULL (user: short, with a clear charge animation). `grab`: extra pickup reach while charging; `hitstop`: the freeze on a hit.
 const SWOOSH_LIFE = 0.28;   // seconds a BULL charge's swoosh trail lingers after it ends
@@ -96,12 +99,13 @@ function spawnBoss() {
   // Enter from the edge furthest from the player.
   const x = p.x < W / 2 ? W - BOSS.r - 4 : BOSS.r + 4, y = Math.min(playH || H, H) / 2;
   const b = {
-    boss: true, type: 'boss', shape: 'boss', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: BOSS.r,
+    boss: true, type: 'boss', shape: 'boss', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: BOSS.r, size: BOSS.r, flip: 1,
     hp: Math.round(BOSS.hp * coopBossHp()), maxHp: Math.round(BOSS.hp * coopBossHp()), dmg: BOSS.dmg,   // co-op: tougher
     hit: 0, born: 0, speed: BOSS.walk,
     state: 'walk', t: 0, dir: 0, throwT: 1.2, chargeT: 2.4, face: 0, phase: 1, throwsLeft: 0, dashesLeft: 0, wind: BOSS.throwWind,
     step: 0, throwing: null, recoil: 0, anim: 0,               // walk cycle, throw windup / follow-through, clock (for draw.js)
   };
+  sizeBoss(b);
   game.enemies = [b];
   game.boss = b;
   game.bossDue = false;
@@ -109,6 +113,16 @@ function spawnBoss() {
   game.shake = Math.max(game.shake, 0.4);
   renderBossBar();
   aliveEl.textContent = game.enemies.length;
+}
+
+// Its size and hitbox follow the drawing (draw.js drawBoss): it grows in as it arrives, and its head is on the side it
+// faces (the way it's charging, or toward you).
+function sizeBoss(b) {
+  const u = b.size * (0.5 + 0.5 * b.born) / 30, c = BOSS.hit.cap;
+  const toward = b.state === 'charge' || b.state === 'windup' ? Math.cos(b.dir) : game.player.x - b.x;
+  if (Math.abs(toward) > 1e-3) b.flip = toward < 0 ? -1 : 1;
+  b.r = BOSS.hit.r * u;
+  b.cap = [c[0] * u * b.flip, c[1] * u, c[2] * u * b.flip, c[3] * u];
 }
 
 function renderBossBar() {
@@ -217,7 +231,7 @@ function moveRaptor(e, dt) {
   e.face = Math.atan2(dy, dx);
   if (e.state === 'walk') {
     e.vx = (dx / d) * e.speed + e.kx; e.vy = (dy / d) * e.speed + e.ky;
-    e.step += dt * 11;
+    e.step += dt * 11 * (e.chill > 0 ? SILICA.cryo.slow : 1);   // chilled: its legs slow down too
     if (e.cd <= 0 && d < RAPTOR.sight) { e.state = 'windup'; e.t = RAPTOR.windup; e.dir = e.face; }
   } else if (e.state === 'windup') {
     e.vx = e.kx; e.vy = e.ky;
@@ -226,7 +240,7 @@ function moveRaptor(e, dt) {
   } else if (e.state === 'charge') {
     const v = RAPTOR.dashSpeed * enemySpeedMul(game.level);
     e.vx = Math.cos(e.dir) * v + e.kx; e.vy = Math.sin(e.dir) * v + e.ky;
-    e.step += dt * 28;
+    e.step += dt * 28 * (e.chill > 0 ? SILICA.cryo.slow : 1);
     if (!reducedMotion && Math.random() < 0.5) game.particles.push({ x: e.x, y: e.y + e.r, vx: -e.vx * 0.1, vy: -20 * Math.random(), life: 0.3, color: COL.rock });
     if (e.t <= 0) { e.state = 'rest'; e.t = RAPTOR.rest; }
   } else {                                                  // rest
@@ -378,7 +392,7 @@ function updateDash(dt) {
   clampTo(p, PLAYER.r);
   game.ghosts.push({ x: p.x, y: p.y, a: Math.atan2(dsh.dy, dsh.dx), life: 0.2 });   // afterimages (draw.js)
   for (const e of game.enemies) {
-    if (dsh.hit.has(e) || Math.hypot(e.x - p.x, e.y - p.y) > e.r + PLAYER.r + 10) continue;
+    if (dsh.hit.has(e) || hitGap(e, p.x, p.y) > PLAYER.r + 10) continue;
     dsh.hit.add(e);
     const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1, kr = e.boss ? BOSS.knockResist : 1;
     // Mostly away from the player, with some of the charge's own direction.
