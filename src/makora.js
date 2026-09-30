@@ -209,7 +209,8 @@ function spawnMakora() {
   const x = W / 2, y = Math.min(playH || H, H) * 0.32;
   const m = {
     makora: true, type: 'makora', shape: 'makora', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: MAKORA.r,
-    hp: Math.round(MAKORA.hp * coopBossHp()), maxHp: Math.round(MAKORA.hp * coopBossHp()), dmg: MAKORA.touch,   // co-op: tougher hit: 0, born: 0, speed: MAKORA.walk,
+    hp: Math.round(MAKORA.hp * coopBossHp()), maxHp: Math.round(MAKORA.hp * coopBossHp()), dmg: MAKORA.touch,   // co-op: tougher
+    hit: 0, born: 0, speed: MAKORA.walk,
     state: 'walk', t: 0, cd: 1, aim: Math.PI / 2, face: 1, step: 0, anim: 0,
     turns: 0, wheelA: 0, queue: [], slice: null, punch: null, kick: null, fast: false, down: false,
     kickCd: 2.5,

@@ -47,11 +47,20 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.46' },
+  { tag: 'Co-op', text: 'Smoother online play: friends move smoothly even on a laggy connection, and the game catches up instead of falling behind.' },
+  { tag: 'Co-op', text: 'Everyone’s HP bar shows under them and in the player list.' },
+  { tag: 'Co-op', text: 'Reviving: hold E next to a friend who’s down. When the ring fills they’re back at full health, and you both get a shield.' },
+  { tag: 'Co-op', text: 'The room shows everyone’s deck, with Edit loadout to change yours. Friends press Ready, and Start counts down from 3.' },
+  { tag: 'Co-op', text: 'Pick your colour, or an emoji. After a run, the host can take everyone back to the room.' },
+  { tag: 'Balance', text: 'Levels need a little more XP each time, and a lot more after level 10. Co-op needs a bit more per player.' },
+  { tag: 'Enemies', text: 'The mini dinos are crabs now: same dash, new look.' },
+  { tag: 'Fix', text: 'SKURTOSAURUS and MAKORA show up at the right size again, and flash when hit.' },
   { ver: 'v0.45' },
   { tag: 'Co-op', text: 'New: online CO-OP for up to 4 players, from the main menu. Type your name, then Host (you get a room key to send your friends) or Join with their key.' },
   { tag: 'Co-op', text: 'Everyone plays their own deck in a bigger arena, with many more enemies. Pings show next to every name.' },
   { tag: 'Co-op', text: 'Level ups give everyone their own 3 picks on a 10 second timer, and the fight keeps going.' },
-  { tag: 'Co-op', text: 'Friend down? Stand next to them and press E, then type 5 words before the timer ends to bring them back at full health.' },
+  { tag: 'Co-op', text: 'Friend down? Stand next to them and bring them back at full health.' },
   { ver: 'v0.44' },
   { tag: 'Fix', text: "MAKORA and the rest of the animations now work in every browser, including Brave, Firefox and Safari with their privacy protections on." },
   { ver: 'v0.43' },
@@ -731,7 +740,7 @@ $('btn-loadout').addEventListener('click', () => showScreen('scr-loadout'));
 $('btn-store').addEventListener('click', () => { renderStore(); showScreen('scr-store'); });
 $('btn-store-back').addEventListener('click', goMain);
 $('btn-pv-back').addEventListener('click', () => { renderStore(); showScreen('scr-store'); });
-$('btn-loadout-back').addEventListener('click', goMain);
+$('btn-loadout-back').addEventListener('click', () => (NET.on && !NET.run ? backFromLoadout() : goMain()));   // from a co-op room: back to it
 $('btn-loadout-test').addEventListener('click', startLoadoutTest);
 $('btn-main-back').addEventListener('click', () => showScreen('scr-title'));
 $('btn-play').addEventListener('click', startPreview);
@@ -742,7 +751,8 @@ function onMenuKey(e) {
   if (current === 'scr-pack' && e.code === 'Space' && !e.repeat) { openStarterPack(); e.preventDefault(); }
   if (current === 'scr-reveal' && e.code === 'Space' && !e.repeat && !$('btn-reveal-all').hidden) { speedReveal(); e.preventDefault(); }
   if (e.code === 'Escape') {
-    if (current === 'scr-loadout' || current === 'scr-store') goMain();
+    if (current === 'scr-loadout' && NET.on && !NET.run) backFromLoadout();
+    else if (current === 'scr-loadout' || current === 'scr-store') goMain();
     else if (current === 'scr-packview' && !buying) { renderStore(); showScreen('scr-store'); }
     else if (current === 'scr-main') showScreen('scr-title');
     else if (current === 'scr-coop') { if (NET.on && !NET.run) coopLeave(); goMain(); }
@@ -863,6 +873,7 @@ function defeat() {
   // co-op: only the host can start the next run (everyone comes along); the others wait for it
   $('btn-retry').hidden = NET.run && NET.guest;
   $('btn-retry').textContent = NET.run ? 'Play again together' : 'Try again';
+  $('btn-room').hidden = !(NET.run && NET.host);   // co-op: or back to the room, to change decks (v0.46)
   $('d-wait').hidden = !(NET.run && NET.guest);
   if (NET.run) { closeRevive(); closePick(); }
   ($('btn-retry').hidden ? $('btn-defeat-menu') : $('btn-retry')).focus();

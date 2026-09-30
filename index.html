@@ -95,8 +95,17 @@
       <p class="sub small" id="co-role"></p>
       <p class="co-key"><b id="co-key-show"></b><button type="button" id="co-copy">Copy</button></p>
       <ul class="co-players" id="co-players"></ul>
-      <button class="start" id="co-start" type="button">Start</button>
-      <p class="sub small" id="co-wait">Waiting for the host to start…</p>
+      <div class="co-look" id="co-look">
+        <p class="co-label">Your look <span class="co-hint">a colour, or an emoji over it</span></p>
+        <div class="co-colors" id="co-colors" role="group" aria-label="Colour"></div>
+        <div class="co-emojis" id="co-emojis" role="group" aria-label="Emoji"></div>
+      </div>
+      <div class="co-actions">
+        <button type="button" id="co-edit">Edit loadout</button>
+        <button class="start" id="co-ready" type="button">Ready</button>
+        <button class="start" id="co-start" type="button">Start</button>
+      </div>
+      <p class="sub small co-wait" id="co-wait" aria-live="polite"></p>
       <button class="back" id="co-leave" type="button">Leave room</button>
     </div>
     <p class="co-error" id="co-error" role="alert" hidden></p>
@@ -198,15 +207,8 @@
   <span class="cp-track"><span class="cp-bar" id="cp-bar"></span></span>
   <ul class="cp-cards" id="cp-cards"></ul>
 </div>
-<div class="revive" id="revive" role="dialog" aria-labelledby="rv-title" hidden>
-  <div class="rv-box">
-    <p class="rv-title" id="rv-title">Reviving <b id="rv-name"></b></p>
-    <p class="rv-hint">Type each word, then Enter or Space</p>
-    <p class="rv-word" id="rv-word"></p>
-    <input id="rv-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type the word">
-    <p class="rv-foot"><span id="rv-count">0/5</span> <span class="cp-track"><span class="cp-bar" id="rv-bar"></span></span> <span id="rv-time">15s</span></p>
-  </div>
-</div>
+<!-- co-op on a touch screen: hold this to revive the friend next to you (the keyboard holds E) -->
+<button class="rv-btn" id="rv-btn" type="button" hidden>Hold to revive <b id="rv-btn-name"></b></button>
 <div class="intro" id="intro" role="status" aria-live="assertive" hidden></div>
 
 <div class="deck-status" id="deckStatus">
@@ -257,6 +259,7 @@
     <p class="sub small" id="d-wait" hidden>Waiting for the host to start the next run…</p>
     <div class="nav">
       <button class="start" id="btn-retry" type="button">Try again</button>
+      <button id="btn-room" type="button" hidden>Back to the room</button>
       <button id="btn-defeat-menu" type="button">Main menu</button>
     </div>
   </section>

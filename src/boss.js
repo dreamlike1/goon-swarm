@@ -97,7 +97,8 @@ function spawnBoss() {
   const x = p.x < W / 2 ? W - BOSS.r - 4 : BOSS.r + 4, y = Math.min(playH || H, H) / 2;
   const b = {
     boss: true, type: 'boss', shape: 'boss', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: BOSS.r,
-    hp: Math.round(BOSS.hp * coopBossHp()), maxHp: Math.round(BOSS.hp * coopBossHp()), dmg: BOSS.dmg,   // co-op: tougher hit: 0, born: 0, speed: BOSS.walk,
+    hp: Math.round(BOSS.hp * coopBossHp()), maxHp: Math.round(BOSS.hp * coopBossHp()), dmg: BOSS.dmg,   // co-op: tougher
+    hit: 0, born: 0, speed: BOSS.walk,
     state: 'walk', t: 0, dir: 0, throwT: 1.2, chargeT: 2.4, face: 0, phase: 1, throwsLeft: 0, dashesLeft: 0, wind: BOSS.throwWind,
     step: 0, throwing: null, recoil: 0, anim: 0,               // walk cycle, throw windup / follow-through, clock (for draw.js)
   };
@@ -206,7 +207,7 @@ function moveBoss(b, dt) {
   b.x += b.vx * dt; b.y += b.vy * dt;
 }
 
-/* ---------- mini dinos (level 11 on) ---------- */
+/* ---------- crabs (level 11 on; mini dinos before v0.46) ---------- */
 // Walks in; once you're within sight it stops, winds up (shaking, aim line), dashes along that line, then rests.
 function moveRaptor(e, dt) {
   const p = game.player, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
@@ -335,7 +336,7 @@ function bossDown(b) {
 
 /* ---------- BULL: Space to charge ---------- */
 function tryDash(dir = null) {
-  if (NET.guest && NET.run) { if (!NET.me.down && !NET.typing) NET.wantDash = true; return; }   // co-op: the host charges us
+  if (NET.guest && NET.run) { if (!NET.me.down) NET.wantDash = true; return; }   // co-op: the host charges us
   if (!game.relics.includes('bull') || game.dash || game.dashCd > 0 || game.inMenu || game.over || (game.paused && !NET.run) || game.choosing || game.intro || game.cine) return;
   if (NET.run && ACTIVE?.down) return;
   const p = game.player;

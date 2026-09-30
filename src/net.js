@@ -6,18 +6,27 @@ const COOP = {
   max: 4, snapMs: 50, inMs: 33, pingMs: 1000, world: 1.6,
   count: 1.0, hp: 0.75, boss: 0.8,                    // per extra player: enemy count +100%, enemy HP +75%, boss HP +80%
   pickTime: 10, reviveReach: 70,
-  revive: { words: 5, time: 15 },
-  colors: ['#fff6fb', '#5fd3ff', '#9dff6a', '#ffb347'],
+  // v0.46 (user): hold E next to a friend who's down (you stand still while you do). `hold` s brings them back at full
+  // health; each extra friend holding adds `help` speed; let go and it drains back at `drain`. Then everyone in it
+  // gets the mini shield for `shield` s.
+  revive: { hold: 2.5, help: 0.5, drain: 1, shield: 3 },
+  countdown: 3,                                        // seconds from Start to the run (everyone must be ready)
+  // Lag (v0.46): a guest draws everything else `delay` ms in the past, between two pictures, so it moves smoothly;
+  // the delay follows how uneven the pictures arrive (min–max), and past the newest picture it carries on for up to
+  // `ext` ms. The host moves each guest ahead by half their ping (up to `lead` s) so where you are on the host
+  // matches your own screen. `backlog`: skip a picture when this much is still waiting to go out to that friend.
+  interp: { min: 60, max: 260, ext: 110 }, lead: 0.12, backlog: 48 * 1024,
+  colors: ['#fff6fb', '#5fd3ff', '#9dff6a', '#ffb347', '#ff7ce0', '#b79cff', '#ffe45c', '#4ef0c8'],
+  // Your look (v0.46): a colour, or an emoji over it (whichever you picked last). Some are from the newest emoji sets.
+  emojis: ['😎', '🤖', '👽', '👻', '💀', '🤡', '🥷', '🧙', '🐸', '🐱', '🐶', '🦊', '🐼', '🐧', '🦄', '🐙',
+    '🦖', '🐢', '🐝', '🦈', '🔥', '⭐', '🍕', '🎃', '🫠', '🫡', '🥹', '🪿', '🫎', '🪼', '🐦‍🔥', '🍄‍🟫'],
   peerjs: 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js', prefix: 'packs-silica-',
-  WORDS: ['silica', 'makora', 'wheel', 'bullet', 'cannon', 'sniper', 'laser', 'gatling', 'cryo', 'druid', 'mine', 'arcane',
-    'swarm', 'packs', 'skurto', 'adapt', 'legend', 'crit', 'dash', 'bull', 'lion', 'turtle', 'chimera', 'frost', 'magus',
-    'rocket', 'shield', 'revive', 'deck', 'combo', 'boss', 'rare', 'gold', 'blast', 'orbit', 'storm', 'pulse', 'blade'],
 };
 
 // NET: the connection and the players. ACTIVE: whose deck, stats and BULL the game's globals point at right now
 // (the host switches between players as it runs each one's part of the frame).
 const NET = { on: false, host: false, guest: false, run: false, key: '', name: '', me: null, players: [], lobby: [], world: null,
-  peer: null, conn: null, conns: new Map(), nid: 0, myCards: null, mySeed: 0, snap: null, lastIn: 0, lastSnap: 0, lastPing: 0, wantDash: false };
+  peer: null, conn: null, fast: null, conns: new Map(), nid: 0, holdE: false, ready: false, countEnd: 0, myCards: null, mySeed: 0, snap: null, lastIn: 0, lastSnap: 0, lastPing: 0, wantDash: false };
 let ACTIVE = null;
 let VW = 0, VH = 0;                                    // the view (the arena on screen); W / H are the world in co-op
 const cam = { x: 0, y: 0 };
@@ -66,7 +75,8 @@ function reacher(x, y, r) {
   for (const c of living()) { usePlayer(c); if (playerReach(x, y) < PLAYER.r + (game.dash ? BULL.grab : 2) + r) return c.body; }
   return null;
 }
-const coopN = () => (NET.run ? NET.players.length : 1);
+// (a guest only holds itself in NET.players, so it counts the players in the host's pictures)
+const coopN = () => (!NET.run ? 1 : NET.guest ? Math.max(1, (NET.pings || NET.roster || []).length) : NET.players.length);
 const coopCount = () => 1 + COOP.count * (coopN() - 1);   // enemy count and spawn rate
 const coopHp = () => 1 + COOP.hp * (coopN() - 1);         // enemy HP
 const coopBossHp = () => 1 + COOP.boss * (coopN() - 1);   // SKURTOSAURUS and MAKORA
@@ -78,5 +88,6 @@ function newCtx(id, name, color, local, cards, seedN) {
     deck: createDeck(cards, mulberry32(seedN)), stats: freshStats(), picks: freshPicks(),
     cooldown: ATTACK_INTERVAL, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], shield: 0, shieldHit: 0, dash: null, dashCd: 0,
     muzzle: null, relics: [], frost: null,
-    down: false, typing: false, ping: 0, fired: 0, outbox: [], pickQ: [], pick: null, net: { mx: 0, my: 0, x: null, y: null, dash: false } };
+    down: false, rev: 0, reviving: false, ping: 0, fired: 0, outbox: [], pickQ: [], pick: null,
+    net: { mx: 0, my: 0, x: null, y: null, dash: false, rv: false, at: 0, seq: 0 } };
 }

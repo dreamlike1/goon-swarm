@@ -25,7 +25,7 @@ function frame(now) {
     if (NET.guest && NET.run) { if (!game.inMenu && !game.over) guestFrame(dt); }
     else if ((!game.paused || NET.run) && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || game.practice)) {
       update(dt);
-      if (NET.run) { usePlayer(NET.me); pickTimeouts(); tickPick(); reviveTick(dt); }
+      if (NET.run) { usePlayer(NET.me); pickTimeouts(); tickPick(); reviveHud(); }
     }
     if (NET.host && NET.run) flushSnaps();
     if (nextCard) nextCard.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);

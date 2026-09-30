@@ -47,8 +47,8 @@ function makeEnemy(type, x, y, split = false) {
     type, shape: T.shape, r: T.r, dmg: enemyDmg(type, game.level), hp, maxHp: hp, split,
     hit: 0, born: 0, speed: T.speed * enemySpeedMul(game.level) * (0.85 + Math.random() * 0.3),
   };
-  // Mini dinos use the dino drawing and a small state machine (see moveRaptor in boss.js).
-  if (T.shape === 'dino') Object.assign(e, { state: 'walk', t: 0, dir: 0, face: 0, step: 0, anim: 0, throwing: null, recoil: 0, cd: RAPTOR.every[0] });
+  // Crabs (mini dinos before v0.46) have a small state machine (see moveRaptor in boss.js).
+  if (T.shape === 'crab') Object.assign(e, { state: 'walk', t: 0, dir: 0, face: 0, step: 0, anim: 0, throwing: null, recoil: 0, cd: RAPTOR.every[0] });
   return e;
 }
 const enemyCol = e => COL[e.split ? `${e.type}-split` : e.type];
@@ -510,7 +510,7 @@ function update(dt) {
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
     else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
-    else if (e.shape === 'dino') moveRaptor(e, dt);
+    else if (e.shape === 'crab') moveRaptor(e, dt);
     else {
       e.kx *= decay; e.ky *= decay;
       e.vx = (dx / d) * e.speed + e.kx;
@@ -528,7 +528,7 @@ function update(dt) {
       if (e.boss || e.makora) { p.x += (dx / d) * (reach - d); p.y += (dy / d) * (reach - d); clampTo(p, PLAYER.r); }   // a boss shoves you, not the other way round
       else {
         e.x -= (dx / d) * (reach - d); e.y -= (dy / d) * (reach - d); e.kx -= (dx / d) * 260; e.ky -= (dy / d) * 260;
-        if (e.state === 'charge') { e.state = 'rest'; e.t = RAPTOR.rest; }   // a mini dino's dash stops when it hits you
+        if (e.state === 'charge') { e.state = 'rest'; e.t = RAPTOR.rest; }   // a crab's dash stops when it hits you
       }
       if (shielded || game.dash) game.shieldHit = 0.15;
       else { p.flash = 0.2; hurtPlayer(e.dmg); }

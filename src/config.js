@@ -13,14 +13,15 @@ const ENEMY_TYPES = {
   // v0.12 (user: the level scaling was a bit hard): HP no longer grows with level at all; only numbers, damage and
   // speed do, so you out-grow them. Each stage brings in one new thing (placeholders):
   //   1–3 red squares only · 4 splitters start (rare, SPLIT) · 7 fast triangles · 10 the boss · 11+ big squares
-  //   (rare) and mini dinos.
+  //   (rare) and mini dinos (crabs since v0.46).
   square:   { name: 'Square',     shape: 'square',   hp: 3, hpPerLevel: 0, hpPerLevelLate: 0, speed: 130, r: 13, dmg: 10, weight: 6,   xp: 1, from: 1 },
   triangle: { name: 'Triangle',   shape: 'triangle', hp: 2, hpPerLevel: 0, hpPerLevelLate: 0, speed: 200, r: 11, dmg: 5,  weight: 2,   xp: 1, from: 7 },
   big:      { name: 'Big square', shape: 'square',   hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 105, r: 20, dmg: 20, weight: 0.6, xp: 3, from: 11 },
   // v0.12: red and bigger (user); r 12 before
-  raptor:   { name: 'Mini dino',  shape: 'dino',     hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 90,  r: 18, dmg: 12, weight: 1,   xp: 2, from: 11 },
+  // v0.46 (user): the mini dino is now a crab (same moves)
+  raptor:   { name: 'Crab',       shape: 'crab',     hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 90,  r: 18, dmg: 12, weight: 1,   xp: 2, from: 11 },
 };
-// Mini dinos (user: after level 10, they dash at you): they walk in, and once you're within `sight` they stop,
+// Crabs (mini dinos until v0.46; user: after level 10, they dash at you): they walk in, and once you're within `sight` they stop,
 // wind up (`windup` s, shaking, with a short aim line), dash along that line, then rest. Placeholders.
 const RAPTOR = { sight: 230, windup: 0.5, dash: 0.42, dashSpeed: 560, rest: 0.7, every: [1.4, 2.4] };
 // Splitters (user): a red-purple version of the squares and triangles, rarer than the red ones but not super
@@ -94,13 +95,24 @@ const XP = {
 // `flat` XP instead of more each level. Set `on: false` to go back to the normal curve above.
 // v0.33 (user: nerf the XP a bit): orbs ×1.5 → ×1.3 and 12 → 14 XP a level, so levels take about a quarter longer.
 const XP_BOOST = { on: true, drop: 1, value: 1.3, flat: 14 };
-const xpNeeded = level => XP_BOOST.on ? XP_BOOST.flat : Math.round(XP.first * XP.grow ** (level - 1) + XP.step * (level - 1));
+// v0.46 (user: too easy to level up after level 10; smoother, and balanced for co-op): instead of the same 14 every
+// level, it starts at 12 and creeps up, then climbs faster after level 9, when the swarm grows quickly:
+// 12, 13, 14, 14, 15, 16, 17, 18, 18, then 20, 23, 27, 33, 40 (levels 10–14). In co-op every level needs `coop` more
+// per extra player (+25%), since there are more enemies to kill. Set `on: false` to go back to the flat 14.
+const XP_CURVE = { on: true, base: 12, per: 0.8, knee: 9, late: 0.7, coop: 0.25 };
+const xpNeeded = level => {
+  if (XP_CURVE.on) {
+    const C = XP_CURVE, n = typeof coopN === 'function' ? coopN() : 1;
+    return Math.round((C.base + C.per * (level - 1) + C.late * Math.max(0, level - C.knee) ** 2) * (1 + C.coop * (n - 1)));
+  }
+  return XP_BOOST.on ? XP_BOOST.flat : Math.round(XP.first * XP.grow ** (level - 1) + XP.step * (level - 1));
+};
 
 const css = getComputedStyle(document.documentElement);
 const tok = n => css.getPropertyValue(n).trim();
 const COL = {
   floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
-  square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--enemy'),
+  square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),
   ...Object.fromEntries(RARITIES.map(r => [`r-${r}`, tok(`--r-${r}`)])),

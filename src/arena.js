@@ -59,8 +59,8 @@ addEventListener('keydown', e => {
   if (game.inMenu) { onMenuKey(e); return; }
   if (game.over) return;
   if (game.practice && onPracticeKey(e)) return;   // the store's test mode: 1–3 fire, Esc goes back
-  if (NET.run && !e.repeat) {                      // co-op: E revives a friend who's down; 1–3 pick a level-up card
-    if (e.code === 'KeyE' && coopTryRevive()) { e.preventDefault(); return; }
+  if (NET.run && e.code === 'KeyE') { NET.holdE = true; e.preventDefault(); return; }   // co-op: hold E to revive a friend who's down
+  if (NET.run && !e.repeat) {                      // co-op: 1–3 pick a level-up card
     const d = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
     if (d && pickNow) { choosePick(+d[1] - 1); e.preventDefault(); return; }
   }
@@ -71,8 +71,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Space') { if (!e.repeat) tryDash(); e.preventDefault(); }   // BULL relic (user: Space)
   if (e.code === 'Escape') { togglePause(); e.preventDefault(); }             // pause (user: Esc)
 });
-addEventListener('keyup', e => keys.delete(e.code));
-addEventListener('blur', () => { keys.clear(); autoPause(); });
+addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyE') NET.holdE = false; });
+addEventListener('blur', () => { keys.clear(); NET.holdE = false; autoPause(); });
 // Alt-tab, another window or a hidden tab pauses the run (user).
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); else releaseHold(); });
 addEventListener('focus', releaseHold);

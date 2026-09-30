@@ -42,6 +42,11 @@
   --enemy-fast: #ff7a6b;
   --enemy-big-split: #8f3a8a;
   --enemy-fast-split: #d970c4;
+  --crab: #f2452a;               /* the crab (v0.46, user's picture): orange-red, glossy, big pale-yellow eyes */
+  --crab-dark: #c9301b;
+  --crab-hi: #ff8a70;
+  --crab-eye: #fbf0b2;
+  --crab-pupil: #2b2429;
   /* card colours, one per card id (placeholders until card visuals are designed) */
   --laser: #3ee6ff;
   --arcane: #b28cff;
@@ -1183,14 +1188,50 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .co-players, .coop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .co-players li, .coop-list li { display: flex; align-items: center; gap: 10px; }
 .co-players li { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-weight: 600; }
-.co-players i, .coop-list i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.co-players span, .coop-list .cl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a player's look: a dot in their colour, or their emoji on a ring of it */
+.co-players i, .coop-list i { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--pc); font-style: normal; }
+.co-players i.has-emoji, .coop-list i.has-emoji {
+  width: 22px; height: 22px; display: grid; place-items: center; background: none; box-shadow: inset 0 0 0 2px var(--pc);
+  font-size: 14px; line-height: 1;
+}
+.coop-list .cl-name, .co-pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.co-deck { display: flex; flex-wrap: wrap; gap: 3px 8px; font: 500 11px var(--f-ui); color: var(--muted); }
+.co-deck span { white-space: nowrap; }
+.co-deck span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 2px; background: var(--c); vertical-align: 1px; }
+.co-rd { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.co-players li.is-ready { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+.co-players li.is-ready .co-rd { color: var(--ok); }
+/* your look: colour swatches, then the emojis */
+.co-look { display: flex; flex-direction: column; gap: 8px; }
+.co-hint { margin-left: 6px; font-weight: 500; letter-spacing: .04em; text-transform: none; }
+.co-colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-sw {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; background: var(--sw); border: 2px solid var(--card);
+  box-shadow: 0 0 0 1.5px var(--line); cursor: pointer;
+}
+.co-sw.is-mine { box-shadow: 0 0 0 2px var(--text); }
+.co-sw[aria-pressed="true"] { box-shadow: 0 0 0 2.5px var(--text), 0 0 10px var(--sw); }
+.co-sw:disabled { opacity: .22; cursor: not-allowed; }
+.co-emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; }
+.co-em {
+  height: 34px; padding: 0; border-radius: 8px; font-size: 19px; line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  background: var(--floor); border: 1.5px solid transparent; cursor: pointer;
+}
+.co-em:hover { border-color: var(--line); }
+.co-em[aria-pressed="true"] { border-color: var(--text); background: color-mix(in srgb, var(--text) 12%, var(--floor)); }
+.co-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.co-actions > button:not(.start) { padding: 10px 16px; border-radius: 8px; font-weight: 600; letter-spacing: .04em; }
+.menu #co-ready.is-on {                                  /* ready: the same chrome button, in green */
+  background: var(--grain), linear-gradient(180deg, #c4f7d8, #8ce0ae 30%, var(--ok) 50%, #3f9a66 52%, #235f3d);
+  text-shadow: 0 2px 0 rgba(0, 40, 20, .8);
+}
+.co-wait { margin: 0; text-align: center; }
+.co-wait:empty { display: none; }
 .cl-ping { font: 600 12px var(--f-num); color: var(--muted); font-variant-numeric: tabular-nums; }
 .cl-ping.is-good { color: var(--ok); } .cl-ping.is-ok { color: var(--r-legendary); } .cl-ping.is-bad { color: var(--bad); }
-#co-start { align-self: center; }
 .co-error { margin: 0; color: var(--bad); font-weight: 600; }
-
-.rv-hint kbd { font: 700 11px var(--f-num); padding: 1px 5px; border: 1px solid currentColor; border-radius: 4px; }
 
 /* In a co-op run: who's playing, with pings (top left, under the counters) */
 .coop-list {
@@ -1201,6 +1242,11 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 }
 .coop-list li.is-down { opacity: .55; }
 .coop-list li.is-down .cl-ping { color: var(--bad); }
+.coop-list .cl-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.coop-list .cl-hp { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.coop-list .cl-hp span { position: absolute; inset: 0; transform-origin: left; transition: transform .2s; }
+.coop-list .cl-warn { color: var(--bad); font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .coop-list .cl-hp span { transition: none; } }
 
 /* Level-up picks in co-op: a bar at the top, the fight carries on underneath */
 .coop-pick {
@@ -1228,26 +1274,11 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .cp-gain { font-size: 11px; color: var(--muted); line-height: 1.25; }
 .cp-rar { font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--rc); }
 
-/* Reviving: a typing test over the arena */
-.revive { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; }
-.rv-box {
-  pointer-events: auto; width: min(360px, calc(100% - 32px)); box-sizing: border-box; padding: 16px 18px;
-  display: flex; flex-direction: column; gap: 10px; text-align: center;
-  background: color-mix(in srgb, var(--card) 96%, transparent); border: 2px solid var(--hp); border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+/* Reviving on a touch screen (v0.46): hold this button; it fills as the revive does. The keyboard holds E. */
+.rv-btn {
+  position: fixed; z-index: 6; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 170px);
+  padding: 12px 20px; border-radius: 999px; font: 700 13px var(--f-ui); letter-spacing: .06em; color: var(--text);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--hp) 55%, var(--card)) calc(var(--p, 0) * 100%), var(--card) 0);
+  border: 2px solid var(--hp); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); touch-action: none; user-select: none; -webkit-user-select: none;
 }
-.rv-box.is-wrong { animation: rv-shake .3s ease-out; border-color: var(--bad); }
-@keyframes rv-shake { 20% { transform: translateX(-8px); } 45% { transform: translateX(7px); } 70% { transform: translateX(-4px); } }
-@media (prefers-reduced-motion: reduce) { .rv-box.is-wrong { animation: none; } }
-.rv-title { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--hp); }
-.rv-title b { color: var(--text); }
-.rv-hint { margin: 0; font-size: 11px; color: var(--muted); }
-.rv-word { margin: 0; font: 700 32px var(--f-num); letter-spacing: .08em; color: var(--text); }
-.rv-word.is-right { color: var(--hp); } .rv-word.is-wrong { color: var(--bad); }
-#rv-input {
-  font: 600 18px var(--f-num); text-align: center; letter-spacing: .06em; color: var(--text);
-  background: var(--floor); border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 10px; outline: none;
-}
-#rv-input:focus-visible { border-color: var(--hp); }
-.rv-foot { margin: 0; display: flex; align-items: center; gap: 10px; font: 600 12px var(--f-num); color: var(--muted); }
-#rv-bar { background: var(--hp); }
+.rv-btn b { color: var(--hp); }

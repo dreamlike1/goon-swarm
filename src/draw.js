@@ -70,23 +70,39 @@ function dinoArm(x, y, raise, col) {
   ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
 }
 
+// A dasher's warning while it winds up (SKURTOSAURUS and the crabs): a faint band as wide as it is and a thick
+// dashed line with an arrowhead, down where the charge will go (user: thicker).
+function chargeAim(b) {
+  const len = b.boss ? BOSS.chargeSpeed * BOSS.charge : RAPTOR.dashSpeed * RAPTOR.dash * enemySpeedMul(game.level);
+  const blink = 0.35 + 0.35 * Math.sin(b.t * 30);
+  ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dir);
+  ctx.fillStyle = COL.bad;
+  ctx.globalAlpha = 0.12; ctx.fillRect(0, -b.r * 0.8, len, b.r * 1.6);
+  ctx.globalAlpha = 0.3 + blink; ctx.strokeStyle = COL.bad; ctx.lineCap = 'round';
+  ctx.lineWidth = b.boss ? 9 : 5; ctx.setLineDash(b.boss ? [22, 14] : [12, 9]);
+  ctx.beginPath(); ctx.moveTo(b.r * 0.5, 0); ctx.lineTo(len, 0); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = b.boss ? 6 : 4; ctx.lineJoin = 'round';          // an arrowhead at the end
+  const h = b.boss ? 16 : 9;
+  ctx.beginPath(); ctx.moveTo(len - h, -h); ctx.lineTo(len, 0); ctx.lineTo(len - h, h); ctx.stroke();
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+// Speed lines streaming off behind a charge.
+function chargeLines(b) {
+  const cx = Math.cos(b.dir), cy = Math.sin(b.dir);
+  ctx.strokeStyle = COL.player; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  for (let i = -2; i <= 2; i++) {
+    const off = i * 11 * (b.r / 30), j = reducedMotion ? 0 : Math.random() * 14, bx = b.x - cx * (b.r + 4) - cy * off, by = b.y - cy * (b.r + 4) + cx * off;
+    ctx.globalAlpha = 0.25 + (2 - Math.abs(i)) * 0.1;
+    const l = (26 + j) * (b.boss ? 1 : 0.5);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - cx * l, by - cy * l); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawBoss(b) {
   const s = b.r * (0.5 + 0.5 * b.born), k = s / 30, t = b.anim, st = b.state, still = reducedMotion;
-  if (st === 'windup') {                    // where the charge will go (user: thicker): a faint band as wide as the dino, and a thick dashed line
-    const len = b.boss ? BOSS.chargeSpeed * BOSS.charge : RAPTOR.dashSpeed * RAPTOR.dash * enemySpeedMul(game.level);
-    const blink = 0.35 + 0.35 * Math.sin(b.t * 30);
-    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.dir);
-    ctx.fillStyle = COL.bad;
-    ctx.globalAlpha = 0.12; ctx.fillRect(0, -b.r * 0.8, len, b.r * 1.6);
-    ctx.globalAlpha = 0.3 + blink; ctx.strokeStyle = COL.bad; ctx.lineCap = 'round';
-    ctx.lineWidth = b.boss ? 9 : 5; ctx.setLineDash(b.boss ? [22, 14] : [12, 9]);
-    ctx.beginPath(); ctx.moveTo(b.r * 0.5, 0); ctx.lineTo(len, 0); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineWidth = b.boss ? 6 : 4; ctx.lineJoin = 'round';          // an arrowhead at the end
-    const h = b.boss ? 16 : 9;
-    ctx.beginPath(); ctx.moveTo(len - h, -h); ctx.lineTo(len, 0); ctx.lineTo(len - h, h); ctx.stroke();
-    ctx.restore(); ctx.globalAlpha = 1;
-  }
+  if (st === 'windup') chargeAim(b);
   if (b.boss && b.throwing != null) {      // the big rock's lane: a red band down the line it'll be thrown, filling as it winds up
     const q = Math.min(1, b.throwing / BOSS.throwWind), a = b.throwA ?? b.face, w = BOSS.bigRock.r * 2 + 8, L = Math.hypot(W, H);
     ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(a);
@@ -101,17 +117,7 @@ function drawBoss(b) {
     }
     ctx.restore(); ctx.globalAlpha = 1;
   }
-  if (st === 'charge') {                    // speed lines streaming off behind it
-    const cx = Math.cos(b.dir), cy = Math.sin(b.dir);
-    ctx.strokeStyle = COL.player; ctx.lineWidth = 2; ctx.lineCap = 'round';
-    for (let i = -2; i <= 2; i++) {
-      const off = i * 11 * (b.r / 30), j = still ? 0 : Math.random() * 14, bx = b.x - cx * (b.r + 4) - cy * off, by = b.y - cy * (b.r + 4) + cx * off;
-      ctx.globalAlpha = 0.25 + (2 - Math.abs(i)) * 0.1;
-      const l = (26 + j) * (b.boss ? 1 : 0.5);
-      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - cx * l, by - cy * l); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
+  if (st === 'charge') chargeLines(b);
 
   if (b.phase === 2) {                      // phase 2: a pulsing red heat around it
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * 6), R = b.r * (1.5 + 0.15 * pulse);
@@ -150,7 +156,6 @@ function drawBoss(b) {
   const bob = stride && !still ? Math.abs(Math.sin(b.step)) * 1.6 : 0;
   const jit = (st === 'windup' || st === 'enrage') && !still ? (Math.random() - 0.5) * (st === 'enrage' ? 4 : 2) : 0;
   if (b.phase === 2) fury = true;                            // phase 2: red eyes the whole time
-  // mini dinos are red (user, v0.12), SKURTOSAURUS stays green
   const body = b.hit > 0 ? COL.player : b.boss ? COL.boss : COL.enemy, dark = b.hit > 0 ? COL.player : b.boss ? COL.bossDark : COL.big;
 
   ctx.save();
@@ -205,6 +210,84 @@ function drawBoss(b) {
   ctx.restore();
 
   dinoLeg(2, 10 + crouch, nearPh, nearStride, body, true);   // near leg
+  ctx.restore();
+}
+
+/* ---------- the crab (v0.46, user's picture; the mini dino before) ----------
+   Front on, in a 20-unit frame (origin = the middle of its shell): a wide glossy orange-red shell with a little smile,
+   two eyes on stalks with big pale-yellow eyeballs, two pincers held up and three legs a side. It keeps the mini
+   dino's moves: it scuttles in (legs ticking, bobbing), and when it winds up a dash it shakes, snaps its pincers and
+   its pupils go red; in the dash it squashes flat and its legs blur. Its eyes follow you. */
+function crabClaw(side, open, lift, col, hi) {
+  // one pincer: the arm, then a round palm with two fingers that open and close (`open` 0–1)
+  ctx.save(); ctx.scale(side, 1);
+  const ax = 27, ay = -19 - lift;
+  ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(14, -6); ctx.quadraticCurveTo(24, -8, ax, ay + 4); ctx.stroke();
+  ctx.fillStyle = col;
+  ellipse(ax, ay, 9.5, 8.5);                                             // palm
+  ctx.save(); ctx.translate(ax + 4, ay - 4); ctx.rotate(0.35 + open * 0.5); ellipse(0, -6, 5, 8); ctx.restore();    // outer finger
+  ctx.save(); ctx.translate(ax - 4, ay - 4); ctx.rotate(-0.35 - open * 0.5); ellipse(0, -5, 4, 6.5); ctx.restore(); // inner finger
+  ctx.fillStyle = hi; ctx.globalAlpha *= 0.55; ellipse(ax - 4, ay + 1, 2.5, 4, 0.5); ctx.globalAlpha /= 0.55;       // shine
+  ctx.restore();
+}
+function drawCrab(e) {
+  const s = e.r * (0.5 + 0.5 * e.born), k = s / 17, t = e.anim || 0, st = e.state, still = reducedMotion;
+  if (st === 'windup') chargeAim(e);
+  if (st === 'charge') chargeLines(e);
+  const hit = e.hit > 0, body = hit ? COL.player : COL.crab, dark = hit ? COL.player : COL.crabDark, hi = COL.crabHi;
+  const walking = st === 'walk', fury = st === 'windup' || st === 'charge';
+  const step = e.step || 0, bob = walking && !still ? Math.abs(Math.sin(step)) * 1.5 : 0;
+  const jit = st === 'windup' && !still ? (Math.random() - 0.5) * 2.4 : 0;
+  const squash = st === 'charge' ? 0.84 : st === 'rest' ? 0.94 : 1;       // flat in a dash, sagging while it rests
+  // pincers: up and slowly opening and closing as it walks; snapping fast in a wind-up; tucked in a dash
+  const open = still ? 0.4 : st === 'windup' ? 0.5 + 0.5 * Math.sin(t * 40) : st === 'charge' ? 0 : 0.35 + 0.25 * Math.sin(t * 4);
+  const lift = st === 'windup' ? 4 : st === 'charge' ? -6 : st === 'rest' ? -3 : 0;
+
+  ctx.save();
+  ctx.translate(e.x + jit, e.y); ctx.scale(k, k);
+  ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ellipse(0, 20, 26, 5); ctx.globalAlpha = 1;   // shadow
+  ctx.translate(0, -bob); ctx.scale(1 / squash, squash);
+
+  // legs: three a side, behind the shell, ticking in turn as it walks (a blur in a dash)
+  ctx.strokeStyle = dark; ctx.lineCap = 'round';
+  for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const ph = step * (st === 'charge' ? 1.6 : 1) + i * 2.1 + (side > 0 ? Math.PI : 0);
+    const kick = walking || st === 'charge' ? Math.sin(ph) * 2.5 : 0, rise = walking ? Math.max(0, Math.cos(ph)) * 2.5 : 0;
+    const hx = side * 17, hy = 1 + i * 5.5, fx = side * (29 + i * 1.5) + kick * side, fy = 9 + i * 5 - rise;
+    ctx.lineWidth = 8; ctx.strokeStyle = i === 1 ? dark : body;          // chunky, like the picture; the middle one a shade darker
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.quadraticCurveTo(side * 27, hy - 2, fx, fy); ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = hi; ctx.globalAlpha = 0.55;       // a shine along each
+    ctx.beginPath(); ctx.moveTo(side * 22, hy - 2); ctx.quadraticCurveTo(side * 26, hy - 2.6, side * 27.5, hy); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+
+  crabClaw(-1, open, lift, body, hi); crabClaw(1, open, lift, body, hi);
+
+  // eyes on stalks, pupils turned toward you (red when it's about to dash)
+  const tx = game.player.x - e.x, ty = game.player.y - e.y, tl = Math.hypot(tx, ty) || 1, lx = (tx / tl) * 2.2, ly = (ty / tl) * 2.2;
+  for (const side of [-1, 1]) {
+    const sx = side * 8.5, sway = still ? 0 : Math.sin(t * 5 + side) * (walking ? 1 : 0.4), ex = sx + side * 1.5 + sway, ey = -29;
+    ctx.strokeStyle = body; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sx * 0.8, -12); ctx.lineTo(ex, ey + 4); ctx.stroke();
+    ctx.fillStyle = body; circle(ex, ey, 8.5);                              // the stalk's round top
+    ctx.fillStyle = COL.crabEye; circle(ex, ey, 6.2);
+    ctx.fillStyle = fury ? COL.bad : COL.crabPupil; circle(ex + lx, ey + ly, fury ? 3 : 3.4);
+    ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.9; circle(ex + lx - 1.3, ey + ly - 1.4, 1.1); ctx.globalAlpha = 1;
+    if (fury) {                                                              // an angry brow across each eye
+      ctx.strokeStyle = dark; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ex - side * 6, ey - 7); ctx.lineTo(ex + side * 4, ey - 4.5); ctx.stroke();
+    }
+  }
+
+  // the shell: a wide oval, a darker lower half and a glossy highlight up and to the left
+  ctx.fillStyle = body; ellipse(0, 0, 22, 17);
+  ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, 22, 17, 0, 0, TAU); ctx.clip();
+  ctx.fillStyle = dark; ctx.globalAlpha = hit ? 0 : 0.35; ellipse(6, 12, 24, 12, -0.25); ctx.globalAlpha = 1;
+  ctx.restore();
+  ctx.fillStyle = hi; ctx.globalAlpha = 0.6; ellipse(-9, -7, 8, 4, -0.45); ctx.globalAlpha = 1;
+  ctx.strokeStyle = COL.crabPupil; ctx.lineWidth = 1.6; ctx.lineCap = 'round';   // the smile (an O while it dashes)
+  if (st === 'charge') { ctx.fillStyle = COL.crabPupil; ellipse(0, -5, 2.2, 2.6); }
+  else { ctx.beginPath(); ctx.moveTo(-3.2, -6.5); ctx.quadraticCurveTo(0, -3.4, 3.2, -6.5); ctx.stroke(); }
   ctx.restore();
 }
 
@@ -353,7 +436,7 @@ function draw() {
     if (e.mrock) { drawKickRock(e); continue; }
     if (e.dummy) { drawDummy(e); continue; }
     const s = e.r * (0.4 + 0.6 * e.born);
-    if (e.shape === 'dino') drawBoss(e);                     // mini dino: the boss drawing, small
+    if (e.shape === 'crab') drawCrab(e);                     // the crab (v0.46; the mini dino before)
     else {
       ctx.fillStyle = e.hit > 0 ? COL.player : enemyCol(e);
       // Splitters also carry a seam down the middle, where they'll split (so it's not colour alone).
@@ -502,7 +585,9 @@ function draw() {
   ctx.fillStyle = NET.run ? (NET.me?.down ? COL.line : NET.me?.color || COL.player) : COL.player;   // co-op: your colour; grey when down
   if (!game.inMenu) {
     ctx.globalAlpha = p.safe > 0 && !dsh && Math.floor(p.safe * 20) % 2 ? 0.45 : 1;   // blink while safe after a hit
-    if (dsh) ellipse(p.x, p.y, PLAYER.r * 1.25, PLAYER.r * 0.82, da);
+    if (NET.run && NET.me?.emoji) {     // co-op, with an emoji (v0.46): a ring in your colour; the emoji is drawn crisp on the text layer
+      ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER.r + 2, 0, TAU); ctx.stroke();
+    } else if (dsh) ellipse(p.x, p.y, PLAYER.r * 1.25, PLAYER.r * 0.82, da);
     else circle(p.x, p.y, PLAYER.r);    // the Druid summons animals separately now (silica.js)
     ctx.globalAlpha = 1;
   }
@@ -567,6 +652,7 @@ function draw() {
   tctx.clearRect(0, 0, VW, VH);
   if (NET.run) tctx.translate(-cam.x, -cam.y);
   if (game.shake > 0 && !reducedMotion) { const s = game.shake * 28; tctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s); }
+  drawCoopFaces();                        // co-op: emojis (coop.js), under the numbers
   tctx.textAlign = 'center';
   for (const f of game.floaters) {
     tctx.globalAlpha = Math.min(1, f.life * 3);

@@ -4,16 +4,24 @@
 /* How it works:
    - The CO-OP screen is a login: your name, then Host (you get a room key) or Join (type a friend's key). Someone has
      to host first; joining a key nobody is hosting says so. Up to 4 players.
-   - The host's browser runs the real game. Each friend's browser sends its movement (and Space, picks, revives) and
-     gets back a picture of the whole arena 20 times a second, which it draws smoothed out. Your own movement is
-     instant on your screen; the host takes your position as you report it, except while it's moving you itself (a
-     BULL charge, a shove).
+   - The room (v0.46): everyone's deck is listed, and Edit loadout takes you to the Loadout screen and back. Pick a
+     colour, or an emoji over it (whichever you picked last). Friends press Ready; once everyone is, the host's Start
+     counts down from 3 (press it again to stop).
+   - The host's browser runs the real game. Each friend's browser sends its movement (and Space, picks, holding E)
+     and gets back a picture of the whole arena 20 times a second. Your own movement is instant on your screen; the
+     host takes your position as you report it (carried ahead by half your ping), except while it's moving you
+     itself (a BULL charge, a shove).
+   - Lag (v0.46): the pictures go on their own channel that doesn't wait for a late one, and one is skipped when a
+     friend's connection is still busy with the last. A guest draws everyone else a little in the past, between two
+     pictures, so it moves smoothly; how far back follows how unevenly the pictures arrive.
    - Every player has their own deck, HP, stats, level-up picks and BULL. The team shares one level: every level up
      gives each player 3 cards to pick from on a 10 s timer (a random one if it runs out), and the fight doesn't stop.
      Every 10th level augments a random slot.
    - The arena is bigger (×1.6 each way) and scrolls with you, and there are many more enemies, with more HP.
-   - A player whose HP runs out is DOWN. Stand next to them and press E: a typing test starts, and 5 words typed
-     right before the timer ends brings them back at full health. If everyone is down, the run is over.
+     Everyone's HP shows under them and in the player list.
+   - A player whose HP runs out is DOWN. Stand next to them and hold E (or the button on a touch screen): you stand
+     still, a ring fills, and they're back at full health, and everyone in it gets a shield (v0.46; a typing test
+     before). If everyone is down, the run is over.
    - Gold, cards and decks stay on each player's own computer: each earns from the team's kills and the bonuses.
    - Connecting: PeerJS (a free public service) introduces the two browsers; after that they talk directly. No
      server or database of our own. On localhost, `?net=local` uses a same-browser channel instead, for testing
@@ -56,16 +64,24 @@ function localJoin(room) {
   });
 }
 
-function netSend(conn, msg) { try { if (conn && conn.open !== false) conn.send(msg); } catch (err) { /* it's closing */ } }
+// Everything goes as JSON text on PeerJS's 'raw' channels (v0.46: its 'json' ones refuse anything over 16 KB, which a
+// busy arena with 4 players can reach). The local test channel carries the same text.
+function netSend(conn, msg) { try { if (conn && conn.open !== false) conn.send(typeof msg === 'string' ? msg : JSON.stringify(msg)); } catch (err) { /* it's closing */ } }
+const netRead = d => { if (typeof d !== 'string') return d; try { return JSON.parse(d); } catch (err) { return null; } };
+// What's still waiting to go out on a connection (bytes, roughly): the browser's queue plus PeerJS's own.
+const backlog = conn => (conn?.dataChannel?.bufferedAmount || 0) + (conn?.bufferSize || 0) * 8000;
 const toHost = msg => netSend(NET.conn, msg);
+const toHostFast = msg => netSend(NET.fast || NET.conn, msg);
+const fastOf = c => c.lobby?.fast || c.conn;        // a player's fast channel (their pictures), or the main one
 
 // Host: open a room under a fresh key.
 async function coopHost(name) {
   coopReset();
   Object.assign(NET, { on: true, host: true, name, key: newKey() });
-  NET.me = { id: 1, name, color: COOP.colors[0], local: true, ping: 0 };
+  NET.me = { id: 1, name, color: '', emoji: '', local: true, ping: 0, ready: true };
   NET.lobby = [NET.me];
-  if (netLocal()) { NET.peer = localHost(NET.key, onGuestConn); return NET.key; }
+  setLook(NET.me, myLook().color, myLook().emoji);
+  if (netLocal()) { NET.peer = localHost(NET.key, onGuestConn); lobbyChanged(); return NET.key; }
   await loadPeer();
   for (let tries = 0; tries < 4; tries++) {
     try {
@@ -74,8 +90,9 @@ async function coopHost(name) {
         p.on('open', () => ok(p));
         p.on('error', err => fail(err));
       });
-      NET.peer.on('connection', conn => conn.on('open', () => onGuestConn(conn)));
+      NET.peer.on('connection', conn => conn.on('open', () => (conn.metadata?.fast ? attachFast(conn) : onGuestConn(conn))));
       NET.peer.on('error', err => console.warn('co-op:', err));
+      lobbyChanged();
       return NET.key;
     } catch (err) {
       if (err.type === 'unavailable-id') { NET.key = newKey(); continue; }
@@ -85,18 +102,29 @@ async function coopHost(name) {
   throw new Error('Could not open a room. Try again.');
 }
 function onGuestConn(conn) {
-  conn.on('data', m => onHostMsg(conn, m));
+  conn.on('data', d => onHostMsg(conn, netRead(d)));
   conn.on('close', () => guestLeft(conn));
 }
+// A guest's second channel, for the pictures and their movement: it doesn't hold everything up waiting for a late one.
+function attachFast(conn) {
+  const g = [...NET.conns.values()].find(x => x.conn.peer === conn.peer);
+  if (!g) { try { conn.close(); } catch (err) { /* gone */ } return; }
+  g.fast = conn;
+  conn.on('data', d => onHostMsg(g.conn, netRead(d)));
+  conn.on('close', () => { if (g.fast === conn) g.fast = null; });
+}
+const cleanCards = cards => (Array.isArray(cards) ? cards.filter(c => CARDS[c]).slice(0, DECK_LIMIT) : ['bullet']);
 function onHostMsg(conn, m) {
   if (!m || typeof m !== 'object') return;
   let g = NET.conns.get(conn);
   if (m.t === 'hello') {
     if (NET.run) return netSend(conn, { t: 'no', why: 'That game has already started.' });
+    if (NET.countEnd) return netSend(conn, { t: 'no', why: 'That game is starting. Try again in a moment.' });
     if (NET.lobby.length >= COOP.max) return netSend(conn, { t: 'no', why: 'That game is full (4 players).' });
     const id = Math.max(...NET.lobby.map(p => p.id)) + 1;
-    g = { id, name: String(m.name || 'Player').slice(0, 14), color: COOP.colors[NET.lobby.length % COOP.colors.length], local: false, ping: null, conn,
-      cards: Array.isArray(m.cards) ? m.cards.filter(c => CARDS[c]).slice(0, DECK_LIMIT) : ['bullet'], seed: m.seed >>> 0 };
+    g = { id, name: String(m.name || 'Player').slice(0, 14), color: '', emoji: '', local: false, ping: null, conn, fast: null, ready: false,
+      cards: cleanCards(m.cards), seed: m.seed >>> 0 };
+    setLook(g, m.color, m.emoji);
     NET.conns.set(conn, g);
     NET.lobby.push(g);
     netSend(conn, { t: 'welcome', id, key: NET.key });
@@ -105,21 +133,29 @@ function onHostMsg(conn, m) {
   }
   if (!g) return;
   if (m.t === 'pong') { g.ping = Math.max(1, Math.round(performance.now() - m.ts)); const c = byId(g.id); if (c) c.ping = g.ping; if (!NET.run) lobbyChanged(); return; }
+  // the room
+  if (m.t === 'cards') { if (!NET.run) { g.cards = cleanCards(m.cards); g.ready = false; cancelCount(); lobbyChanged(); } return; }
+  if (m.t === 'ready') { if (!NET.run) { g.ready = !!m.on; if (!g.ready) cancelCount(); lobbyChanged(); } return; }
+  if (m.t === 'look') { if (!NET.run) { setLook(g, m.color, m.emoji); lobbyChanged(); } return; }
+  // the run
   const c = byId(g.id);
   if (!c) return;
   if (m.t === 'in') {
-    Object.assign(c.net, { mx: +m.mx || 0, my: +m.my || 0, x: +m.x, y: +m.y });
-    c.typing = !!m.ty;
-    if (m.dash) c.net.dash = true;
+    if (m.dash) c.net.dash = true;                         // a dash always counts, even in a late message
+    const q = m.q | 0;
+    if (q && q < c.net.seq) return;                        // an older one that arrived after a newer one: skip it
+    c.net.seq = q;
+    Object.assign(c.net, { mx: +m.mx || 0, my: +m.my || 0, x: +m.x, y: +m.y, rv: !!m.rv, at: performance.now() });
   } else if (m.t === 'pick') coopPick(c, m.i | 0);
-  else if (m.t === 'revive') coopRevive(byId(m.id), c);
   else if (m.t === 'skip') skipIntro(true);
 }
 function guestLeft(conn) {
   const g = NET.conns.get(conn);
   NET.conns.delete(conn);
   if (!g) return;
+  try { g.fast?.close(); } catch (err) { /* gone */ }
   NET.lobby = NET.lobby.filter(p => p !== g);
+  cancelCount();
   const c = byId(g.id);
   if (c) {
     if (ACTIVE === c) usePlayer(NET.me);
@@ -129,9 +165,17 @@ function guestLeft(conn) {
   }
   lobbyChanged();
 }
+// A deck as counts, most first: [['bullet', 5], ['cannon', 5]] (the room shows everyone's).
+function deckSummary(cards) {
+  const n = {};
+  for (const c of cards || []) n[c] = (n[c] || 0) + 1;
+  return Object.entries(n).sort((a, b) => b[1] - a[1] || CARDS[a[0]].name.localeCompare(CARDS[b[0]].name));
+}
 function lobbyChanged() {
-  const list = NET.lobby.map(p => ({ id: p.id, name: p.name, color: p.color, ping: p.ping }));
-  for (const g of NET.conns.values()) netSend(g.conn, { t: 'lobby', list });
+  const count = NET.countEnd ? Math.max(0, (NET.countEnd - performance.now()) / 1000) : 0;
+  NET.list = NET.lobby.map(p => ({ id: p.id, name: p.name, color: p.color, emoji: p.emoji || '', ping: p.ping, ready: p.local || !!p.ready,
+    deck: deckSummary(p.local ? equippedCards() : p.cards) }));
+  for (const g of NET.conns.values()) netSend(g.conn, { t: 'lobby', list: NET.list, count });
   renderLobby();
 }
 
@@ -149,35 +193,56 @@ async function coopJoin(name, key) {
       p.on('error', err => fail(new Error(err.type === 'network' || err.type === 'server-error' ? 'Could not reach the connection service. Check your internet.' : 'Could not connect. Try again.')));
     });
     conn = await new Promise((ok, fail) => {
-      const c = NET.peer.connect(COOP.prefix + key, { reliable: true, serialization: 'json' });
+      const c = NET.peer.connect(COOP.prefix + key, { reliable: true, serialization: 'raw' });
       const t = setTimeout(() => fail(new Error('No game with that key. Ask your friend to host first.')), 9000);
       NET.peer.on('error', err => { clearTimeout(t); fail(new Error(err.type === 'peer-unavailable' ? 'No game with that key. Ask your friend to host first.' : 'Could not connect. Try again.')); });
       c.on('open', () => { clearTimeout(t); ok(c); });
     });
   }
   NET.conn = conn;
-  conn.on('data', onGuestMsg);
+  conn.on('data', d => onGuestMsg(netRead(d)));
   conn.on('close', () => { if (NET.guest) { coopLeave(); toast('THE HOST LEFT', 'enrage'); } });
-  toHost({ t: 'hello', name, cards: NET.myCards, seed: NET.mySeed });
+  toHost({ t: 'hello', name, cards: NET.myCards, seed: NET.mySeed, color: myLook().color, emoji: myLook().emoji });
+}
+// Once we're in: a second channel for the pictures (if it can't open, they come on the main one).
+function openFast() {
+  if (netLocal() || !NET.peer?.connect || NET.fast) return;
+  const f = NET.peer.connect(COOP.prefix + NET.key, { reliable: false, serialization: 'raw', metadata: { fast: 1 } });
+  f.on('open', () => { if (NET.guest) NET.fast = f; });
+  f.on('data', d => onGuestMsg(netRead(d)));
+  f.on('close', () => { if (NET.fast === f) NET.fast = null; });
 }
 function onGuestMsg(m) {
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'welcome') { NET.myId = m.id; renderLobby(); }
+  if (m.t === 's') {
+    if (!NET.run || (m.q | 0) <= NET.lastQ) return;       // an older picture that arrived after a newer one
+    NET.lastQ = m.q | 0;
+    NET.snap = m; applySnap(m);
+  } else if (m.t === 'ev') guestEvents(m);
+  else if (m.t === 'welcome') { NET.myId = m.id; openFast(); renderLobby(); }
   else if (m.t === 'no') { coopLeave(); coopError(m.why); }
-  else if (m.t === 'lobby') { NET.lobby = m.list; renderLobby(); }
+  else if (m.t === 'lobby') {
+    NET.lobby = NET.list = m.list;
+    NET.countEnd = m.count ? performance.now() + m.count * 1000 : 0;
+    const mine = m.list.find(p => p.id === NET.myId);
+    if (mine) NET.ready = !!mine.ready;
+    renderLobby();
+  }
   else if (m.t === 'ping') toHost({ t: 'pong', ts: m.ts });
   else if (m.t === 'start') guestStart(m);
-  else if (m.t === 's') { NET.snap = m; applySnap(m); }
+  else if (m.t === 'room') coopToRoom();
 }
 
 function coopReset() {
   try { NET.peer?.destroy(); } catch (err) { /* gone */ }
   try { NET.conn?.close(); } catch (err) { /* gone */ }
   for (const g of NET.conns.keys()) { try { g.close(); } catch (err) { /* gone */ } }
-  Object.assign(NET, { on: false, host: false, guest: false, run: false, key: '', me: null, myId: 0, players: [], lobby: [], world: null, peer: null, conn: null, snap: null });
+  Object.assign(NET, { on: false, host: false, guest: false, run: false, key: '', me: null, myId: 0, players: [], lobby: [], list: [], world: null,
+    peer: null, conn: null, fast: null, snap: null, ready: false, countEnd: 0, holdE: false });
   NET.conns = new Map();
   ACTIVE = null;
   coopHud(false);
+  $('btn-loadout-test').hidden = false;
 }
 // Leave co-op for good: back to single player. The run (if any) ends.
 function coopLeave() {
@@ -191,20 +256,85 @@ function coopLeave() {
 }
 const SOLO = { stats, picks, body: game.player };   // the single-player objects, put back when co-op ends
 
+/* ---------- the room: ready, look, loadout ---------- */
+const allReady = () => NET.lobby.length > 1 && NET.lobby.every(p => p.local || p.ready);
+function clickStart() {
+  if (!NET.host || NET.run) return;
+  if (NET.countEnd) { cancelCount(); return; }            // pressed again: stop the countdown
+  if (deckProblems().length) { coopError('Fix your deck first (Edit loadout).'); return; }
+  if (!allReady()) return;
+  coopError('');
+  NET.countEnd = performance.now() + COOP.countdown * 1000;
+  lobbyChanged();
+}
+function cancelCount() { if (!NET.countEnd) return; NET.countEnd = 0; if (NET.host) lobbyChanged(); }
+setInterval(() => {                                     // the countdown: its number, and the start when it runs out
+  if (!NET.on || NET.run || !NET.countEnd) return;
+  if (NET.host) {
+    if (!allReady()) { cancelCount(); return; }
+    if (performance.now() >= NET.countEnd) { NET.countEnd = 0; coopStart(); return; }
+  }
+  renderLobbyText();
+}, 200);
+function setReady(on) {
+  if (!NET.guest || NET.run) return;
+  if (on && deckProblems().length) { coopError('Fix your deck first (Edit loadout).'); return; }
+  coopError('');
+  NET.ready = on;
+  toHost({ t: 'ready', on });
+  renderLobby();
+}
+
+// Your look: a colour, or an emoji over it (whichever you picked last). Saved on this computer. The host makes sure
+// no two players have the same colour.
+const LOOK_KEY = 'rogue.coopLook';
+function myLook() {
+  try { const l = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}'); return { color: l.color || '', emoji: l.emoji || '' }; } catch (err) { return { color: '', emoji: '' }; }
+}
+function setLook(p, color, emoji) {
+  const taken = new Set(NET.lobby.filter(o => o !== p).map(o => o.color));
+  if (COOP.colors.includes(color) && !taken.has(color)) p.color = color;
+  else if (!p.color || taken.has(p.color)) p.color = COOP.colors.find(c => !taken.has(c)) || COOP.colors[0];
+  p.emoji = COOP.emojis.includes(emoji) ? emoji : '';
+}
+function pickLook(color, emoji) {
+  try { localStorage.setItem(LOOK_KEY, JSON.stringify({ color, emoji })); } catch (err) { /* not saved */ }
+  if (NET.host) { setLook(NET.lobby.find(p => p.local), color, emoji); lobbyChanged(); }
+  else if (NET.guest) toHost({ t: 'look', color, emoji });
+}
+const lobbyMe = () => (NET.list || []).find(p => p.id === (NET.host ? 1 : NET.myId)) || null;
+
+// Edit loadout: the Loadout screen, and back here (menus.js calls backFromLoadout). Changing your deck un-readies you.
+function editLoadout() {
+  if (NET.guest && NET.ready) setReady(false);
+  renderLoadout();
+  $('btn-loadout-test').hidden = true;                  // no practice runs from the room
+  showScreen('scr-loadout');
+}
+function backFromLoadout() {
+  $('btn-loadout-test').hidden = false;
+  if (NET.host) lobbyChanged();
+  else if (NET.guest) { NET.myCards = equippedCards(); toHost({ t: 'cards', cards: NET.myCards }); }
+  openCoop();
+}
+
 /* ---------- starting a run ---------- */
 function coopStart() {
   if (!NET.host || NET.run || deckProblems().length) return;
+  NET.countEnd = 0;
   resetRun();
   NET.world = { w: Math.round(Math.max(VW, 640) * COOP.world), h: Math.round(Math.max(VH, 480) * COOP.world) };
   NET.run = true;
   resize();
-  const host = newCtx(1, NET.name, COOP.colors[0], true, equippedCards(), seed);
-  Object.assign(host, { body: game.player, deck, stats, picks });   // the host's own run, as resetRun made it
+  const mine = NET.lobby.find(p => p.local);
+  const host = newCtx(1, NET.name, mine.color, true, equippedCards(), seed);
+  Object.assign(host, { body: game.player, deck, stats, picks, emoji: mine.emoji || '' });   // the host's own run, as resetRun made it
   for (const k of PKEYS) host[k] = game[k];
-  NET.players = [host, ...NET.lobby.filter(p => !p.local).map(g => Object.assign(newCtx(g.id, g.name, g.color, false, g.cards, g.seed), { conn: g.conn, ping: g.ping }))];
+  NET.players = [host, ...NET.lobby.filter(p => !p.local).map(g => Object.assign(newCtx(g.id, g.name, g.color, false, g.cards, g.seed),
+    { conn: g.conn, lobby: g, ping: g.ping, emoji: g.emoji || '' }))];
   NET.me = host; ACTIVE = host;
   NET.players.forEach((c, i) => { const a = (i / NET.players.length) * TAU; c.body.x = W / 2 + Math.cos(a) * 60; c.body.y = H / 2 + Math.sin(a) * 60; });
-  const roster = NET.players.map(c => ({ id: c.id, name: c.name, color: c.color }));
+  const roster = NET.players.map(c => ({ id: c.id, name: c.name, color: c.color, emoji: c.emoji }));
   for (const c of NET.players) if (c.conn) netSend(c.conn, { t: 'start', world: NET.world, you: c.id, roster, x: c.body.x, y: c.body.y });
   coopEnter();
 }
@@ -215,10 +345,11 @@ function guestStart(m) {
   resize();
   deck = createDeck(NET.myCards, mulberry32(NET.mySeed));    // the same deck the host is playing for us
   NET.roster = m.roster;
-  NET.me = { id: m.you, name: NET.name, local: true, body: game.player, down: false, color: (m.roster.find(r => r.id === m.you) || {}).color };
+  const r = m.roster.find(x => x.id === m.you) || {};
+  NET.me = { id: m.you, name: NET.name, local: true, body: game.player, down: false, rev: 0, color: r.color, emoji: r.emoji || '' };
   NET.players = [NET.me];
   Object.assign(game.player, { x: m.x, y: m.y });
-  NET.view = [];
+  Object.assign(NET, { view: [], pings: null, hist: new Map(), off: null, jit: 0, delay: 100, lastQ: 0, seqIn: 0, snapAt: performance.now() });
   coopEnter();
 }
 function coopEnter() {
@@ -233,27 +364,54 @@ function coopEnter() {
   last = performance.now();
   document.activeElement?.blur();
 }
+// After a run, the host can take everyone back to the room (v0.46): change decks, looks, then Ready again.
+function coopToRoom() {
+  if (!NET.run) return;
+  if (NET.host) { for (const c of NET.players) if (c.conn) netSend(c.conn, { t: 'room' }); usePlayer(NET.players[0]); }
+  NET.run = false; NET.players = []; ACTIVE = null; NET.world = null; NET.ready = false; NET.countEnd = 0; NET.holdE = false;
+  for (const p of NET.lobby) if (!p.local) p.ready = false;
+  if (NET.host) NET.me = NET.lobby.find(p => p.local);
+  closeRevive(); closePick(); coopHud(false);
+  stats = SOLO.stats; picks = SOLO.picks; game.player = SOLO.body;
+  resetRun(); resize(); setPaused(false);
+  game.inMenu = true; menuEl.hidden = false;
+  if (NET.host) lobbyChanged();
+  openCoop();
+}
 
 /* ---------- the host's frame ---------- */
 // Movement for every player (combat.js calls this instead of the single player's).
 function coopPlayersStep(dt) {
+  reviveStep(dt);
+  const now = performance.now();
   for (const c of NET.players) {
     if (c.down) continue;
     usePlayer(c);
     const p = c.body;
     if (c.local) {
-      const [mx, my] = c.typing ? [0, 0] : localInput();
+      const [mx, my] = c.reviving ? [0, 0] : localInput();
       playerStep(dt, mx, my);
     } else {
       if (c.net.dash) { c.net.dash = false; tryDash([c.net.mx, c.net.my]); }
-      const px = p.x, py = p.y;
-      playerStep(dt, c.typing ? 0 : c.net.mx, c.typing ? 0 : c.net.my);
-      // the guest's own position wins, unless the host is moving them (a charge or a shove)
+      const px = p.x, py = p.y, mx = c.reviving ? 0 : c.net.mx, my = c.reviving ? 0 : c.net.my;
+      playerStep(dt, mx, my);
+      // the guest's own position wins, unless the host is moving them (a charge or a shove); carried on along their
+      // movement by half their ping plus the time since it came, so it's where they are on their own screen by now
       const forced = game.dash || Math.hypot(p.kx || 0, p.ky || 0) > 5;
-      if (!forced && Number.isFinite(c.net.x)) { p.x = c.net.x; p.y = c.net.y; clampTo(p, PLAYER.r); }
+      if (!forced && Number.isFinite(c.net.x)) {
+        const ml = Math.hypot(mx, my), lead = ml ? Math.min(COOP.lead, (c.ping || 0) / 2000 + (now - c.net.at) / 1000) * moveSpeed() / ml : 0;
+        p.x = c.net.x + mx * lead; p.y = c.net.y + my * lead; clampTo(p, PLAYER.r);
+      }
       p.px = px; p.py = py;
       c.forced = forced;
     }
+  }
+  // where the host draws each friend: eased toward where they are, since their reports come in steps
+  for (const c of NET.players) {
+    const p = c.body;
+    if (c.local || c.dx == null || Math.hypot(p.x - c.dx, p.y - c.dy) > 120) { c.dx = p.x; c.dy = p.y; continue; }
+    const f = Math.min(1, dt * 18);
+    c.dx += (p.x - c.dx) * f; c.dy += (p.y - c.dy) * f;
   }
 }
 // Every player's cards (combat.js).
@@ -319,29 +477,46 @@ function pickTimeouts() {
 // HP ran out (combat.js hurtPlayer): down, not out, while anyone's still standing.
 function coopDown(c) {
   if (!c || c.down) return;
-  c.down = true; c.typing = false;
+  c.down = true; c.rev = 0; c.reviving = false;
   game.dash = null; game.frost = null;
   const p = c.body;
   p.hp = 0; p.kx = p.ky = 0;
   game.rings.push({ x: p.x, y: p.y, r: PLAYER.r, max: 70, life: 0.6, color: COL.bad });
   game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 16, text: `${c.name} IS DOWN`, color: COL.bad, life: 1.6, vy: -20, big: true });
   coopEvent({ e: 'down', id: c.id });
-  if (c.local) { renderHp(true); closeRevive(); }
+  if (c.local) renderHp(true);
   if (!living().length) coopOver();
 }
-function coopRevive(target, by) {
-  if (!NET.host || !target || !target.down || !by || by.down) return;
-  target.down = false;
-  const was = ACTIVE; usePlayer(target);
+// Reviving (v0.46, user: hold E): everyone standing next to a downed friend and holding E fills their ring (faster
+// with more of you); let go and it drains. When it's full they're back at full health, and they and everyone who
+// helped get the mini shield.
+function reviveStep(dt) {
+  const R = COOP.revive;
+  for (const c of NET.players) c.reviving = false;
+  for (const t of NET.players) {
+    if (!t.down) continue;
+    const helpers = NET.players.filter(c => !c.down && (c.local ? NET.holdE : c.net.rv)
+      && Math.hypot(c.body.x - t.body.x, c.body.y - t.body.y) < COOP.reviveReach);
+    if (!helpers.length) { t.rev = Math.max(0, t.rev - dt * R.drain / R.hold); continue; }
+    for (const c of helpers) c.reviving = true;
+    t.rev = Math.min(1, t.rev + dt * (1 + R.help * (helpers.length - 1)) / R.hold);
+    if (t.rev >= 1) coopRevive(t, helpers);
+  }
+}
+function coopRevive(target, helpers) {
+  if (!NET.host || !target || !target.down) return;
+  target.down = false; target.rev = 0;
+  const was = ACTIVE;
+  for (const c of [target, ...helpers]) { usePlayer(c); game.shield = Math.max(game.shield, COOP.revive.shield); }
+  usePlayer(target);
   target.body.hp = maxHp(); target.body.safe = 2;
-  game.shield = 1.2;
   if (target.local) renderHp(false);
   usePlayer(was);
   const p = target.body;
   game.rings.push({ x: p.x, y: p.y, r: PLAYER.r, max: 90, life: 0.6, color: COL.hp });
   game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 16, text: `${target.name} IS BACK!`, color: COL.hp, life: 1.6, vy: -20, big: true });
-  SFX.levelUp();
-  coopEvent({ e: 'revived', id: target.id });
+  if (target.local || helpers.some(c => c.local)) SFX_RAW.levelUp();
+  coopEvent({ e: 'revived', id: target.id, by: helpers.map(c => c.id) });
 }
 function coopOver() {
   if (game.over) return;
@@ -349,14 +524,14 @@ function coopOver() {
   flushSnaps(true);
   defeat();
 }
-// An event for every guest (they get it with their next picture of the arena).
+// An event for every guest (they get it right after their next picture, on the main channel, so none go missing).
 function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local) c.outbox.push(ev); }
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
   'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes'];
 const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons']);
-const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue']);
+const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
 function snapReplacer(k, v) {
   if (SNAP_DROP.has(k)) return undefined;
@@ -367,16 +542,18 @@ function snapReplacer(k, v) {
 function playerView(c) {
   const g = k => (c === ACTIVE ? game[k] : c[k]);
   const d = g('dash'), f = g('frost');
-  return { id: c.id, name: c.name, color: c.color, x: c.body.x, y: c.body.y, hp: c.body.hp, mh: PLAYER.hp + c.stats.hp, down: c.down,
+  return { id: c.id, name: c.name, color: c.color, emoji: c.emoji || '', x: c.body.x, y: c.body.y, hp: c.body.hp, mh: PLAYER.hp + c.stats.hp, down: c.down,
     dash: d ? { dx: d.dx, dy: d.dy, sx: d.sx, sy: d.sy } : null, frost: f ? { t: f.t, card: f.card } : null, safe: c.body.safe, flash: c.body.flash,
-    shield: g('shield'), ping: c.local ? 0 : c.ping, forced: !!c.forced, typing: c.typing };
+    shield: g('shield'), ping: c.local ? 0 : c.ping, forced: !!c.forced, rev: c.rev || 0, rv: !!c.reviving,
+    lag: !c.local && performance.now() - (c.net.at || 0) > 600 };
 }
 function flushSnaps(force = false) {
   const now = performance.now();
-  if (!force && now - NET.lastSnap < COOP.snapMs) return;
+  if (!force && now - NET.lastSnap < COOP.snapMs - 8) return;   // a little slack, so a beat that comes a moment early isn't skipped
   NET.lastSnap = now;
   for (const k of IDS) for (const o of game[k]) if (!o._id) o._id = ++NET.nid;
-  const world = { t: 's', lv: game.level, xp: game.xp, kills: game.kills, shake: game.shake, over: game.over,
+  NET.seqOut = (NET.seqOut || 0) + 1;
+  const world = { t: 's', q: NET.seqOut, ht: Math.round(now), lv: game.level, xp: game.xp, kills: game.kills, shake: game.shake, over: game.over,
     adapted: game.makoraAdapted ? [...game.makoraAdapted] : [],
     cine: game.cine ? { kind: game.cine.kind, t: game.cine.t, step: game.cine.step } : null,
     intro: game.intro ? { t: game.intro.t, stomp: game.intro.stomp } : null,
@@ -395,35 +572,63 @@ function flushSnaps(force = false) {
   for (const c of NET.players) {
     if (c.local || !c.conn) continue;
     const g = k => (c === ACTIVE ? game[k] : c[k]);
-    const me = { cd: g('cooldown'), cdt: g('cdTotal'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd'),
-      fired: c.fired, ev: c.outbox.splice(0) };
-    c.fired = 0;
-    netSend(c.conn, JSON.parse(base.slice(0, -1) + ',"me":' + JSON.stringify(me, snapReplacer) + '}'));   // … plus their own part
+    const me = { cd: g('cooldown'), cdt: g('cdTotal'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd') };
+    // … plus their own part. A friend whose connection is still busy with earlier pictures skips this one, so they
+    // don't fall further and further behind.
+    const ch = fastOf(c);
+    if (backlog(ch) > COOP.backlog) c.skipped = (c.skipped || 0) + 1;
+    else netSend(ch, base.slice(0, -1) + ',"me":' + JSON.stringify(me, snapReplacer) + '}');
+    // their cards fired and their events (picks, gold, sounds …) never get skipped
+    if (c.fired || c.outbox.length) { netSend(c.conn, { t: 'ev', fired: c.fired, ev: c.outbox.splice(0) }); c.fired = 0; }
   }
   NET.sfxN = 0; NET.sfxSeen = {};
   if (now - NET.lastPing > COOP.pingMs) { NET.lastPing = now; for (const c of NET.players) if (c.conn) netSend(c.conn, { t: 'ping', ts: now }); }
 }
 
 /* ---------- the guest's frame ---------- */
+// Smoothing (v0.46): every moving thing keeps its last few positions with the host's time. We draw them `NET.delay`
+// ms in the past, between two of them; `NET.off` turns the host's clock into ours (the fastest a picture has ever
+// come), and the delay grows while pictures come unevenly and shrinks back when they settle.
+function clockSample(now, ht) {
+  if (!Number.isFinite(ht)) return;
+  const off = now - ht;
+  if (NET.off == null || off < NET.off) NET.off = off; else NET.off += (off - NET.off) * 0.002;   // follows slow drift
+  const late = off - NET.off;                                // how much later than the fastest picture this one came
+  NET.jit = Math.max(late, (NET.jit || 0) * 0.97);
+  NET.delay = Math.max(COOP.interp.min, Math.min(COOP.interp.max, COOP.snapMs + NET.jit * 1.1 + 15));
+}
+function track(key, t, x, y) {
+  let h = NET.hist.get(key);
+  if (!h) NET.hist.set(key, h = { t: [], x: [], y: [] });
+  if (h.t.length && t <= h.t[h.t.length - 1]) return;
+  h.t.push(t); h.x.push(x); h.y.push(y);
+  if (h.t.length > 5) { h.t.shift(); h.x.shift(); h.y.shift(); }
+}
+// Where something was at host time `rt`: between the two positions around it, or a little past the newest.
+function sampleAt(h, rt, o) {
+  const n = h.t.length;
+  if (n === 1 || rt <= h.t[0]) { o.x = h.x[0]; o.y = h.y[0]; return; }
+  let i = n - 1;
+  while (i > 1 && rt < h.t[i - 1]) i--;
+  const a = i - 1, span = h.t[i] - h.t[a] || 1, f = Math.min((rt - h.t[a]) / span, 1 + COOP.interp.ext / span);
+  o.x = h.x[a] + (h.x[i] - h.x[a]) * f; o.y = h.y[a] + (h.y[i] - h.y[a]) * f;
+}
 const trails = new Map();
 function applySnap(s) {
   if (!NET.run) return;
   const now = performance.now();
-  // smoothing: each thing slides from where it's drawn now to its new place over the next picture's time
-  const drawn = new Map();
-  for (const k of IDS) for (const o of game[k] || []) if (o._id) drawn.set(o._id, o);
+  clockSample(now, s.ht);
   if (s.orbs && typeof s.orbs[0] === 'number') {             // unpacked: x, y, r, id
     const o = s.orbs, out = [];
     for (let i = 0; i + 3 < o.length; i += 4) out.push({ x: o[i], y: o[i + 1], r: o[i + 2], _id: o[i + 3], t: o[i + 3] * 0.7, born: 1 });
     s.orbs = out;
   }
+  const seen = new Set();
   for (const k of WORLD_KEYS) {
     if (k === 'cracks' && !s.cracks) continue;               // unchanged: keep ours (they fade out on their own)
     const list = s[k] || [];
     if (IDS.has(k)) for (const o of list) {
-      const was = drawn.get(o._id);
-      o._fx = was ? was.x : o.x; o._fy = was ? was.y : o.y; o._tx = o.x; o._ty = o.y;
-      o.x = o._fx; o.y = o._fy;
+      track(o._id, s.ht, o.x, o.y); seen.add(o._id);
       if (k === 'projectiles') o.trail = trails.get(o._id) || [];
     }
     game[k] = list;
@@ -443,9 +648,9 @@ function applySnap(s) {
   game.makoraAdapted = new Set(s.adapted || []);
   if (game.makora) renderMakoraBar(); else if (game.boss) renderBossBar(); else { bossBar.hidden = true; bossBar.classList.remove('is-makora'); }
   // the others, smoothed too
-  const views = new Map((NET.view || []).map(v => [v.id, v]));
-  NET.view = (s.pl || []).filter(v => v.id !== NET.me.id).map(v => { const w = views.get(v.id); return { ...v, _fx: w ? w.x : v.x, _fy: w ? w.y : v.y, _tx: v.x, _ty: v.y }; });
-  NET.pings = (s.pl || []).map(v => ({ id: v.id, name: v.name, color: v.color, ping: v.ping, down: v.down, host: v.id === 1 }));
+  NET.view = (s.pl || []).filter(v => v.id !== NET.me.id).map(v => { track('p' + v.id, s.ht, v.x, v.y); seen.add('p' + v.id); return v; });
+  for (const k of NET.hist.keys()) if (!seen.has(k)) NET.hist.delete(k);
+  NET.pings = (s.pl || []).map(v => ({ id: v.id, name: v.name, color: v.color, emoji: v.emoji, ping: v.ping, down: v.down, host: v.id === 1, hp: v.hp, mh: v.mh, lag: v.lag }));
   // me
   const mine = (s.pl || []).find(v => v.id === NET.me.id), p = game.player;
   if (mine) {
@@ -453,6 +658,7 @@ function applySnap(s) {
     if (hit) SFX_RAW.hurt();
     if (mine.forced || mine.down || Math.hypot(mine.x - p.x, mine.y - p.y) > 160) { p.x = mine.x; p.y = mine.y; }
     NET.me.forced = mine.forced;
+    NET.me.rev = mine.rev || 0;
     if (mine.down !== NET.me.down) { NET.me.down = mine.down; if (mine.down) closeRevive(); }
     Object.assign(p, { hp: mine.hp, safe: mine.safe, flash: mine.flash });
     game.dash = mine.dash; game.frost = mine.frost; game.shield = mine.shield;
@@ -472,11 +678,15 @@ function applySnap(s) {
     game.relics = me.relics || []; game.dashCd = me.dashCd || 0;
     if (hadBull !== game.relics.includes('bull') || game.dashCd > 0 || NET.wasCd) renderRelics();
     NET.wasCd = game.dashCd > 0;
-    for (let k = 0; k < (me.fired || 0); k++) onAttack(deck.draw());   // our deck plays along with the host's copy of it
     if (augChanged) renderTray(false);
-    for (const ev of me.ev || []) guestEvent(ev);
   }
   guestScenes(s);
+}
+// Our cards the host fired (our deck plays along with the host's copy of it) and the events, on the main channel.
+function guestEvents(m) {
+  if (!NET.run) return;
+  for (let k = 0; k < (m.fired || 0); k++) onAttack(deck.draw());
+  for (const ev of m.ev || []) guestEvent(ev);
 }
 function guestEvent(ev) {
   if (ev.e === 'sfx') { const f = SFX_RAW[ev.n]; if (f) try { f(...(ev.a || [])); } catch (err) { /* a sound */ } }
@@ -486,6 +696,7 @@ function guestEvent(ev) {
   else if (ev.e === 'picked') { SFX_RAW.upgrade(ev.rank); closePick(); renderStats(ev.id); }
   else if (ev.e === 'over') { if (!game.over) defeat(); }
   else if (ev.e === 'down' && ev.id === NET.me.id) { NET.me.down = true; closeRevive(); }
+  else if (ev.e === 'revived' && (ev.id === NET.me.id || (ev.by || []).includes(NET.me.id))) SFX_RAW.levelUp();
   else if (ev.e === 'skip') skipIntro(true);
 }
 // SKURTOSAURUS's intro and MAKORA's scenes: the guest plays its own copy (the words, the wheel, the sounds), started
@@ -502,28 +713,30 @@ function guestScenes(s) {
 function guestFrame(dt) {
   const p = game.player;
   p.px = p.x; p.py = p.y;
-  if (!NET.me.down && !NET.me.forced && !game.dash) {
-    const [mx, my] = NET.typing ? [0, 0] : localInput(), ml = Math.hypot(mx, my);
+  const rooted = NET.holdE && !!reviveNear();              // holding E by a friend who's down: you stand still
+  if (!NET.me.down && !NET.me.forced && !game.dash && !rooted) {
+    const [mx, my] = localInput(), ml = Math.hypot(mx, my);
     if (ml) { p.x += (mx / ml) * moveSpeed() * dt; p.y += (my / ml) * moveSpeed() * dt; hintEl.classList.add('gone'); }
     clampTo(p, PLAYER.r);
   }
   const now = performance.now();
   if (now - NET.lastIn > COOP.inMs) {
     NET.lastIn = now;
-    const [mx, my] = NET.typing || NET.me.down ? [0, 0] : localInput();
-    toHost({ t: 'in', x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, mx, my, ty: NET.typing ? 1 : 0, dash: NET.wantDash ? 1 : 0 });
+    const [mx, my] = rooted || NET.me.down ? [0, 0] : localInput();
+    NET.seqIn = (NET.seqIn || 0) + 1;
+    toHostFast({ t: 'in', q: NET.seqIn, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, mx, my, rv: NET.holdE ? 1 : 0, dash: NET.wantDash ? 1 : 0 });
     NET.wantDash = false;
   }
-  // slide everything toward where the last picture put it
-  const k = Math.min(1, (now - (NET.snapAt || now)) / COOP.snapMs);
-  for (const key of IDS) for (const o of game[key]) if (o._tx != null) { o.x = o._fx + (o._tx - o._fx) * k; o.y = o._fy + (o._ty - o._fy) * k; }
-  for (const v of NET.view || []) { v.x = v._fx + (v._tx - v._fx) * k; v.y = v._fy + (v._ty - v._fy) * k; }
+  // everything else, a little in the past (see clockSample)
+  const rt = now - (NET.off || 0) - (NET.delay || 100);
+  for (const key of IDS) for (const o of game[key]) { const h = o._id && NET.hist.get(o._id); if (h) sampleAt(h, rt, o); }
+  for (const v of NET.view || []) { const h = NET.hist.get('p' + v.id); if (h) sampleAt(h, rt, v); }
   for (const pr of game.projectiles) { pr.trail.push(pr.x, pr.y); if (pr.trail.length > 16) pr.trail.splice(0, 2); pr.spin = (pr.spin || 0) + dt * 18; }
   for (const e of game.enemies) e.anim = (e.anim || 0) + dt;
   if (game.intro) updateIntro(dt);
   if (game.cine) updateCine(dt);
   updateEffects(dt);
-  tickPick(); reviveTick(dt);
+  tickPick(); reviveHud();
 }
 
 /* ---------- input, camera ---------- */
@@ -562,55 +775,91 @@ for (const k of Object.keys(SFX)) {
 NET.sfxN = 0; NET.sfxSeen = {};                        // at most 10 sounds (2 of each) per picture
 toast = (text, cls) => { if (NET.host && NET.run) coopEvent({ e: 'toast', text, cls }); return toastRaw(text, cls); };
 
-/* ---------- drawing the others ---------- */
-// Everyone else (draw.js, after your own player): a circle in their colour, a BULL wedge while charging, DOWN with a
-// cross, and a name over each (drawn on the text layer, below).
+/* ---------- drawing everyone ---------- */
+// Everyone else (draw.js, after your own player): a circle in their colour (a ring, if they picked an emoji: the
+// emoji itself goes on the text layer, below), a BULL wedge while charging, their HP bar, their shield, and DOWN with a
+// cross and a revive ring that fills as someone holds E.
 function coopBodies() {
   if (!NET.run) return [];
-  if (NET.host) return NET.players.filter(c => c !== NET.me).map(c => ({ ...playerView(c) }));
+  if (NET.host) return NET.players.filter(c => c !== NET.me).map(c => ({ ...playerView(c), x: c.dx ?? c.body.x, y: c.dy ?? c.body.y }));
   return NET.view || [];
+}
+const hpColor = f => (f > 0.5 ? COL.hp : f > 0.25 ? COL['r-legendary'] : COL.bad);
+function hpBar(x, y, hp, mh) {
+  const w = 30, h = 4, f = Math.max(0, Math.min(1, hp / (mh || 1))), bx = x - w / 2, by = y + PLAYER.r + 6;
+  ctx.fillStyle = 'rgba(0, 0, 0, .7)'; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
+  ctx.fillStyle = COL.line; ctx.fillRect(bx, by, w, h);
+  ctx.fillStyle = hpColor(f); ctx.fillRect(bx, by, w * f, h);
+}
+function bubble(x, y, shield) {                      // the mini shield, as on your own player (draw.js)
+  const fade = Math.min(1, shield / 0.3), rr = PLAYER.r + SHIELD.r;
+  ctx.globalAlpha = fade * 0.1; ctx.fillStyle = COL.xp; circle(x, y, rr);
+  ctx.globalAlpha = fade * 0.6; ctx.strokeStyle = COL.xp; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+}
+function downed(x, y, rev, near) {                   // a cross, the reach ring, and how far the revive has got
+  ctx.strokeStyle = COL.bad; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6); ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6); ctx.stroke();
+  const R = COOP.reviveReach * 0.6;
+  ctx.globalAlpha = near || rev > 0 ? 0.9 : 0.35; ctx.strokeStyle = COL.hp; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+  ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  if (rev > 0) {
+    ctx.strokeStyle = COL.hp; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(x, y, R, -Math.PI / 2, -Math.PI / 2 + rev * TAU); ctx.stroke();
+  }
 }
 function drawCoopPlayers() {
   if (!NET.run) return;
+  const p = game.player;
   for (const v of coopBodies()) {
     if (v.frost) drawFrostAt(v.frost, v);
     ctx.globalAlpha = v.down ? 0.55 : v.safe > 0 && Math.floor(v.safe * 20) % 2 ? 0.45 : 1;
-    ctx.fillStyle = v.down ? COL.line : v.color;
-    if (v.dash) ellipse(v.x, v.y, PLAYER.r * 1.25, PLAYER.r * 0.82, Math.atan2(v.dash.dy, v.dash.dx));
+    ctx.fillStyle = ctx.strokeStyle = v.down ? COL.line : v.color;
+    if (v.emoji) { ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(v.x, v.y, PLAYER.r + 2, 0, TAU); ctx.stroke(); }
+    else if (v.dash) ellipse(v.x, v.y, PLAYER.r * 1.25, PLAYER.r * 0.82, Math.atan2(v.dash.dy, v.dash.dx));
     else circle(v.x, v.y, PLAYER.r);
     ctx.globalAlpha = 1;
-    if (v.down) {                                             // a cross, and a ring if you can revive them
-      ctx.strokeStyle = COL.bad; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(v.x - 6, v.y - 6); ctx.lineTo(v.x + 6, v.y + 6); ctx.moveTo(v.x + 6, v.y - 6); ctx.lineTo(v.x - 6, v.y + 6); ctx.stroke();
-      const near = !NET.me.down && Math.hypot(v.x - game.player.x, v.y - game.player.y) < COOP.reviveReach;
-      ctx.globalAlpha = near ? 0.9 : 0.35; ctx.strokeStyle = COL.hp; ctx.setLineDash([5, 5]);
-      ctx.beginPath(); ctx.arc(v.x, v.y, COOP.reviveReach * 0.6, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-    } else if (v.flash > 0) {
+    if (v.down) { downed(v.x, v.y, v.rev, !NET.me.down && Math.hypot(v.x - p.x, v.y - p.y) < COOP.reviveReach); continue; }
+    if (v.flash > 0) {
       ctx.globalAlpha = v.flash / 0.2; ctx.strokeStyle = COL.bad; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(v.x, v.y, PLAYER.r + 5, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
     }
+    if (v.shield > 0) bubble(v.x, v.y, v.shield);
+    hpBar(v.x, v.y, v.hp, v.mh);
   }
-  if (NET.me.down) {                                          // you: down
-    const p = game.player;
-    ctx.strokeStyle = COL.bad; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(p.x - 6, p.y - 6); ctx.lineTo(p.x + 6, p.y + 6); ctx.moveTo(p.x + 6, p.y - 6); ctx.lineTo(p.x - 6, p.y + 6); ctx.stroke();
-  }
+  if (NET.me.down) downed(p.x, p.y, NET.me.rev || 0, false);    // you: down
+  else hpBar(p.x, p.y, p.hp, maxHp());
 }
-// Names, over everyone (on the text layer, which draw.js has moved with the camera).
+// Emojis (crisp, on the text layer, under the numbers) and names over everyone. draw.js has moved the layer with the camera.
+const EMOJI_FONT = `${Math.round(PLAYER.r * 2.3)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+function drawCoopFaces() {
+  if (!NET.run) return;
+  const c = tctx, p = game.player;
+  c.save(); c.font = EMOJI_FONT; c.textAlign = 'center'; c.textBaseline = 'middle';
+  const face = (x, y, emoji, down, safe) => {
+    if (!emoji) return;
+    c.globalAlpha = down ? 0.45 : safe > 0 && Math.floor(safe * 20) % 2 ? 0.5 : 1;
+    c.fillText(emoji, x, y + 1);
+  };
+  face(p.x, p.y, NET.me.emoji, NET.me.down, p.safe);
+  for (const v of coopBodies()) face(v.x, v.y, v.emoji, v.down, v.safe);
+  c.restore();
+}
 function drawCoopNames() {
   if (!NET.run) return;
   const c = tctx;
   c.font = '700 12px "Chakra Petch", system-ui, sans-serif'; c.textAlign = 'center'; c.lineJoin = 'round';
   const label = (x, y, text, color) => { c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.85)'; c.strokeText(text, x, y); c.fillStyle = color; c.fillText(text, x, y); };
-  const p = game.player;
-  label(p.x, p.y - PLAYER.r - 8, NET.me.down ? `${NET.name} · DOWN` : NET.name, COOP.colors[0] === (NET.me.color || COOP.colors[0]) ? '#fff' : NET.me.color);
+  const p = game.player, top = PLAYER.r + (NET.me.emoji ? 12 : 8);
+  label(p.x, p.y - top, NET.me.down ? `${NET.name} · DOWN` : NET.name, COOP.colors[0] === (NET.me.color || COOP.colors[0]) ? '#fff' : NET.me.color);
   for (const v of coopBodies()) {
-    label(v.x, v.y - PLAYER.r - 8, v.down ? `${v.name} · DOWN` : v.name, v.color);
-    if (v.down && !NET.me.down && Math.hypot(v.x - p.x, v.y - p.y) < COOP.reviveReach && !NET.typing) label(v.x, v.y + PLAYER.r + 20, 'E · REVIVE', COL.hp);
+    label(v.x, v.y - PLAYER.r - (v.emoji ? 12 : 8), v.down ? `${v.name} · DOWN` : v.name, v.color);
+    if (!v.down || NET.me.down || Math.hypot(v.x - p.x, v.y - p.y) >= COOP.reviveReach) continue;
+    label(v.x, v.y + PLAYER.r + 22, v.rev > 0 ? `REVIVING ${Math.floor(v.rev * 100)}%` : 'HOLD E · REVIVE', COL.hp);
   }
 }
 
-/* ---------- the in-game player list, with pings ---------- */
+/* ---------- the in-game player list, with HP and pings ---------- */
 function coopHud(on) {
   const el = $('coop-list');
   el.hidden = !on;
@@ -618,14 +867,22 @@ function coopHud(on) {
   if (on) renderCoopList();
 }
 function pingClass(ms) { return ms == null ? '' : ms < 80 ? 'is-good' : ms < 150 ? 'is-ok' : 'is-bad'; }
+const dot = r => `<i class="${r.emoji ? 'has-emoji' : ''}" style="--pc:${r.color}">${r.emoji || ''}</i>`;
 function renderCoopList() {
   if (!NET.run) return;
-  const rows = NET.host ? NET.players.map(c => ({ id: c.id, name: c.name, color: c.color, ping: c.local ? null : c.ping, down: c.down, host: c.id === 1 }))
+  const rows = NET.host ? NET.players.map(c => ({ id: c.id, name: c.name, color: c.color, emoji: c.emoji, ping: c.local ? null : c.ping, down: c.down, host: c.id === 1,
+    hp: c.body.hp, mh: PLAYER.hp + c.stats.hp, lag: !c.local && performance.now() - (c.net.at || 0) > 600 }))
     : (NET.pings || []);
-  $('coop-list').innerHTML = rows.map(r => `<li class="${r.down ? 'is-down' : ''}"><i style="background:${r.color}"></i><span class="cl-name">${esc(r.name)}${r.id === (NET.me?.id) ? ' (you)' : ''}</span>`
-    + `<b class="cl-ping ${r.host ? '' : pingClass(r.ping)}">${r.down ? 'DOWN' : r.host ? 'host' : r.ping == null ? '…' : `${r.ping} ms`}</b></li>`).join('');
+  const stale = NET.guest && performance.now() - (NET.snapAt || 0) > 700;   // nothing from the host for a while
+  $('coop-list').innerHTML = (stale ? '<li class="cl-warn">Waiting for the host…</li>' : '') + rows.map(r => {
+    const f = Math.max(0, Math.min(1, (r.hp || 0) / (r.mh || 1)));
+    const ping = r.down ? 'DOWN' : r.host ? 'host' : r.lag ? 'LAG' : r.ping == null ? '…' : `${r.ping} ms`;
+    return `<li class="${r.down ? 'is-down' : ''}">${dot(r)}<span class="cl-mid"><span class="cl-name">${esc(r.name)}${r.id === (NET.me?.id) ? ' (you)' : ''}</span>`
+      + `<span class="cl-hp"><span style="transform:scaleX(${f.toFixed(3)});background:${hpColor(f)}"></span></span></span>`
+      + `<b class="cl-ping ${r.host ? '' : r.lag ? 'is-bad' : pingClass(r.ping)}">${ping}</b></li>`;
+  }).join('');
 }
-setInterval(() => { if (NET.run) renderCoopList(); }, 500);
+setInterval(() => { if (NET.run) renderCoopList(); }, 250);
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 /* ---------- level-up picks, without pausing ---------- */
@@ -656,82 +913,35 @@ function choosePick(i) {
 }
 $('cp-cards').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { choosePick(+b.dataset.i); b.blur(); } });
 
-/* ---------- reviving: a typing test ---------- */
-const rv = { on: false, target: 0, words: [], i: 0, left: 0 };
-function coopTryRevive() {
-  if (!NET.run || NET.typing || NET.me.down || game.over) return false;
+/* ---------- reviving: hold E (or the button, on a touch screen) ---------- */
+// The friend who's down within reach of you, if any.
+function reviveNear() {
+  if (!NET.run || NET.me?.down || game.over) return null;
   const p = game.player;
-  const t = coopBodies().find(v => v.down && Math.hypot(v.x - p.x, v.y - p.y) < COOP.reviveReach);
-  if (!t) return false;
-  const pool = COOP.WORDS.slice().sort(() => Math.random() - 0.5);
-  Object.assign(rv, { on: true, target: t.id, name: t.name, words: pool.slice(0, COOP.revive.words), i: 0, left: COOP.revive.time });
-  NET.typing = true; if (NET.host) NET.me.typing = true;
-  keys.clear();
-  $('revive').hidden = false;
-  $('rv-name').textContent = t.name;
-  $('rv-input').value = '';
-  renderRevive();
-  $('rv-input').focus();
-  return true;
+  return coopBodies().find(v => v.down && Math.hypot(v.x - p.x, v.y - p.y) < COOP.reviveReach) || null;
 }
-function renderRevive() {
-  $('rv-word').textContent = rv.words[rv.i] || '';
-  $('rv-count').textContent = `${rv.i}/${COOP.revive.words}`;
-  $('rv-bar').style.transform = `scaleX(${rv.left / COOP.revive.time})`;
-  $('rv-time').textContent = `${Math.ceil(rv.left)}s`;
+const coarse = matchMedia('(pointer: coarse)');
+let rvTouch = false;
+function reviveHud() {                               // the touch button, only on a touch screen and only by someone down
+  const t = coarse.matches ? reviveNear() : null, btn = $('rv-btn');
+  if (!t) { if (!btn.hidden) btn.hidden = true; if (rvTouch) { rvTouch = false; NET.holdE = false; } return; }
+  btn.hidden = false;
+  $('rv-btn-name').textContent = t.name;
+  btn.style.setProperty('--p', (t.rev || 0).toFixed(3));
 }
-function reviveTick(dt) {
-  if (!rv.on) return;
-  rv.left -= dt;
-  // the one being revived got up (someone else), or left
-  const t = coopBodies().find(v => v.id === rv.target);
-  if (!t || !t.down) { closeRevive(); return; }
-  if (rv.left <= 0) { closeRevive(); toastRaw('TOO SLOW · PRESS E TO TRY AGAIN', ''); return; }
-  $('rv-bar').style.transform = `scaleX(${Math.max(0, rv.left) / COOP.revive.time})`;
-  $('rv-time').textContent = `${Math.ceil(rv.left)}s`;
-}
-function closeRevive() {
-  if (!rv.on && $('revive').hidden) return;
-  rv.on = false; NET.typing = false; if (NET.me) NET.me.typing = false;
-  $('revive').hidden = true;
-  $('rv-input').blur();
-}
-$('rv-input').addEventListener('keydown', e => {
-  if (e.code === 'Escape') { closeRevive(); e.preventDefault(); return; }
-  if (e.key !== 'Enter' && e.key !== ' ') return;
-  e.preventDefault();
-  const typed = e.target.value.trim().toLowerCase();
-  if (!typed) return;
-  if (typed === rv.words[rv.i]) {
-    rv.i++; e.target.value = '';
-    SFX_RAW.pickup();
-    if (rv.i >= COOP.revive.words) {                          // done: they're back at full health
-      const id = rv.target;
-      closeRevive();
-      if (NET.host) coopRevive(byId(id), NET.me); else toHost({ t: 'revive', id });
-      return;
-    }
-    renderRevive();
-  } else {
-    SFX_RAW.dodge();
-    e.target.value = '';
-    const box = $('revive').querySelector('.rv-box');
-    box.classList.remove('is-wrong'); void box.offsetWidth; box.classList.add('is-wrong');
-  }
-});
-// the word as you type it: green while right so far, red once it's wrong
-$('rv-input').addEventListener('input', e => {
-  const w = rv.words[rv.i] || '', v = e.target.value.toLowerCase();
-  $('rv-word').className = 'rv-word' + (v && !w.startsWith(v.trim()) ? ' is-wrong' : v ? ' is-right' : '');
-});
+function closeRevive() { NET.holdE = false; rvTouch = false; $('rv-btn').hidden = true; }
+const rvHold = on => e => { rvTouch = on; NET.holdE = on; e.preventDefault(); };
+$('rv-btn').addEventListener('pointerdown', rvHold(true));
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('rv-btn').addEventListener(ev, rvHold(false));
 
-/* ---------- the CO-OP screen (a login: name, then Host or Join) ---------- */
+/* ---------- the CO-OP screen (a login: name, then Host or Join; then the room) ---------- */
 const NAME_KEY = 'rogue.coopName';
 function openCoop() {
   if (!NET.on) {
     try { $('co-name').value = localStorage.getItem(NAME_KEY) || ''; } catch (err) { /* no storage */ }
   }
   coopError('');
+  NET.lookKey = '';
   renderLobby();
   showScreen('scr-coop');
 }
@@ -746,7 +956,6 @@ let coopBusy = false;
 async function clickHost() {
   if (coopBusy) return;
   const n = coopName(); if (!n) return;
-  if (deckProblems().length) { coopError('Fix your deck in Loadout first.'); return; }
   coopBusy = true; coopError(''); $('co-status').textContent = 'Opening a room…';
   try { await coopHost(n); } catch (err) { coopReset(); coopError(err.message); }
   coopBusy = false; renderLobby();
@@ -756,7 +965,6 @@ async function clickJoin() {
   const n = coopName(); if (!n) return;
   const key = cleanKey($('co-key').value);
   if (key.length !== 7) { coopError('Type the room key your friend gave you (like PS-7KQX).'); $('co-key').focus(); return; }
-  if (deckProblems().length) { coopError('Fix your deck in Loadout first.'); return; }
   coopBusy = true; coopError(''); $('co-status').textContent = `Joining ${key}…`;
   try { await coopJoin(n, key); } catch (err) { coopReset(); coopError(err.message); }
   coopBusy = false; renderLobby();
@@ -770,30 +978,85 @@ function renderLobby() {
   $('co-key-show').textContent = NET.key;
   $('co-role').textContent = NET.host ? 'You are hosting. Send your friends this key:' : 'You joined. Room key:';
   $('co-copy').hidden = !NET.host;
-  $('co-players').innerHTML = NET.lobby.map(p => `<li><i style="background:${p.color}"></i><span>${esc(p.name)}${p.id === (NET.host ? 1 : NET.myId) ? ' (you)' : ''}</span>`
-    + `<b class="cl-ping ${p.id === 1 ? '' : pingClass(p.ping)}">${p.id === 1 ? 'host' : p.ping == null ? '…' : `${p.ping} ms`}</b></li>`).join('');
+  const you = NET.host ? 1 : NET.myId;
+  $('co-players').innerHTML = (NET.list || []).map(p => {
+    const deck = (p.deck || []).map(([id, n]) => `<span style="--c: var(--${id})">${n}× ${CARDS[id]?.name || id}</span>`).join('');
+    const state = p.id === 1 ? 'Host' : p.ready ? 'Ready' : 'Not ready';
+    return `<li class="${p.ready ? 'is-ready' : ''}">${dot(p)}<span class="co-who"><span class="co-pname">${esc(p.name)}${p.id === you ? ' (you)' : ''}</span>`
+      + `<span class="co-deck">${deck}</span></span><b class="co-rd">${state}</b>`
+      + `<b class="cl-ping ${p.id === 1 ? '' : pingClass(p.ping)}">${p.id === 1 ? '' : p.ping == null ? '…' : `${p.ping} ms`}</b></li>`;
+  }).join('');
+  renderLook();
   $('co-start').hidden = !NET.host;
-  $('co-start').textContent = NET.lobby.length > 1 ? `Start (${NET.lobby.length} players)` : 'Start (waiting for friends…)';
-  $('co-start').disabled = NET.lobby.length < 2;
-  $('co-wait').hidden = NET.host;
+  $('co-ready').hidden = NET.host;
+  $('co-ready').textContent = NET.ready ? 'Ready ✓' : 'Ready';
+  $('co-ready').classList.toggle('is-on', !!NET.ready);
+  renderLobbyText();
 }
+// The words that change with the countdown (every 0.2 s while it runs).
+function renderLobbyText() {
+  if (!NET.on || NET.run) return;
+  const n = NET.lobby.length, secs = NET.countEnd ? Math.max(1, Math.ceil((NET.countEnd - performance.now()) / 1000)) : 0;
+  const waiting = (NET.list || []).filter(p => !p.ready).length;
+  if (NET.host) {
+    const b = $('co-start');
+    b.disabled = !secs && !allReady();
+    b.textContent = secs ? `Starting in ${secs}… (stop)` : n < 2 ? 'Start (waiting for friends…)' : allReady() ? `Start (${n} players)` : 'Start';
+  }
+  $('co-wait').textContent = secs ? `Starting in ${secs}…`
+    : NET.host ? (n < 2 ? 'Send the key to a friend.' : waiting ? `Waiting for ${waiting === 1 ? '1 player' : `${waiting} players`} to press Ready.` : 'Everyone is ready.')
+      : NET.ready ? 'Ready. Waiting for the host to start…' : 'Press Ready when your deck is set.';
+}
+// Colour swatches and emojis (rebuilt only when your look or the colours taken change, so a click keeps its focus).
+function renderLook() {
+  const me = lobbyMe();
+  if (!me) return;
+  const taken = new Map((NET.list || []).filter(p => p.id !== me.id).map(p => [p.color, p.name]));
+  const key = me.color + '|' + me.emoji + '|' + [...taken.keys()].join(',');
+  if (key === NET.lookKey) return;
+  NET.lookKey = key;
+  const focused = document.activeElement?.dataset?.look;
+  $('co-colors').innerHTML = COOP.colors.map(c => {
+    const who = taken.get(c), on = c === me.color && !me.emoji;
+    return `<button type="button" class="co-sw${c === me.color ? ' is-mine' : ''}" data-look="c${c}" style="--sw:${c}" aria-pressed="${on}"`
+      + `${who ? ` disabled title="Taken by ${esc(who)}"` : ''} aria-label="Colour${who ? `, taken by ${esc(who)}` : ''}"></button>`;
+  }).join('');
+  $('co-emojis').innerHTML = COOP.emojis.map(e => `<button type="button" class="co-em" data-look="e${e}" aria-pressed="${e === me.emoji}">${e}</button>`).join('');
+  if (focused) $('scr-coop').querySelector(`[data-look="${CSS.escape(focused)}"]`)?.focus();
+}
+$('co-look').addEventListener('click', e => {
+  const b = e.target.closest('button[data-look]');
+  if (!b || b.disabled) return;
+  const me = lobbyMe(), v = b.dataset.look.slice(1);
+  if (b.dataset.look[0] === 'c') pickLook(v, '');                     // a colour: back to a plain circle in it
+  else pickLook(me?.color || '', me?.emoji === v ? '' : v);            // an emoji (again: off)
+});
 setInterval(() => { if (NET.host && !NET.run) { const now = performance.now(); for (const g of NET.conns.values()) netSend(g.conn, { t: 'ping', ts: now }); } }, COOP.pingMs);
 $('btn-coop').addEventListener('click', openCoop);
 $('co-host').addEventListener('click', clickHost);
 $('co-join').addEventListener('click', clickJoin);
 $('co-key').addEventListener('keydown', e => { if (e.key === 'Enter') clickJoin(); });
 $('co-name').addEventListener('keydown', e => { if (e.key === 'Enter') ($('co-key').value ? clickJoin() : clickHost()); });
-$('co-start').addEventListener('click', coopStart);
+$('co-start').addEventListener('click', clickStart);
+$('co-ready').addEventListener('click', () => setReady(!NET.ready));
+$('co-edit').addEventListener('click', editLoadout);
 $('co-leave').addEventListener('click', () => { coopLeave(); coopError(''); });
 $('co-back').addEventListener('click', () => { if (NET.on && !NET.run) coopLeave(); goMain(); });
 $('co-copy').addEventListener('click', () => {
   navigator.clipboard?.writeText(NET.key).then(() => { $('co-copy').textContent = 'Copied'; setTimeout(() => { $('co-copy').textContent = 'Copy'; }, 1200); }).catch(() => {});
 });
+$('btn-room').addEventListener('click', coopToRoom);
 
 // The host keeps the fight going when its tab is hidden (the browser stops drawing it), so the others aren't frozen.
-setInterval(() => {
+// v0.46: the beat comes from a Web Worker, since browsers slow a hidden tab's own timers to once a second (the whole
+// game ran at a tenth of its speed for everyone while the host was on another tab). A plain timer if that fails.
+function hiddenHostStep() {
   if (!NET.host || !NET.run || !document.hidden || game.over) return;
   const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  try { update(dt); usePlayer(NET.me); flushSnaps(); } catch (err) { console.error(err); }
-}, 50);
+  try { update(dt); usePlayer(NET.me); pickTimeouts(); flushSnaps(); } catch (err) { console.error(err); }
+}
+try {
+  const beat = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 50);'], { type: 'text/javascript' })));
+  beat.onmessage = hiddenHostStep;
+} catch (err) { setInterval(hiddenHostStep, 50); }
