@@ -232,8 +232,14 @@ function drawBeam(x1, y1, x2, y2, k, w, color) {
 
 function draw() {
   ctx.save();
+  if (NET.run) {                          // co-op: a bigger arena, and the view follows you (coop.js)
+    updateCam();
+    ctx.fillStyle = COL.line; ctx.fillRect(0, 0, VW, VH);   // beyond the arena's edge
+    ctx.translate(-cam.x, -cam.y);
+  }
   ctx.fillStyle = COL.floor;
   ctx.fillRect(0, 0, W, H);
+  if (NET.run) { ctx.strokeStyle = COL.bad; ctx.globalAlpha = 0.35; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, W - 3, H - 3); ctx.globalAlpha = 1; }
   if (game.shake > 0 && !reducedMotion) {
     const s = game.shake * 28;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
@@ -469,7 +475,7 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(x1 + dx * 0.25, y1 + dy * 0.25); ctx.lineTo(x2, y2); ctx.stroke();
   };
   for (const w of game.swooshes) swoosh(w.x1, w.y1, w.x2, w.y2, w.life / SWOOSH_LIFE);
-  if (game.dash && !game.inMenu) swoosh(game.dash.sx, game.dash.sy, game.player.x, game.player.y, 1);
+  if (game.dash && !game.inMenu && Number.isFinite(game.dash.sx)) swoosh(game.dash.sx, game.dash.sy, game.player.x, game.player.y, 1);
 
   // BULL charge: afterimages fading out behind you
   ctx.fillStyle = COL.relic;
@@ -493,7 +499,7 @@ function draw() {
 
   // player: a circle (hidden behind the start menu), stretched along a BULL charge
   const p = game.player, dsh = game.dash, da = dsh ? Math.atan2(dsh.dy, dsh.dx) : 0;
-  ctx.fillStyle = COL.player;
+  ctx.fillStyle = NET.run ? (NET.me?.down ? COL.line : NET.me?.color || COL.player) : COL.player;   // co-op: your colour; grey when down
   if (!game.inMenu) {
     ctx.globalAlpha = p.safe > 0 && !dsh && Math.floor(p.safe * 20) % 2 ? 0.45 : 1;   // blink while safe after a hit
     if (dsh) ellipse(p.x, p.y, PLAYER.r * 1.25, PLAYER.r * 0.82, da);
@@ -515,6 +521,8 @@ function draw() {
     }
     ctx.restore();
   }
+
+  drawCoopPlayers();                     // co-op: your friends, and you if you're down (coop.js)
 
   // mini shield (after a level-up choice): a bubble that flashes when an enemy bumps it
   if (game.shield > 0 && !game.inMenu) {
@@ -556,7 +564,8 @@ function draw() {
   // Floating numbers and callouts: on their own full-resolution layer, so they stay sharp under the CRT filter
   // (user: text was unreadable at its low resolution). It shakes with the arena.
   tctx.save();
-  tctx.clearRect(0, 0, W, H);
+  tctx.clearRect(0, 0, VW, VH);
+  if (NET.run) tctx.translate(-cam.x, -cam.y);
   if (game.shake > 0 && !reducedMotion) { const s = game.shake * 28; tctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s); }
   tctx.textAlign = 'center';
   for (const f of game.floaters) {
@@ -568,6 +577,7 @@ function draw() {
     tctx.lineWidth = 4; tctx.strokeStyle = 'rgba(0, 0, 0, .8)'; tctx.lineJoin = 'round'; tctx.strokeText(f.text, f.x, f.y);
     tctx.fillText(f.text, f.x, f.y);
   }
+  drawCoopNames();
   tctx.restore();
 }
 // A crit (v0.42, user: a GOOD indicator): the number pops in big and settles, on a spiky orange starburst, with a

@@ -53,6 +53,7 @@
     <div class="nav">
       <button id="btn-loadout" type="button">Loadout</button>
       <button id="btn-store" type="button">Store</button>
+      <button id="btn-coop" type="button">Co-op</button>
       <button class="start" id="btn-play" type="button">Start</button>
     </div>
     <p class="sub small">Earn 1 gold for every 15 enemies you defeat in a run, +10 for beating SKURTOSAURUS and +15 every time MAKORA goes down.</p>
@@ -67,6 +68,39 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <!-- CO-OP (v0.45, user): a login. Your name, then Host (you get a room key to send) or Join (type a friend's key).
+       Someone has to host first. Once you're in a room: the players and their pings, and the host's Start. -->
+  <section class="screen" id="scr-coop" aria-labelledby="co-title" hidden>
+    <p class="eyebrow">Online</p>
+    <h1 id="co-title">Co-op</h1>
+    <div class="co-card" id="co-login">
+      <label class="co-field"><span>Your name</span><input id="co-name" type="text" maxlength="14" autocomplete="nickname" spellcheck="false" placeholder="Player"></label>
+      <div class="co-split">
+        <div class="co-half">
+          <p class="co-label">Start a room</p>
+          <button class="start" id="co-host" type="button">Host</button>
+          <p class="sub small">You'll get a key to send your friends.</p>
+        </div>
+        <div class="co-half">
+          <p class="co-label">Join a friend</p>
+          <label class="co-field"><span>Room key</span><input id="co-key" type="text" maxlength="8" autocomplete="off" spellcheck="false" placeholder="PS-7KQX"></label>
+          <button id="co-join" type="button">Join</button>
+        </div>
+      </div>
+      <p class="co-status sub small" id="co-status" aria-live="polite"></p>
+    </div>
+    <div class="co-card" id="co-room" hidden>
+      <p class="sub small" id="co-role"></p>
+      <p class="co-key"><b id="co-key-show"></b><button type="button" id="co-copy">Copy</button></p>
+      <ul class="co-players" id="co-players"></ul>
+      <button class="start" id="co-start" type="button">Start</button>
+      <p class="sub small" id="co-wait">Waiting for the host to start…</p>
+      <button class="back" id="co-leave" type="button">Leave room</button>
+    </div>
+    <p class="co-error" id="co-error" role="alert" hidden></p>
+    <button class="back" id="co-back" type="button">Back</button>
   </section>
 
   <!-- Loadout (v0.31, user: a deck builder like Legends of Runeterra's): your deck as a list on the left, the cards
@@ -157,6 +191,22 @@
   <button class="cine-skip" id="cine-skip" type="button" hidden>Skip <kbd>Space</kbd></button>
 </div>
 <p class="toast" id="toast" role="status" hidden></p>
+<!-- co-op (coop.js): the players and their pings; the level-up picks, which don't pause; reviving a friend -->
+<ul class="coop-list" id="coop-list" aria-label="Players" hidden></ul>
+<div class="coop-pick" id="coop-pick" hidden>
+  <p class="cp-head"><b id="cp-level">LEVEL 2</b> Pick one <span class="cp-keys">1 · 2 · 3</span> <span id="cp-time">10s</span></p>
+  <span class="cp-track"><span class="cp-bar" id="cp-bar"></span></span>
+  <ul class="cp-cards" id="cp-cards"></ul>
+</div>
+<div class="revive" id="revive" role="dialog" aria-labelledby="rv-title" hidden>
+  <div class="rv-box">
+    <p class="rv-title" id="rv-title">Reviving <b id="rv-name"></b></p>
+    <p class="rv-hint">Type each word, then Enter or Space</p>
+    <p class="rv-word" id="rv-word"></p>
+    <input id="rv-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type the word">
+    <p class="rv-foot"><span id="rv-count">0/5</span> <span class="cp-track"><span class="cp-bar" id="rv-bar"></span></span> <span id="rv-time">15s</span></p>
+  </div>
+</div>
 <div class="intro" id="intro" role="status" aria-live="assertive" hidden></div>
 
 <div class="deck-status" id="deckStatus">
@@ -204,6 +254,7 @@
     <h2 id="d-title">Defeated</h2>
     <p class="sub" id="d-stats"></p>
     <p class="gold" id="d-gold"></p>
+    <p class="sub small" id="d-wait" hidden>Waiting for the host to start the next run…</p>
     <div class="nav">
       <button class="start" id="btn-retry" type="button">Try again</button>
       <button id="btn-defeat-menu" type="button">Main menu</button>
@@ -266,6 +317,7 @@
 <script src="src/sound.js"></script>
 <script src="src/display.js"></script>
 <script src="src/state.js"></script>
+<script src="src/net.js"></script>
 <script src="src/arena.js"></script>
 <script src="src/combat.js"></script>
 <script src="src/combos.js"></script>
@@ -276,6 +328,7 @@
 <script src="src/hud.js"></script>
 <script src="src/upgrades.js"></script>
 <script src="src/menus.js"></script>
+<script src="src/coop.js"></script>
 <script src="src/main.js"></script>
 <!-- The test panel (src/devtools.js): loaded only on localhost, and never pushed to GitHub -->
 <script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.write('<script src="src/devtools.js"><\/script>');</script>

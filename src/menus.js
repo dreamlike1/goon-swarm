@@ -47,6 +47,11 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.45' },
+  { tag: 'Co-op', text: 'New: online CO-OP for up to 4 players, from the main menu. Type your name, then Host (you get a room key to send your friends) or Join with their key.' },
+  { tag: 'Co-op', text: 'Everyone plays their own deck in a bigger arena, with many more enemies. Pings show next to every name.' },
+  { tag: 'Co-op', text: 'Level ups give everyone their own 3 picks on a 10 second timer, and the fight keeps going.' },
+  { tag: 'Co-op', text: 'Friend down? Stand next to them and press E, then type 5 words before the timer ends to bring them back at full health.' },
   { ver: 'v0.44' },
   { tag: 'Fix', text: "MAKORA and the rest of the animations now work in every browser, including Brave, Firefox and Safari with their privacy protections on." },
   { ver: 'v0.43' },
@@ -740,6 +745,7 @@ function onMenuKey(e) {
     if (current === 'scr-loadout' || current === 'scr-store') goMain();
     else if (current === 'scr-packview' && !buying) { renderStore(); showScreen('scr-store'); }
     else if (current === 'scr-main') showScreen('scr-title');
+    else if (current === 'scr-coop') { if (NET.on && !NET.run) coopLeave(); goMain(); }
   }
 }
 
@@ -828,6 +834,7 @@ function resetRun() {
 
 // Pause → Exit to title: the run ends, and pays its gold (user: quitting earns gold too).
 function exitToTitle() {
+  if (NET.run) { coopLeave(); return; }            // co-op: leave the room first (it comes back here)
   const g = (!game.inMenu && !game.over && !game.practice && deck ? payGold(game.kills) : 0) + (game.over ? 0 : game.goldBonus || 0);
   resetRun();
   $('title-note').hidden = !g;
@@ -853,14 +860,21 @@ function defeat() {
   $('d-gold').innerHTML = `<span class="coin" aria-hidden="true"></span><b>+${g + bonus} gold</b> · ${g} for kills (1 per ${GOLD_PER})${bonus ? ` + ${bonus} bonus` : ''} · you have ${save.gold}`;
   if (g) SFX.coin();
   $('defeat').hidden = false;
-  $('btn-retry').focus();
+  // co-op: only the host can start the next run (everyone comes along); the others wait for it
+  $('btn-retry').hidden = NET.run && NET.guest;
+  $('btn-retry').textContent = NET.run ? 'Play again together' : 'Try again';
+  $('d-wait').hidden = !(NET.run && NET.guest);
+  if (NET.run) { closeRevive(); closePick(); }
+  ($('btn-retry').hidden ? $('btn-defeat-menu') : $('btn-retry')).focus();
 }
 $('btn-retry').addEventListener('click', () => {
+  if (NET.run && NET.host) { NET.run = false; coopStart(); return; }   // co-op: again, with the same friends
   resetRun();
   last = performance.now();
   document.activeElement?.blur();
 });
 $('btn-defeat-menu').addEventListener('click', () => {
+  if (NET.run) { coopLeave(); goMain(); return; }
   resetRun();
   game.inMenu = true;
   menuEl.hidden = false;

@@ -48,6 +48,12 @@ const toastEl = document.getElementById('toast');
 // arena harder each time, then SKURTOSAURUS arrives with its name.
 const introEl = document.getElementById('intro');
 let introTimer = 0;
+// The intro's words, on its own (a co-op guest plays just this, the host clears the arena).
+function startIntroScene() {
+  clearTimeout(introTimer);
+  introEl.innerHTML = `<p class="intro-line">DO YOU HEAR THOSE FOOTSTEPS?</p>`;
+  introEl.hidden = false;
+}
 function startIntro() {
   // The boss fights alone (user): the swarm on the field scatters in a puff, and none spawn until it's down.
   for (const e of game.enemies) {
@@ -74,7 +80,7 @@ function updateIntro(dt) {
   }
   if (it.t >= spawn) {
     game.intro = null;
-    spawnBoss();
+    if (!NET.guest) spawnBoss();
     introEl.innerHTML = `<p class="intro-name"><span class="intro-vs">VS</span>${BOSS.name}</p>`;
     introTimer = setTimeout(() => { introEl.hidden = true; }, 1400);
   }
@@ -91,7 +97,7 @@ function spawnBoss() {
   const x = p.x < W / 2 ? W - BOSS.r - 4 : BOSS.r + 4, y = Math.min(playH || H, H) / 2;
   const b = {
     boss: true, type: 'boss', shape: 'boss', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: BOSS.r,
-    hp: BOSS.hp, maxHp: BOSS.hp, dmg: BOSS.dmg, hit: 0, born: 0, speed: BOSS.walk,
+    hp: Math.round(BOSS.hp * coopBossHp()), maxHp: Math.round(BOSS.hp * coopBossHp()), dmg: BOSS.dmg,   // co-op: tougher hit: 0, born: 0, speed: BOSS.walk,
     state: 'walk', t: 0, dir: 0, throwT: 1.2, chargeT: 2.4, face: 0, phase: 1, throwsLeft: 0, dashesLeft: 0, wind: BOSS.throwWind,
     step: 0, throwing: null, recoil: 0, anim: 0,               // walk cycle, throw windup / follow-through, clock (for draw.js)
   };
@@ -119,11 +125,13 @@ function renderBossBar() {
 function bossNextPhase(b) {
   if (b.phase !== 1) return false;
   const P = BOSS.phase2, p = game.player;
-  Object.assign(b, { phase: 2, hp: P.hp, maxHp: P.hp, dead: false, state: 'enrage', t: P.enrage, throwing: null, recoil: 0, throwsLeft: 0, dashesLeft: 0, kx: 0, ky: 0 });
+  Object.assign(b, { phase: 2, hp: Math.round(P.hp * coopBossHp()), maxHp: Math.round(P.hp * coopBossHp()), dead: false, state: 'enrage', t: P.enrage, throwing: null, recoil: 0, throwsLeft: 0, dashesLeft: 0, kx: 0, ky: 0 });
   game.rocks = [];                                           // a clean slate for the second round
   // the roar shoves you back
-  const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1;
-  p.kx = (p.kx || 0) + dx / d * P.push; p.ky = (p.ky || 0) + dy / d * P.push;
+  eachLiving(() => {
+    const q = game.player, dx = q.x - b.x, dy = q.y - b.y, d = Math.hypot(dx, dy) || 1;
+    q.kx = (q.kx || 0) + dx / d * P.push; q.ky = (q.ky || 0) + dy / d * P.push;
+  });
   game.rings.push({ x: b.x, y: b.y, r: b.r, max: Math.max(W, H) * 0.6, life: 0.7, color: COL.bad });
   game.shake = Math.max(game.shake, 0.6);
   game.hitstop = Math.max(game.hitstop || 0, 0.12);
@@ -275,14 +283,19 @@ function throwBigRock(b) {
 }
 
 function updateRocks(dt) {
-  const p = game.player;
   for (let i = game.rocks.length - 1; i >= 0; i--) {
     const k = game.rocks[i];
     k.t += dt; k.spin += dt * 4;
     k.x += k.vx * dt; k.y += k.vy * dt;
     const gone = (!k.big && k.t > BOSS.rockLife) || k.x < -40 || k.y < -40 || k.x > W + 40 || k.y > H + 40;
     if (gone) { game.rocks.splice(i, 1); continue; }
-    if (Math.hypot(k.x - p.x, k.y - p.y) < k.r + PLAYER.r) {
+    let p = game.player;
+    if (NET.run) {                                           // co-op: whoever it hits
+      const c = living().find(c => Math.hypot(k.x - c.body.x, k.y - c.body.y) < k.r + PLAYER.r);
+      if (c) usePlayer(c);
+      p = c ? c.body : null;
+    }
+    if (p && Math.hypot(k.x - p.x, k.y - p.y) < k.r + PLAYER.r) {
       game.rocks.splice(i, 1);
       burst(k.x, k.y, COL.rock, k.big ? 24 : 8, k.big ? 260 : 160);
       if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; continue; }
@@ -305,7 +318,11 @@ function bossDown(b) {
   game.rings.push({ x: b.x, y: b.y, r: 10, max: 220, life: 0.7, color: COL.boss });
   game.orbs.push({ x: b.x, y: b.y, vx: 0, vy: 0, value: BOSS.xp, r: 11, t: 0, born: 0 });
   game.rocks = [];
-  if (!game.relics.includes('bull')) {
+  if (NET.run) {                                           // co-op: everyone gets BULL, and the fight doesn't stop
+    eachPlayer(() => { if (!game.relics.includes('bull')) game.relics = [...game.relics, 'bull']; game.dashCd = 0; renderRelics(); });
+    toast(`EVERYONE GOT ${BULL.name} · SPACE TO CHARGE`, '');
+    SFX.upgrade(4);
+  } else if (!game.relics.includes('bull')) {
     game.relics.push('bull');
     game.dashCd = 0;
     renderRelics();
@@ -317,12 +334,12 @@ function bossDown(b) {
 }
 
 /* ---------- BULL: Space to charge ---------- */
-function tryDash() {
-  if (!game.relics.includes('bull') || game.dash || game.dashCd > 0 || game.inMenu || game.over || game.paused || game.choosing || game.intro || game.cine) return;
+function tryDash(dir = null) {
+  if (NET.guest && NET.run) { if (!NET.me.down && !NET.typing) NET.wantDash = true; return; }   // co-op: the host charges us
+  if (!game.relics.includes('bull') || game.dash || game.dashCd > 0 || game.inMenu || game.over || (game.paused && !NET.run) || game.choosing || game.intro || game.cine) return;
+  if (NET.run && ACTIVE?.down) return;
   const p = game.player;
-  let mx = 0, my = 0;
-  for (const k of keys) { mx += MOVE[k][0]; my += MOVE[k][1]; }
-  if (!mx && !my && pointer) { mx = pointer.x - p.x; my = pointer.y - p.y; }
+  let [mx, my] = dir || localInput();
   if (!mx && !my) { const e = nearestEnemy(); if (e) { mx = e.x - p.x; my = e.y - p.y; } else mx = 1; }
   const l = Math.hypot(mx, my) || 1;
   game.dash = { t: BULL.time, dx: mx / l, dy: my / l, hit: new Set(), smashed: false, sx: p.x, sy: p.y };
@@ -344,7 +361,7 @@ function tryDash() {
 function updateDash(dt) {
   if (game.dashCd > 0) {
     game.dashCd = Math.max(0, game.dashCd - dt);
-    const icon = relicsEl.querySelector('.relic');
+    const icon = isLocal() && relicsEl.querySelector('.relic');
     if (icon) icon.style.setProperty('--k', 1 - game.dashCd / BULL.cd);
     if (game.dashCd === 0) {                              // ready again: the chip lights up, and so do you
       renderRelics();
@@ -388,6 +405,7 @@ function updateDash(dt) {
 
 // The BULL icon beside the HP bar: a bull's head in a ring that fills while it cools down, and glows when ready.
 function renderRelics() {
+  if (!isLocal()) return;
   const has = game.relics.includes('bull');
   relicsEl.hidden = !has;
   if (!has) return;

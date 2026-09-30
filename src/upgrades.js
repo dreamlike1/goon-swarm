@@ -38,8 +38,8 @@ const pct = (v, plus = false) => `${plus ? '+' : ''}${Math.round(v * 100)}%`;
 const upAmount = (id, r) => { const v = STATS[id].base * UP_MULT[r]; return STATS[id].round ? Math.round(v) : v; };
 
 // This run's bonuses, how many times each stat was picked, and the best rarity picked for it.
-const stats = {};
-const picks = {};
+let stats = {};                // `let`: in co-op the host points these at each player's own in turn (coop.js usePlayer)
+let picks = {};
 // Every run starts with these (user, v0.9: +10% base damage and +10% attack speed). Upgrades add on top, and the
 // stats panel shows the total (Base damage +10%, Attack speed 0.63s) without marking them as upgraded.
 const BASE_STATS = { dmg: 0.1, atk: 0.1, crit: 0.1, critDmg: 0.3 };   // crits: v0.41, user
@@ -452,6 +452,7 @@ statsEl.innerHTML = STAT_IDS.map(id =>
 // Upgraded stats light up in the colour of the best rarity picked for them, with a pip per pick.
 // `changed` flashes that row and counts its number up.
 function renderStats(changed = null) {
+  if (!isLocal()) return;                // co-op: only your own stats are on the panel
   for (const li of statsEl.children) {
     const id = li.dataset.stat, pk = picks[id];
     li.classList.toggle('is-up', pk.n > 0);

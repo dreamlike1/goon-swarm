@@ -134,9 +134,11 @@ function startMakora() {
 }
 // Skip (user): the Skip button, Space or Enter. The voice stops, its music comes in and MAKORA is standing there as
 // the screen fades back in, the same as the end of the summoning.
-function skipIntro() {
+function skipIntro(fromNet = false) {
   const c = game.cine, T = MAKORA.cine.summon;
   if (!c || c.kind !== 'summon' || c.step > 5) return;
+  if (NET.guest && NET.run && !fromNet) { toHost({ t: 'skip' }); return; }   // co-op: the host skips it for everyone
+  if (NET.host && NET.run) coopEvent({ e: 'skip' });
   if (furubeEl) { furubeEl.pause(); furubeEl = null; }
   c.audio = null; c.music = true;
   cineSkip.hidden = true;
@@ -144,7 +146,7 @@ function skipIntro() {
   c.step = 5; c.t = T[5];                            // straight on to "it appears"
   SFX.click();
 }
-cineSkip.addEventListener('click', e => { skipIntro(); e.currentTarget.blur(); });
+cineSkip.addEventListener('click', e => { skipIntro(); e.currentTarget.blur(); });   // (a click event is never `fromNet`)
 // The summoning's voice (furube.m4a), on the sound effects' volume. A fresh copy each time, so it always starts at 0:00.
 let furubeEl = null;
 function playFurube() {
@@ -178,13 +180,13 @@ function updateCine(dt) {
     else if (i === 1 || i === 3) lineOut();
     else if (i === 2) line('I SUMMON');
     else if (i === 4) { line('MAKORA!', 'is-name'); c.music = true; SFX.makoraRoar(); game.shake = Math.max(game.shake, 0.5); }   // its music comes in (sound.js)
-    else if (i === 5) { spawnMakora(); cineEl.classList.remove('is-on'); cineSkip.hidden = true; }   // fades back in, MAKORA standing there
+    else if (i === 5) { if (!NET.guest) spawnMakora(); cineEl.classList.remove('is-on'); cineSkip.hidden = true; }   // fades back in, MAKORA standing there
     else endCine();
   } else {
     const m = game.makora;
     if (i === 0) { line(''); drawWheel((m.turns - 1) * Math.PI / 4); cineWheel.hidden = false; void cineWheel.offsetWidth; cineWheel.classList.add('is-shown'); }
     else if (i === 1) { SFX.wheelSpin(); spinMakoraWheel(c, m); }   // the shove; it spins from here (above)
-    else if (i === 2) { makoraReturns(m); cineEl.classList.remove('is-on'); }
+    else if (i === 2) { if (!NET.guest) makoraReturns(m); cineEl.classList.remove('is-on'); }
     else endCine();
   }
 }
@@ -207,7 +209,7 @@ function spawnMakora() {
   const x = W / 2, y = Math.min(playH || H, H) * 0.32;
   const m = {
     makora: true, type: 'makora', shape: 'makora', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: MAKORA.r,
-    hp: MAKORA.hp, maxHp: MAKORA.hp, dmg: MAKORA.touch, hit: 0, born: 0, speed: MAKORA.walk,
+    hp: Math.round(MAKORA.hp * coopBossHp()), maxHp: Math.round(MAKORA.hp * coopBossHp()), dmg: MAKORA.touch,   // co-op: tougher hit: 0, born: 0, speed: MAKORA.walk,
     state: 'walk', t: 0, cd: 1, aim: Math.PI / 2, face: 1, step: 0, anim: 0,
     turns: 0, wheelA: 0, queue: [], slice: null, punch: null, kick: null, fast: false, down: false,
     kickCd: 2.5,
@@ -227,6 +229,11 @@ function makoraDown(m, card) {
   m.turns++;
   game.projectiles = []; game.mines = [];
   clearKickRocks();
+  showAdaptScene(m);
+  renderMakoraBar();
+}
+// The black screen for the wheel (a co-op guest plays just this; the host runs the fight side).
+function showAdaptScene(m) {
   game.cine = { kind: 'adapt', t: 0, step: 0 };
   cineEl.className = 'cine';
   line('');
@@ -235,12 +242,12 @@ function makoraDown(m, card) {
   void cineEl.offsetWidth;
   cineEl.classList.add('is-on');
   SFX.kill(true);
-  renderMakoraBar();
 }
 // … and it comes back, ×2 the HP and ×2 the damage, and faster.
 function makoraReturns(m) {
   const k = MAKORA.mult ** m.turns;
-  Object.assign(m, { down: false, hp: MAKORA.hp * k, maxHp: MAKORA.hp * k, dmg: MAKORA.touch * k, state: 'rest', t: 0.9, queue: [], slice: null, punch: null, kick: null, kickCd: 2, kx: 0, ky: 0, born: 0.3, hit: 0 });
+  const hp = Math.round(MAKORA.hp * k * coopBossHp());
+  Object.assign(m, { down: false, hp, maxHp: hp, dmg: MAKORA.touch * k, state: 'rest', t: 0.9, queue: [], slice: null, punch: null, kick: null, kickCd: 2, kx: 0, ky: 0, born: 0.3, hit: 0 });
   m.x = W / 2; m.y = Math.min(playH || H, H) * 0.32;
   game.rings.push({ x: m.x, y: m.y, r: m.r, max: m.r * 5, life: 0.6, color: COL.wheel });
   const name = m.adaptedTo ? CARDS[m.adaptedTo].name.toUpperCase() : null;
@@ -358,13 +365,18 @@ function waveHits(m, u, was) {
     const a = u.a + (Math.random() - 0.5) * P.arc;
     game.particles.push({ x: m.x + Math.cos(a) * u.wave, y: m.y + Math.sin(a) * u.wave, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60 - 30, life: 0.3, color: COL.rock });
   }
-  if (u.hit) return;
+  eachLiving(() => waveHitOne(m, u, was));                  // co-op: it can catch everyone
+}
+function waveHitOne(m, u, was) {
+  const P = MAKORA.punch, p = game.player, who = ownerId();
+  u.hitIds = u.hitIds || [];
+  if (u.hitIds.includes(who)) return;
   const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy);
   let diff = Math.atan2(dy, dx) - u.a;
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
   if (Math.abs(diff) > P.arc / 2 + Math.atan2(PLAYER.r, Math.max(d, 1))) return;
   if (d + PLAYER.r < was - P.width || d - PLAYER.r > u.wave + P.width / 2) return;
-  u.hit = true;
+  u.hitIds.push(who);
   if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
   p.flash = 0.25;
   const a = Math.atan2(dy, dx);                              // the wave throws you back
@@ -399,6 +411,9 @@ function strike(m, s, S) {
   SFX.slice(s.kind === 'great' ? 'cleave' : s.kind);
   if (s.kind === 'great') SFX.punch();
   game.shake = Math.max(game.shake, s.kind === 'great' ? 0.35 : 0.1);
+  eachLiving(() => strikeOne(m, s, S));                      // co-op: the cut catches everyone in the cone
+}
+function strikeOne(m, s, S) {
   const p = game.player, dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy);
   let diff = Math.atan2(dy, dx) - s.a;
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -440,7 +455,8 @@ function kickRock(m, K) {
 }
 // One frame of a kicked rock (combat.js): it flies and tumbles, and breaks on you, or flies off the arena.
 function moveKickRock(k, dt) {
-  const p = game.player;
+  let p = game.player;
+  if (NET.run) { const c = living().find(c => Math.hypot(k.x - c.body.x, k.y - c.body.y) < k.r + PLAYER.r); if (c) { usePlayer(c); p = c.body; } }   // co-op: whoever it hits
   k.t += dt; k.spin += dt * Math.hypot(k.vx, k.vy) / k.r * 0.5;
   k.x += k.vx * dt; k.y += k.vy * dt;
   if (!reducedMotion && Math.random() < 0.5) game.particles.push({ x: k.x - k.vx * 0.05, y: k.y + k.r * 0.6, vx: -k.vx * 0.1, vy: -20 * Math.random(), life: 0.3, color: COL.rock });
@@ -636,8 +652,9 @@ function drawMakora(m) {
   } else { crouch = 1; }
 
   // drawn small on its own canvas and blown up with hard edges: blocks of 2 arena px, like the arena under the CRT filter
-  const bs = cv.width / W, B = Math.max(1, Math.round(2 * bs)), q = k * bs / B;   // B: canvas pixels per block; q: blocks per unit
+  const bs = cv.width / VW, B = Math.max(1, Math.round(2 * bs)), q = k * bs / B;   // B: canvas pixels per block; q: blocks per unit
   const pw = Math.ceil(MK.w * q), ph = Math.ceil(MK.h * q);
+  if (!(pw > 0 && ph > 0 && pw < 4096 && ph < 4096)) return;   // a hidden or zero-size view for a moment: skip this frame
   if (mkCv.width !== pw || mkCv.height !== ph) { mkCv.width = pw; mkCv.height = ph; }
   const c = mkx;
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pw, ph);

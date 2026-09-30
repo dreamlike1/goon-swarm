@@ -12,6 +12,7 @@ const packtest = { ok: packtests.every(t => t.ok), packs: packtests.reduce((n, t
 let nextCard = null;
 
 function onAttack(ev) {
+  if (NET.host && NET.run && ACTIVE && !ACTIVE.local) { ACTIVE.fired++; return; }   // a friend's card: their screen shows it (coop.js)
   record.current.push(ev.card);            // what combat fired
   record.passFired.push(ev.card);
   let fresh = false;
@@ -39,6 +40,7 @@ function onAttack(ev) {
 
 // Player HP bar. `hit` flashes it red for a moment.
 function renderHp(hit) {
+  if (!isLocal()) return;
   const p = game.player, el = $('hp');
   $('hp-fill').style.transform = `scaleX(${p.hp / maxHp()})`;
   el.setAttribute('aria-valuemax', maxHp());

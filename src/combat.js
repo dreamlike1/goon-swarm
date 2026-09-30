@@ -41,7 +41,7 @@ function spawnEnemy() {
 
 // One enemy of `type` at (x, y). `split`: the red-purple version that splits in two when it dies.
 function makeEnemy(type, x, y, split = false) {
-  const T = ENEMY_TYPES[type], hp = enemyHp(type, game.level);
+  const T = ENEMY_TYPES[type], hp = Math.round(enemyHp(type, game.level) * coopHp());   // co-op: tougher
   const e = {
     x, y, vx: 0, vy: 0, kx: 0, ky: 0,
     type, shape: T.shape, r: T.r, dmg: enemyDmg(type, game.level), hp, maxHp: hp, split,
@@ -114,13 +114,13 @@ const inRange = (card, from = game.player) => nearestEnemy(from, null, rangeOf(c
 const knockOf = base => base * (1 + stats.knock);   // the Knockback upgrade pushes every hit harder
 
 // Runs `fn` after `t` seconds of play (paused time doesn't count).
-function later(t, fn) { game.timers.push({ t, fn }); }
+function later(t, fn) { game.timers.push({ t, fn, owner: ownerId() }); }
 
 // Mine: placed where the player stands, or `dist` px away at angle `a` (the mine combos). Too many on the field and
 // the oldest one is cleared. In the store's test mode it's placed under the target dummy, which never moves.
 function dropMine(card, a = 0, dist = 0, quiet = false) {
   const c = game.practice ? game.practice.dummies[0] : game.player;   // test mode: around the main dummy
-  const m = { x: c.x + Math.cos(a) * dist - (game.practice && !dist ? c.r + 4 : 0), y: c.y + Math.sin(a) * dist, t: 0, card };
+  const m = { x: c.x + Math.cos(a) * dist - (game.practice && !dist ? c.r + 4 : 0), y: c.y + Math.sin(a) * dist, t: 0, card, owner: ownerId() };
   clampTo(m, 8);
   game.mines.push(m);
   if (game.mines.length > MINE_MAX) game.mines.shift();
@@ -139,13 +139,15 @@ function zap(card, e, o = {}) {
 // Laser ×7: a line at angle a0, held for a moment, then swept a full turn back to where it started. Every enemy the
 // beam passes over (within `len`) is hit once.
 function sweep(card, a0, len, dmg) {
-  game.sweeps.push({ card, a0, len, dmg, t: 0, prev: a0, hits: new Set() });
+  game.sweeps.push({ card, a0, len, dmg, t: 0, prev: a0, hits: new Set(), owner: ownerId() });
   SFX.sweep();
 }
 function updateSweeps(dt) {
-  const p = game.player, { hold, dur } = TUNE.sweep;
+  const { hold, dur } = TUNE.sweep;
   for (let i = game.sweeps.length - 1; i >= 0; i--) {
     const sw = game.sweeps[i];
+    usePlayerId(sw.owner);
+    const p = game.player;
     sw.t += dt;
     const k = Math.max(0, Math.min(1, (sw.t - hold) / dur)), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;   // ease in-out
     const a = sw.a0 + e * Math.PI * 2;
@@ -207,7 +209,7 @@ function launch(card, a, e, o = {}) {
     card, look: spec.look, r: o.r || spec.r, dmg: damageOf(o.dmg ?? spec.dmg), knock: knockOf(spec.knock), speed: spec.start, top: spec.speed,
     start: spec.start, ramp: spec.ramp, age: 0, straight: true, pierce: o.pierce ?? (spec.pierce || 0), bounces: 0, hits: new Set(), spin: 0,
     target: null, a, x: p.x + Math.cos(a) * (PLAYER.r + 4), y: p.y + Math.sin(a) * (PLAYER.r + 4), big: !!o.big,
-    vx: Math.cos(a) * spec.start, vy: Math.sin(a) * spec.start, trail: [], flown: 0, range: o.range || 0, endBlast: o.endBlast || null,
+    vx: Math.cos(a) * spec.start, vy: Math.sin(a) * spec.start, trail: [], flown: 0, range: o.range || 0, endBlast: o.endBlast || null, owner: ownerId(),
   });
   if (!e) return;                       // part of a burst: the burst handles sound and muzzle
   game.muzzle = { a, life: 0.12, card };
@@ -257,7 +259,7 @@ function shoot(card, e, o = {}) {
     homeDelay: o.noHome ? Infinity : (o.homeDelay ?? (steer ? TUNE.missile.curve : 0)), split: o.split || 0, field: o.field || null,
     turn: steer ? TUNE.missile.turn * speed / spec.speed : 0,   // faster missiles turn faster, so they still curve in the same space
     flown: 0, maxDist: rangeOf(card) * (steer ? 2.2 : 1.35), age: 0,
-    x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [],
+    x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [], owner: ownerId(),
   });
   if (o.quiet) return;
   game.muzzle = { a, life: 0.12, card };
@@ -367,7 +369,7 @@ function gainXp(n) {
   }
   renderXp(up > 0);
   if (up && game.level >= 10 && game.level - up < 10) bonusGold('LEVEL 10', GOLD_BONUS.level10);   // +1 gold for reaching level 10 (user)
-  if (up) queueLevelUps(game.level - up, game.level);
+  if (up) { if (NET.run) coopLevelUps(game.level - up, game.level); else queueLevelUps(game.level - up, game.level); }
 }
 
 // Bonus gold (user): +1 for reaching level 10, +10 for beating SKURTOSAURUS and +15 every time MAKORA goes down
@@ -375,6 +377,7 @@ function gainXp(n) {
 const GOLD_BONUS = { level10: 1, boss: 10, makora: 15 };
 function bonusGold(why, n = 1) {
   if (game.practice) return;
+  if (NET.host && NET.run) coopEvent({ e: 'gold', why, n });   // each friend earns it on their own computer
   save.gold += n; writeSave();
   game.goldBonus = (game.goldBonus || 0) + n;
   const p = game.player;
@@ -396,7 +399,7 @@ function playerReach(x, y) {
 // Dodge can avoid the hit entirely; Armor takes a flat amount off it (a hit always does at least 1).
 function hurtPlayer(raw) {
   const p = game.player;
-  if (p.safe > 0 || game.over) return;
+  if (p.safe > 0 || game.over || (NET.run && ACTIVE?.down)) return;
   if (Math.random() < dodgeChance()) {
     p.safe = PLAYER.safe;
     SFX.dodge();
@@ -406,33 +409,49 @@ function hurtPlayer(raw) {
   const dmg = armorCut(raw);
   p.hp = Math.max(0, p.hp - dmg);
   p.safe = PLAYER.safe;
-  SFX.hurt();
+  if (isLocal()) SFX.hurt();
   game.shake = Math.max(game.shake, 0.12);
   game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 10, text: `-${dmg}`, color: COL.bad, life: 0.7, vy: -40, big: true });
   renderHp(true);
-  if (p.hp <= 0) defeat();
+  if (p.hp <= 0) { if (NET.run) coopDown(ACTIVE); else defeat(); }   // co-op: down until a friend revives you
 }
 
-function update(dt) {
-  if (first) return;                    // wait until the arena has a real size (see resize)
-  if (game.hitstop > 0) { game.hitstop -= dt; return; }   // a BULL hit freezes the frame for a moment
-  if (game.intro) { updateIntro(dt); updateEffects(dt); return; }   // SKURTOSAURUS's intro: the fight waits
-  if (game.cine) { updateCine(dt); updateEffects(dt); return; }     // MAKORA's black-screen scenes: so does this
+// One player's cards for this frame: an augmented slot's second shot, then the next card when the timer runs out. The
+// timer only runs out while the next card has an enemy within its range (not in the store's test mode).
+function attackStep(dt) {
+  for (let i = game.echoes.length - 1; i >= 0; i--) {
+    const ec = game.echoes[i];
+    if ((ec.t -= dt) > 0) continue;
+    game.echoes.splice(i, 1);
+    const tg = inRange(ec.card);
+    if (tg) shoot(ec.card, tg);
+  }
+  game.cooldown -= dt;
+  const autoTest = game.practice?.card === DECK_TAB;             // Test loadout's Whole deck: your deck plays as in a run
+  if (autoTest) game.practice.t += dt;
+  if (game.practice && !autoTest) game.cooldown = attackInterval();
+  else if (game.cooldown <= 0) {
+    const next = deck.sequence[deck.seqPos];
+    if (next && (CARDS[next].auto || inRange(next))) {   // the Mine has no range: it drops on its own (v0.40)
+      const ev = fire();
+      // A shuffle takes a moment: the next card waits for it. Attack speed shortens both.
+      game.cdTotal = attackInterval() + (ev.reshuffle ? shuffleTime() : 0);
+      game.cooldown += game.cdTotal;
+    }
+    else game.cooldown = 0;
+  }
+
+}
+
+// One player's movement, timers and regen for this frame (co-op runs it for each player in turn).
+function playerStep(dt, mx, my) {
   const p = game.player;
   p.px = p.x; p.py = p.y;               // where this frame started, so pickups can check the whole path (see playerReach)
-
-  // movement
-  let mx = 0, my = 0;
-  for (const k of keys) { mx += MOVE[k][0]; my += MOVE[k][1]; }
-  if (!mx && !my && pointer) {
-    const dx = pointer.x - p.x, dy = pointer.y - p.y;
-    if (Math.hypot(dx, dy) > 6) { mx = dx; my = dy; }
-  }
   const ml = Math.hypot(mx, my);
   if (updateDash(dt)) { /* BULL charge: it moves the player itself */ }
   else if (ml) {
     p.x += (mx / ml) * moveSpeed() * dt; p.y += (my / ml) * moveSpeed() * dt;
-    hintEl.classList.add('gone');
+    if (isLocal()) hintEl.classList.add('gone');
   }
   if (p.kx || p.ky) {                   // a shove (SKURTOSAURUS's phase-2 roar), dying away quickly
     p.x += p.kx * dt; p.y += p.ky * dt;
@@ -445,6 +464,22 @@ function update(dt) {
   // Mini shield: a moment of safety right after a level-up choice closes.
   game.shield = Math.max(0, game.shield - dt);
   game.shieldHit = Math.max(0, game.shieldHit - dt);
+  // health regen
+  if (stats.regen > 0 && p.hp < maxHp()) {
+    const before = Math.ceil(p.hp);
+    p.hp = Math.min(maxHp(), p.hp + stats.regen * dt);
+    if (Math.ceil(p.hp) !== before) renderHp(false);
+  }
+}
+
+function update(dt) {
+  if (first) return;                    // wait until the arena has a real size (see resize)
+  if (game.hitstop > 0) { game.hitstop -= dt; return; }   // a BULL hit freezes the frame for a moment
+  if (game.intro) { updateIntro(dt); updateEffects(dt); return; }   // SKURTOSAURUS's intro: the fight waits
+  if (game.cine) { updateCine(dt); updateEffects(dt); return; }     // MAKORA's black-screen scenes: so does this
+  let p = game.player;
+  if (NET.run) coopPlayersStep(dt);     // co-op: every player moves (coop.js)
+  else playerStep(dt, ...localInput());
 
   // swarm spawning
   // swarm spawning: tops up fast below this level's minimum, then keeps adding up to its maximum
@@ -456,16 +491,9 @@ function update(dt) {
   if (game.makoraDue && !game.boss && !game.makora) { startMakora(); return; }   // level 15: the last fight
   game.spawnTimer -= dt;
   if (game.spawnTimer <= 0 && !game.boss && !game.makora && !game.practice) {   // no swarm at all while a boss is up (user)
-    const n = game.enemies.length, low = n < swarmMin(game.level);
-    if (n < swarmMax(game.level)) spawnEnemy();
-    game.spawnTimer = low ? SWARM.refill : spawnEvery(game.level);
-  }
-
-  // health regen
-  if (stats.regen > 0 && p.hp < maxHp()) {
-    const before = Math.ceil(p.hp);
-    p.hp = Math.min(maxHp(), p.hp + stats.regen * dt);
-    if (Math.ceil(p.hp) !== before) renderHp(false);
+    const n = game.enemies.length, low = n < swarmMin(game.level) * coopCount();   // co-op: many more of them
+    if (n < swarmMax(game.level) * coopCount()) spawnEnemy();
+    game.spawnTimer = (low ? SWARM.refill : spawnEvery(game.level)) / coopCount();
   }
 
   // enemies: chase, keep a little apart from each other, get shoved on contact
@@ -474,6 +502,10 @@ function update(dt) {
   for (const e of es) {
     if (e.dummy) { e.hit = Math.max(0, e.hit - dt); continue; }   // the store's test dummies stand still and do no harm
     e.born = Math.min(1, e.born + dt * (e.boss || e.makora ? 1.5 : 4));
+    if (NET.run) {                          // co-op: each goes after whoever is nearest (and standing)
+      if (!e.mrock && !nearestLiving(e.x, e.y)) { e.hit = Math.max(0, e.hit - dt); continue; }
+      p = game.player;
+    }
     const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, ox = e.x, oy = e.y;
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
@@ -521,8 +553,7 @@ function update(dt) {
 
   updateRocks(dt);
 
-  // Pickups reach: a BULL charge also scoops up anything it passes near.
-  const grab = PLAYER.r + (game.dash ? BULL.grab : 2);
+  // Pickups reach: a BULL charge also scoops up anything it passes near. (Co-op: whoever gets there; see reacher.)
 
   // potions: walk over one to heal; they fade after a while
   for (let i = game.potions.length - 1; i >= 0; i--) {
@@ -530,7 +561,7 @@ function update(dt) {
     pt.t += dt;
     if (pt.vacuum) vacuumStep(pt, dt);
     else if (pt.t > POTION.life) { game.potions.splice(i, 1); continue; }
-    if (playerReach(pt.x, pt.y) < grab + POTION.r) {
+    if ((p = reacher(pt.x, pt.y, POTION.r))) {
       game.potions.splice(i, 1);
       const healed = Math.min(POTION.heal, maxHp() - p.hp);
       p.hp = Math.min(maxHp(), p.hp + POTION.heal);
@@ -547,7 +578,7 @@ function update(dt) {
     dm.t += dt;
     if (dm.vacuum) vacuumStep(dm, dt);
     else if (dm.t > DIAMOND.life) { game.diamonds.splice(i, 1); continue; }
-    if (playerReach(dm.x, dm.y) < grab + DIAMOND.r) {
+    if ((p = reacher(dm.x, dm.y, DIAMOND.r))) {
       game.diamonds.splice(i, 1);
       // every drop on the floor flies to you (user: all of them, not just XP): orbs, potions and other diamonds
       for (const o of game.orbs) { o.magnetized = true; o.vacuum = true; }   // the fast pull (XP.vacuum)
@@ -566,7 +597,7 @@ function update(dt) {
     m.t += dt;
     if (m.t < spec.arm) continue;
     // In test mode the dummies never walk onto a mine, so mines go off as soon as they're armed.
-    if (game.practice || es.some(e => Math.hypot(e.x - m.x, e.y - m.y) < (spec.trigger || spec.r) + e.r)) { game.mines.splice(i, 1); explode(m); }
+    if (game.practice || es.some(e => Math.hypot(e.x - m.x, e.y - m.y) < (spec.trigger || spec.r) + e.r)) { game.mines.splice(i, 1); usePlayerId(m.owner); explode(m); }
   }
 
   // scheduled combo shots
@@ -574,36 +605,14 @@ function update(dt) {
     const tm = game.timers[i];
     if ((tm.t -= dt) > 0) continue;
     game.timers.splice(i, 1);
+    usePlayerId(tm.owner);
     tm.fn();
-  }
-
-  // an augmented slot's second shot
-  for (let i = game.echoes.length - 1; i >= 0; i--) {
-    const ec = game.echoes[i];
-    if ((ec.t -= dt) > 0) continue;
-    game.echoes.splice(i, 1);
-    const tg = inRange(ec.card);
-    if (tg) shoot(ec.card, tg);
   }
 
   updateSweeps(dt);
   updateSilica(dt);
-
-  // attacks: the timer only runs out while the next card has an enemy within its range (not in the store's test mode)
-  game.cooldown -= dt;
-  const autoTest = game.practice?.card === DECK_TAB;             // Test loadout's Whole deck: your deck plays as in a run
-  if (autoTest) game.practice.t += dt;
-  if (game.practice && !autoTest) game.cooldown = attackInterval();
-  else if (game.cooldown <= 0) {
-    const next = deck.sequence[deck.seqPos];
-    if (next && (CARDS[next].auto || inRange(next))) {   // the Mine has no range: it drops on its own (v0.40)
-      const ev = fire();
-      // A shuffle takes a moment: the next card waits for it. Attack speed shortens both.
-      game.cdTotal = attackInterval() + (ev.reshuffle ? shuffleTime() : 0);
-      game.cooldown += game.cdTotal;
-    }
-    else game.cooldown = 0;
-  }
+  if (NET.run) coopAttacks(dt);         // co-op: everyone's cards (coop.js)
+  else attackStep(dt);
 
   // Projectiles home in on their target, so they don't miss it. If the target dies first, the shot doesn't
   // look for another: it flies on straight and can still hit whatever it runs into (user: less aimbot).
@@ -615,6 +624,7 @@ function update(dt) {
     if (game.cine) break;
     const pr = game.projectiles[i];
     if (!pr) continue;
+    usePlayerId(pr.owner);                 // co-op: its hits crit and blast as whoever fired it
     pr.trail.push(pr.x, pr.y);
     if (pr.trail.length > 16) pr.trail.splice(0, 2);
     // Straight missiles: no homing. They ease in slowly, then speed up. They pierce `pierce` enemies;
@@ -696,9 +706,12 @@ function update(dt) {
   }
 
   // XP orbs: slide to a stop, then fly to the player once in range. Touching one collects it.
+  p = game.player;                      // (the pickups above leave p as whoever grabbed something, or null)
   for (let i = game.orbs.length - 1; i >= 0; i--) {
     const o = game.orbs[i];
     o.t += dt; o.born = Math.min(1, o.born + dt * 5);
+    if (NET.run) { if (!nearestLiving(o.x, o.y)) break; p = game.player; }   // co-op: it flies to whoever is nearest
+    const grab = PLAYER.r + (game.dash ? BULL.grab : 2);
     const dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy) || 1;
     // Once an orb is pulled in range, it stays "latched" and keeps chasing no matter how far
     // it falls behind afterwards — otherwise a player sprinting away can shake it off for good.

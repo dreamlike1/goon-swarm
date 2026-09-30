@@ -13,14 +13,18 @@ function resize() {
   // The CRT filter (display.js) draws the arena at 1/CRT.pixel resolution; the page scales it up with hard edges.
   const dpr = display.crt ? 1 / CRT.pixel : Math.min(window.devicePixelRatio || 1, 2);
   // the layout size, not the on-screen one: the CRT switch-on squashes the whole page for a moment
-  W = Math.max(1, arena.clientWidth); H = Math.max(1, arena.clientHeight);
-  cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr));
-  ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  // VW × VH is the view; W × H is the world. They're the same, except in co-op, where the world is bigger and
+  // the view follows you round it (coop.js).
+  VW = Math.max(1, arena.clientWidth); VH = Math.max(1, arena.clientHeight);
+  if (NET.run && NET.world) { W = NET.world.w; H = NET.world.h; } else { W = VW; H = VH; }
+  cv.width = Math.max(1, Math.round(VW * dpr)); cv.height = Math.max(1, Math.round(VH * dpr));
+  ctx.setTransform(cv.width / VW, 0, 0, cv.height / VH, 0, 0);
   // the text layer stays at full resolution, so numbers read even under the CRT filter
   const tdpr = Math.min(window.devicePixelRatio || 1, 2);
-  tcv.width = Math.round(W * tdpr); tcv.height = Math.round(H * tdpr);
+  tcv.width = Math.round(VW * tdpr); tcv.height = Math.round(VH * tdpr);
   tctx.setTransform(tdpr, 0, 0, tdpr, 0, 0);
-  playH = bottomSafeY(r);
+  NET.viewSafe = bottomSafeY(r);
+  playH = NET.run ? H : NET.viewSafe;
   // Centre the player once the arena has a real size (it can measure 0 before layout settles).
   if (first && W > 100 && H > 100) { game.player.x = W / 2; game.player.y = H / 2; first = false; }
   clampTo(game.player, PLAYER.r);
@@ -33,7 +37,7 @@ new ResizeObserver(resize).observe(arena);
 // underneath and out of sight.
 function bottomSafeY(arenaRect) {
   const hudEls = [document.querySelector('.hp'), document.querySelector('.xp'), document.querySelector('.deck'), document.querySelector('.deck-status')].filter(Boolean);
-  if (!hudEls.length) return H;
+  if (!hudEls.length) return VH;
   const topMost = Math.min(...hudEls.map(el => el.getBoundingClientRect().top));
   return Math.max(40, topMost - arenaRect.top - 12);
 }
@@ -55,6 +59,11 @@ addEventListener('keydown', e => {
   if (game.inMenu) { onMenuKey(e); return; }
   if (game.over) return;
   if (game.practice && onPracticeKey(e)) return;   // the store's test mode: 1–3 fire, Esc goes back
+  if (NET.run && !e.repeat) {                      // co-op: E revives a friend who's down; 1–3 pick a level-up card
+    if (e.code === 'KeyE' && coopTryRevive()) { e.preventDefault(); return; }
+    const d = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
+    if (d && pickNow) { choosePick(+d[1] - 1); e.preventDefault(); return; }
+  }
   if (game.choosing && onChoiceKey(e)) return;   // number keys (and Space on the wheel) pick; movement keys are still recorded
   if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) return;
   if (game.cine?.kind === 'summon' && !game.paused && (e.code === 'Space' || e.code === 'Enter')) { if (!e.repeat) skipIntro(); e.preventDefault(); return; }   // skip MAKORA's intro (user)
@@ -68,6 +77,7 @@ addEventListener('blur', () => { keys.clear(); autoPause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); else releaseHold(); });
 addEventListener('focus', releaseHold);
 function autoPause() {
+  if (NET.run) return;                               // co-op: the fight goes on for everyone
   if (game.inMenu || game.over || game.choosing || game.paused || game.practice || !deck) return;
   // During MAKORA's black-screen scenes it just holds, with no pause menu, and carries on when you come back
   // (v0.33, user: alt-tab there froze the scene, or a click landed on the pause menu hidden behind it)

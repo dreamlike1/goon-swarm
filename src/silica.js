@@ -72,7 +72,7 @@ const chill = (e, t) => { if (!e.dummy) e.chill = Math.max(e.chill || 0, t); };
 // A frost field where an ice blast lands. `kind` 'burst' (×3) is bigger and shatters when it runs out.
 function iceField(x, y, kind, card) {
   const C = SILICA.cryo, F = kind === 'burst' ? C.burst : C.field;
-  game.fields.push({ x, y, r: F.r, life: F.life, t: 0, burst: kind === 'burst', card });
+  game.fields.push({ x, y, r: F.r, life: F.life, t: 0, burst: kind === 'burst', card, owner: ownerId() });
   game.rings.push({ x, y, r: 6, max: F.r, life: 0.3, color: COL.ice });
   burst(x, y, COL.ice, 14, 200);
   SFX.freeze(false);
@@ -81,6 +81,7 @@ function updateFields(dt) {
   const C = SILICA.cryo;
   for (let i = game.fields.length - 1; i >= 0; i--) {
     const f = game.fields[i];
+    usePlayerId(f.owner);
     f.t += dt;
     for (const e of game.enemies) if (Math.hypot(e.x - f.x, e.y - f.y) < f.r + e.r) chill(e, C.chill);
     if (f.t < f.life) continue;
@@ -92,8 +93,8 @@ function updateFields(dt) {
   }
 }
 // ×7: shards of ice spinning round you on a ring that grows from you out to `to` px, hitting what they touch.
-function frostShards() {
-  const R = SILICA.cryo.ring, f = game.frost, p = game.player;
+function frostShards(f = game.frost, p = game.player) {
+  const R = SILICA.cryo.ring;
   const k = Math.min(1, f.t / R.grow), ease = 1 - (1 - k) ** 2, rad = R.from + (R.to - R.from) * ease;
   return Array.from({ length: R.shards }, (_, i) => {
     const a = f.t * R.spin + (i / R.shards) * TAU;
@@ -124,7 +125,7 @@ function summonLion(card, e) {
   const p = game.player, a = Math.atan2(e.y - p.y, e.x - p.x);
   const off = PLAYER.r + 14, sx = p.x - Math.cos(a) * off, sy = p.y - Math.sin(a) * off;   // appears just behind you
   const stop = Math.max(0, Math.hypot(e.x - sx, e.y - sy) - e.r - 14);
-  game.summons.push({ kind: 'lion', card, t: 0, life: SILICA.lion.leap + SILICA.lion.stay, face: a, x: sx, y: sy,
+  game.summons.push({ owner: ownerId(), kind: 'lion', card, t: 0, life: SILICA.lion.leap + SILICA.lion.stay, face: a, x: sx, y: sy,
     leap: { x0: sx, y0: sy, x1: sx + Math.cos(a) * stop, y1: sy + Math.sin(a) * stop, target: e, done: false } });
   poof(sx, sy, '#fff');
   SFX.growl();
@@ -132,7 +133,7 @@ function summonLion(card, e) {
 // A summoned beast that holds its ground where you called it (turtle ×3, chimera ×7).
 function summonBeast(kind, card) {
   const S = SILICA[kind], p = game.player;
-  game.summons.push({ kind, card, t: 0, life: S.life, face: 0, x: p.x, y: p.y, next: kind === 'turtle' ? 0.25 : 0.3, scream: 0 });
+  game.summons.push({ owner: ownerId(), kind, card, t: 0, life: S.life, face: 0, x: p.x, y: p.y, next: kind === 'turtle' ? 0.25 : 0.3, scream: 0 });
   poof(p.x, p.y, '#fff');
   if (kind === 'chimera') { SFX.roar(); game.shake = Math.max(game.shake, 0.3); }
   else SFX.stomp(1);
@@ -161,13 +162,14 @@ function updateLion(s) {
 // Everything here that runs each frame (combat.js update, after movement).
 function updateSilica(dt) {
   updateFields(dt);
-  updateFrost(dt);
+  if (!NET.run) updateFrost(dt);                             // co-op: each player's own ring (coop.js)
   for (const b of game.bites) b.life -= dt;
   game.bites = game.bites.filter(b => b.life > 0);
   for (const m of game.muzzles) m.life -= dt;
   game.muzzles = game.muzzles.filter(m => m.life > 0);
   for (let i = game.summons.length - 1; i >= 0; i--) {        // the Druid's summoned animals
     const s = game.summons[i];
+    usePlayerId(s.owner);                                      // co-op: it hits as whoever summoned it
     s.t += dt;
     if (s.kind === 'lion') updateLion(s);
     else if (s.kind === 'turtle' && (s.next -= dt) <= 0) {    // the turtle's stomp: the ground shakes and damages enemies round it
@@ -185,6 +187,7 @@ function updateSilica(dt) {
   }
   for (let i = game.bombs.length - 1; i >= 0; i--) {         // the chimera's bombs: they fall, then go off
     const b = game.bombs[i];
+    usePlayerId(b.owner);
     b.t += dt;
     if (b.t < SILICA.chimera.fall) continue;
     game.bombs.splice(i, 1);
@@ -200,7 +203,7 @@ function dropBomb(card, origin) {
   const e = near[Math.floor(Math.random() * near.length)];
   const a = Math.random() * TAU, d = 40 + Math.random() * (C.reach - 60);
   const x = e ? e.x + (Math.random() - 0.5) * 20 : p.x + Math.cos(a) * d, y = e ? e.y + (Math.random() - 0.5) * 20 : p.y + Math.sin(a) * d;
-  game.bombs.push({ x: Math.max(10, Math.min(W - 10, x)), y: Math.max(10, Math.min(H - 10, y)), t: 0, card });
+  game.bombs.push({ x: Math.max(10, Math.min(W - 10, x)), y: Math.max(10, Math.min(H - 10, y)), t: 0, card, owner: origin?.owner ?? ownerId() });
 }
 
 /* ---------- drawing ---------- */
@@ -245,18 +248,7 @@ function drawSilicaTop() {
   for (const e of [game.boss, game.makora]) if (e && e.chill > 0 && !e.down) {   // the big ones: frost at their feet
     ctx.globalAlpha = 0.4; ctx.fillStyle = COL.ice; ellipse(e.x, e.y + e.r * 0.6, e.r * 0.9, e.r * 0.25); ctx.globalAlpha = 1;
   }
-  if (game.frost) {
-    const R = SILICA.cryo.ring, f = game.frost, fade = Math.min(1, (R.grow + R.hold - f.t) * 3);
-    for (const s of frostShards()) {
-      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a + Math.PI / 2); ctx.globalAlpha = fade;
-      ctx.fillStyle = COL.ice; ctx.globalAlpha = 0.25 * fade; circle(0, 0, R.r + 5);
-      ctx.globalAlpha = fade;                                 // a long ice crystal
-      ctx.beginPath(); ctx.moveTo(0, -R.r * 1.4); ctx.lineTo(R.r * 0.55, 0); ctx.lineTo(0, R.r * 1.4); ctx.lineTo(-R.r * 0.55, 0); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = COL.player; ctx.beginPath(); ctx.moveTo(0, -R.r * 1.1); ctx.lineTo(R.r * 0.2, 0); ctx.lineTo(0, R.r * 0.5); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-    ctx.globalAlpha = 1;
-  }
+  if (game.frost) drawFrostAt(game.frost, game.player);
   for (const b of game.bombs) {                               // falling in from above, growing as it comes
     const k = b.t / SILICA.chimera.fall, y = b.y - (1 - k) * 140;
     ctx.fillStyle = COL.line; circle(b.x, y, 6 + 2 * k);
@@ -274,6 +266,19 @@ function drawSilicaTop() {
   }
   for (const m of game.muzzles) { ctx.globalAlpha = m.life / 0.06; ctx.fillStyle = COL.gatling; circle(m.x + Math.cos(m.a) * 6, m.y + Math.sin(m.a) * 6, 5); ctx.globalAlpha = 1; }
   drawSummons();                                             // the Druid's animals, over the enemies
+}
+// The ring of ice round a player (yours, or a friend's in co-op).
+function drawFrostAt(f, p) {
+    const R = SILICA.cryo.ring, fade = Math.min(1, (R.grow + R.hold - f.t) * 3);
+    for (const s of frostShards(f, p)) {
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a + Math.PI / 2); ctx.globalAlpha = fade;
+      ctx.fillStyle = COL.ice; ctx.globalAlpha = 0.25 * fade; circle(0, 0, R.r + 5);
+      ctx.globalAlpha = fade;                                 // a long ice crystal
+      ctx.beginPath(); ctx.moveTo(0, -R.r * 1.4); ctx.lineTo(R.r * 0.55, 0); ctx.lineTo(0, R.r * 1.4); ctx.lineTo(-R.r * 0.55, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = COL.player; ctx.beginPath(); ctx.moveTo(0, -R.r * 1.1); ctx.lineTo(R.r * 0.2, 0); ctx.lineTo(0, R.r * 0.5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
 }
 // The Cryo Magus's ice blast: a pale crystal with a frosty trail.
 function drawIceShot(pr) {

@@ -20,7 +20,14 @@ function frame(now) {
   // The fight pauses while a level-up choice is open. Held keys are still tracked (arena.js), so you move off the moment you pick.
   // A bug in one frame must never stop the game for good (v0.32): the error is logged and the next frame still comes.
   try {
-    if (!game.paused && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || game.practice)) update(dt);
+    // co-op (coop.js): a guest only draws what the host sends; the host runs the fight for everyone, even with its
+    // pause menu open, and sends each friend a picture of it
+    if (NET.guest && NET.run) { if (!game.inMenu && !game.over) guestFrame(dt); }
+    else if ((!game.paused || NET.run) && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || game.practice)) {
+      update(dt);
+      if (NET.run) { usePlayer(NET.me); pickTimeouts(); tickPick(); reviveTick(dt); }
+    }
+    if (NET.host && NET.run) flushSnaps();
     if (nextCard) nextCard.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);
     draw();
     syncMusic(dt);
