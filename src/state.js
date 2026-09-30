@@ -47,6 +47,7 @@ const game = {
   obiDue: false, obiDone: false,
   sabers: [],         // his lightsaber while it's thrown
   bolts: [],          // your shots, knocked back at you while he blocks
+  eshots: [],         // the shooters' slow red orbs (v0.51)
   boulders: [],       // OBI ONE phase 3: rocks lying round the arena, which he hurls at you (v0.50)
   debris: [],         // phase 2: the force rains debris down; red circle telegraphs, then a hit (user)
   defl: 0,            // DEFLECT: seconds of shield left …

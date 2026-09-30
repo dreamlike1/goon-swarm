@@ -31,15 +31,17 @@ const OBI = {
     bolt: { speed: 430, r: 6, dmg: 9, every: 0.12, max: 14, life: 3.2 } },   // what your shots turn into when he blocks
   intro: { hums: [0.15, 0.95, 1.75], spawn: 2.6, arrive: 0.7, tele: 1.1 },
   // Phase 2 (user, v0.49): faster, the blade turns red, and up close his moves are a fixed rotation — small slash,
-  // a stabbing dash, a big slash — round and round; his throw curves in on you as it flies (dodge it).
+  // a stabbing dash, a big slash — round and round.
   // v0.50 (user): more HP (450 before); faster, with longer dashes at you; out of his melee reach he always throws;
   // stay out of it for 3–5 s (random each time) and he pulls you in; stay inside it for 3–5 s and the force shoves
   // you off while debris rains over the whole arena (dodge it). (The old pull-on-a-dodged-throw and the steady
   // debris rain are gone.)
   phase2: {
     hp: 600, focus: 1.6, push: 520, walk: 1.35, quick: 0.62,
-    melee: 150,                                        // his melee reach: out of it, he throws
-    pullAfter: [3, 5], pushAfter: [3, 5],              // seconds out of / inside his reach before he pulls / pushes
+    // v0.51 (user): his melee reach and his throw range. Between the two he throws; inside his reach for `pushAfter`
+    // s, the force pushes you off; beyond his throw range for `pullAfter` s, it pulls you in.
+    melee: 150, throwRange: 480,
+    pullAfter: [2, 2], pushAfter: [2, 2],
     pull: { speed: 185, reach: 62, press: 0.12, decay: 0.25, dmg: 26, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
     rotation: ['smallSlash', 'stabDash', 'bigSlash'],  // up close, round and round
     smallSlash: { tele: 0.16, anim: 0.12, arc: 1.5, range: 105, dmg: 10, lunge: 80 },
@@ -49,7 +51,10 @@ const OBI = {
     // after catching his saber with you out of reach: a long dash straight at you (user: longer dashes), then a stab
     lunge: { tele: 0.3, time: 0.55, speed: 1250, stopAt: 60, sliceTele: 0.08,
       stab: { anim: 0.12, arc: 0.7, range: 85, dmg: 22, lunge: 140 } },
-    throwTurn: 3.2,                                    // the throw's homing turn rate (rad/s) while it flies out
+    // v0.51 (user: the homing throw was too strong to dodge): it no longer curves after you. Where it turns, it stops
+    // and spins for `tele` s while a second lane shows, aimed at you (it locks at `lock`), then flies straight down it
+    // (`len` px, or to the wall), and only then goes back to his hand.
+    redirect: { tele: 0.55, lock: 0.7, len: 700, speed: 820 },
     push: 720,                                         // the force push's shove
   },
   // The force push's debris (user: over the whole arena, so you dodge through the gaps): the arena is cut into
@@ -177,7 +182,8 @@ function moveObi(o, dt) {
     if (d < P2.melee) {
       o.farT = 0; o.closeT = (o.closeT || 0) + dt;
       if (o.closeT >= o.pushAt) { obiForcePush(o); o.closeT = 0; o.pushAt = between(P2.pushAfter); }
-    } else {
+    } else if (d <= P2.throwRange) { o.closeT = 0; o.farT = 0; }   // in his throw range: he throws (below)
+    else {
       o.closeT = 0; o.farT = (o.farT || 0) + dt;
       // (it cuts in on a throw's wind-up, or while his saber is in the air: his other hand is free)
       if (o.farT >= o.pullAt && ['walk', 'rest', 'throwwind', 'thrown'].includes(o.state)) { o.th = null; startPull(o, ownerId()); o.farT = 0; o.pullAt = between(P2.pullAfter); }
@@ -193,7 +199,8 @@ function moveObi(o, dt) {
     o.step += dt * 9 * (go || 0.3);
     if (P2) {                                                // phase 2 on: out of reach he throws; up close, a fixed rotation (user)
       if (o.cd <= 0) {
-        if (d > P2.melee) startThrow(o, OBI.throw.tele * q);
+        if (d > P2.throwRange) { o.cd = 0.2; }              // too far to throw: he walks at you (and the pull is coming)
+        else if (d > P2.melee) startThrow(o, OBI.throw.tele * q);
         else {
           const move = P2.rotation[(o.rot || 0) % P2.rotation.length]; o.rot = (o.rot || 0) + 1;
           if (move === 'smallSlash') startSlice(o, P2.smallSlash.tele * q, 1, P2.smallSlash);
@@ -356,16 +363,26 @@ function updateSabers(dt) {
   for (let i = game.sabers.length - 1; i >= 0; i--) {
     const s = game.sabers[i], T = OBI.throw;
     s.t += dt; s.spin += dt * T.spin;
-    if (!s.back) {
-      if (o.phase >= 2) {                     // it curves in on you as it flies (user): dodge it
-        const p = game.player, dx = p.x - s.x, dy = p.y - s.y, sp = Math.hypot(s.vx, s.vy);
-        const cur = Math.atan2(s.vy, s.vx), want = Math.atan2(dy, dx), turn = OBI.phase2.throwTurn * dt;
-        const diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur)), na = cur + Math.max(-turn, Math.min(turn, diff));
-        s.vx = Math.cos(na) * sp; s.vy = Math.sin(na) * sp;
+    if (s.aim) {                              // phase 2 on: it hangs in the air, spinning, while the second lane shows
+      const Rd = OBI.phase2.redirect, A = s.aim;
+      A.t += dt;
+      if (!A.locked) {
+        const p = nearestBody(s.x, s.y);
+        A.a = Math.atan2(p.y - s.y, p.x - s.x); A.L = Math.min(Rd.len, edgeDist(s.x, s.y, A.a) - 8);
+        if (A.t >= Rd.tele * Rd.lock) A.locked = true;
       }
+      if (A.t >= Rd.tele) {                  // … then straight down it
+        s.vx = Math.cos(A.a) * Rd.speed; s.vy = Math.sin(A.a) * Rd.speed;
+        s.L = s.flown + Math.max(80, A.L); s.aim = null; s.again = true; s.hitIds = [];
+        SFX.saberThrow();
+      }
+    } else if (!s.back) {
       s.x += s.vx * dt; s.y += s.vy * dt;
       s.flown += Math.hypot(s.vx, s.vy) * dt;
-      if (s.flown >= s.L) { s.back = true; s.hitIds = []; SFX.saberThrow(); }
+      if (s.flown >= s.L) {
+        if (o.phase >= 2 && !s.again) { s.aim = { t: 0, a: 0, L: 0, locked: false }; s.vx = s.vy = 0; }   // the second lane (user)
+        else { s.back = true; s.hitIds = []; SFX.saberThrow(); }
+      }
     } else {
       const h = obiHand(o), dx = h.x - s.x, dy = h.y - s.y, d = Math.hypot(dx, dy) || 1, v = T.back * Math.min(1.6, 0.6 + s.t * 0.5);
       if (d < T.catch || d < v * dt) { game.sabers.splice(i, 1); obiCatch(o); continue; }
@@ -436,6 +453,13 @@ function drawDebris() {
     }
   }
   ctx.globalAlpha = 1;
+}
+// The nearest living player's body (without switching whose turn it is).
+function nearestBody(x, y) {
+  if (!NET.run) return game.player;
+  let best = game.player, bd = Infinity;
+  for (const c of living()) { const d = Math.hypot(c.body.x - x, c.body.y - y); if (d < bd) { bd = d; best = c.body; } }
+  return best;
 }
 // How far the nearest living player is (without switching whose turn it is).
 function nearestGap(x, y) {
@@ -1045,6 +1069,17 @@ function pulledBody(id) {
 function drawObiShots() {
   const bad = game.obi && game.obi.phase >= 2;
   for (const s of game.sabers) {
+    if (s.aim) {                                                       // phase 2 on: the second lane, aimed at you (user)
+      const A = s.aim, q = Math.min(1, A.t / OBI.phase2.redirect.tele), w = OBI.throw.r * 2 + 8, L = A.L;
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(A.a);
+      ctx.fillStyle = COL.bad;
+      ctx.globalAlpha = 0.1 + 0.14 * q; ctx.fillRect(18, -w / 2, L - 18, w);
+      ctx.globalAlpha = 0.4 + 0.4 * q; ctx.fillRect(18, -w / 2, (L - 18) * q, 2); ctx.fillRect(18, w / 2 - 2, (L - 18) * q, 2);
+      ctx.globalAlpha = (0.45 + 0.5 * q) * (reducedMotion ? 1 : 0.7 + 0.3 * Math.sin(A.t * 34));
+      ctx.strokeStyle = COL.bad; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+      for (let i = 0; i < 5; i++) { const x = 50 + i * ((L - 70) / 4); ctx.beginPath(); ctx.moveTo(x - 7, -8); ctx.lineTo(x + 3, 0); ctx.lineTo(x - 7, 8); ctx.stroke(); }
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
     ctx.save(); ctx.translate(s.x, s.y);
     ctx.globalAlpha = 0.1; ctx.fillStyle = bad ? COL.saberBad : COL.saber; circle(0, 0, 26);
     for (let g = 2; g >= 0; g--) {                                     // afterimages of the last moment of spin

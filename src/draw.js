@@ -298,6 +298,39 @@ function drawDummy(e) {
   ctx.fillStyle = hit ? COL.bad : COL.floor; circle(e.x, e.y, r * 0.12);
 }
 
+// The boss arena's wall (v0.50, user: a visible boundary): a glowing edge round the arena in the boss's own colour,
+// with an energy dash running along it and bright brackets at the corners. It fades in as the view zooms out for the
+// fight (arena.js) and out again after. `f`: how far in (0–1).
+const arenaWall = () => (game.practice || game.inMenu ? 0 : Math.max(0, Math.min(1, (viewZoom - VIEW.normal) / (VIEW.boss - VIEW.normal))));
+function wallColor() {
+  const o = game.obi, b = game.boss;
+  if (game.makora || game.cine) return COL.wheel;
+  if (o) return o.phase >= 2 ? COL.saberBad : COL.saber;
+  if (game.intro?.kind === 'obi') return COL.saber;
+  if (b) return b.phase === 2 ? COL.bad : COL.boss;
+  return game.intro ? COL.boss : null;               // (none: it keeps the last one as it fades out)
+}
+let wallLast = null;
+function drawArenaWall(f) {
+  const col = (wallLast = wallColor() || wallLast || COL.line), t = performance.now() / 1000, still = reducedMotion;
+  const i = 5, x0 = i, y0 = i, w = W - 2 * i, h = (NET.run || arenaMode === 'boss' ? H : Math.min(playH || H, H)) - 2 * i;
+  const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * 2.4);
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.strokeStyle = col;
+  ctx.globalAlpha = f * 0.12; ctx.lineWidth = 44; ctx.strokeRect(x0, y0, w, h);          // the glow, soft and wide …
+  ctx.globalAlpha = f * 0.22; ctx.lineWidth = 18; ctx.strokeRect(x0, y0, w, h);
+  ctx.globalAlpha = f * (0.85 + 0.15 * pulse); ctx.lineWidth = 7; ctx.strokeRect(x0, y0, w, h);   // … the wall itself …
+  ctx.globalAlpha = f * 0.7; ctx.lineWidth = 3; ctx.setLineDash([22, 16]);                 // … energy running round it …
+  ctx.lineDashOffset = still ? 0 : -t * 60; ctx.strokeRect(x0 + 9, y0 + 9, w - 18, h - 18);
+  ctx.setLineDash([]);
+  ctx.globalAlpha = f; ctx.lineWidth = 9; ctx.lineCap = 'round';                            // … and brackets at the corners
+  const L = Math.min(70, w / 6, h / 6);
+  for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x0 + w, y0, -1, 1], [x0, y0 + h, 1, -1], [x0 + w, y0 + h, -1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(cx + sx * L, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy * L); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // Laser zaps: a wide soft glow with a thin bright core, flickering as it fades.
 function drawBeam(x1, y1, x2, y2, k, w, color) {
   ctx.lineCap = 'round';
@@ -384,19 +417,19 @@ function waterPuddle(x, y, r, seed, q, alpha = 1) {
 
 function draw() {
   ctx.save();
-  if (NET.run) {                          // co-op: a bigger arena, and the view follows you (coop.js)
-    updateCam();
-    ctx.fillStyle = COL.line; ctx.fillRect(0, 0, VW, VH);   // beyond the arena's edge
-  }
-  ctx.scale(viewZoom, viewZoom);          // a boss fight: zoomed out, for a bigger arena (arena.js)
-  if (NET.run) ctx.translate(-cam.x, -cam.y);
+  updateCam();                            // co-op's bigger arena, and a boss's square one: the view follows you (coop.js)
+  ctx.fillStyle = arenaMode === 'boss' ? COL.crack : COL.line; ctx.fillRect(0, 0, VW, VH);   // beyond the arena's edge (darker round a boss's)
+  ctx.scale(viewZoom, viewZoom);          // zoomed out for the swarm, in for a boss (arena.js)
+  ctx.translate(-cam.x, -cam.y);
   ctx.fillStyle = COL.floor;
   ctx.fillRect(0, 0, W, H);
-  if (NET.run) { ctx.strokeStyle = COL.bad; ctx.globalAlpha = 0.35; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, W - 3, H - 3); ctx.globalAlpha = 1; }
+  const wall = arenaWall();               // a boss fight's arena wall (below) replaces co-op's plain edge
+  if (NET.run && wall < 1) { ctx.strokeStyle = COL.bad; ctx.globalAlpha = 0.35 * (1 - wall); ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, W - 3, H - 3); ctx.globalAlpha = 1; }
   if (game.shake > 0 && !reducedMotion) {
     const s = game.shake * 28;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   }
+  if (wall > 0) drawArenaWall(wall);
 
   // broken ground where the boss landed: under everything else, fading out at the end
   for (const c of game.cracks) {
@@ -500,8 +533,8 @@ function draw() {
 
   drawBoulders(false);                   // OBI ONE phase 3: his rocks lying round the arena (obi.js)
 
-  // enemies: squares (normal and big) and triangles that point where they're heading,
-  // each with a thin health line above it once it's been hit
+  // enemies: squares (normal and big) and triangles that point where they're heading (no health lines since v0.51,
+  // user: only the bosses show their HP)
   for (const e of game.enemies) {
     if (e.boss) { drawBoss(e); continue; }
     if (e.makora) { if (!e.down) drawMakora(e); continue; }
@@ -509,26 +542,41 @@ function draw() {
     if (e.mrock) { drawKickRock(e); continue; }
     if (e.dummy) { drawDummy(e); continue; }
     const s = e.r * (0.4 + 0.6 * e.born);
-    if (e.shape === 'crab') drawCrab(e);                     // the crab (v0.46; the mini dino before)
-    else {
-      ctx.fillStyle = e.hit > 0 ? COL.player : e.chill > 0 ? chilled(enemyCol(e)) : enemyCol(e);   // chilled: frosted over
-      // Splitters also carry a seam down the middle, where they'll split (so it's not colour alone).
-      ctx.save(); ctx.translate(e.x, e.y);
-      if (e.shape === 'triangle') {
-        ctx.rotate(Math.atan2(e.vy, e.vx));
-        ctx.beginPath(); ctx.moveTo(s * 1.3, 0); ctx.lineTo(-s, -s); ctx.lineTo(-s, s); ctx.closePath(); ctx.fill();
-        if (e.split) { ctx.strokeStyle = COL.floor; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(s * 1.1, 0); ctx.stroke(); }
-      } else {
-        ctx.fillRect(-s, -s, s * 2, s * 2);
-        if (e.split) { ctx.strokeStyle = COL.floor; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); }
+    if (e.shape === 'crab') { drawCrab(e); continue; }       // the crab (v0.46; the mini dino before)
+    const lit = e.boom && e.fuse != null;                    // an exploder about to go: its blast ring, filling
+    if (lit) {
+      const q = Math.min(1, e.fuse / EXPLODER.fuse);
+      ctx.fillStyle = COL.bad; ctx.globalAlpha = 0.08 + 0.16 * q; circle(e.x, e.y, EXPLODER.r * (0.35 + 0.65 * q));
+      ctx.globalAlpha = 0.5 + 0.4 * q; ctx.strokeStyle = COL.bad; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(e.x, e.y, EXPLODER.r, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    // flashing, faster and faster, while its fuse burns (user: a flashing indicator)
+    const flash = lit && (reducedMotion ? e.fuse % 0.3 < 0.15 : Math.sin(e.fuse * e.fuse * 40) > 0);
+    ctx.fillStyle = e.hit > 0 || flash ? COL.player : e.chill > 0 ? chilled(enemyCol(e)) : enemyCol(e);   // chilled: frosted over
+    // Splitters carry a seam down the middle, where they'll split, and exploders a bright core (so it's not colour alone).
+    ctx.save(); ctx.translate(e.x + (lit && !reducedMotion ? (Math.random() - 0.5) * 3 : 0), e.y);
+    if (e.shape === 'triangle') {
+      ctx.rotate(lit ? e.face || 0 : (e.face = Math.atan2(e.vy, e.vx)));
+      ctx.beginPath(); ctx.moveTo(s * 1.3, 0); ctx.lineTo(-s, -s); ctx.lineTo(-s, s); ctx.closePath(); ctx.fill();
+      if (e.boom) { ctx.fillStyle = flash ? COL.bad : COL.player; ctx.globalAlpha = 0.85; circle(-s * 0.15, 0, s * 0.32); ctx.globalAlpha = 1; }
+    } else {
+      ctx.fillRect(-s, -s, s * 2, s * 2);
+      if (e.split) { ctx.strokeStyle = COL.floor; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); }
+      if (e.type === 'shooter') {                            // a dark muzzle toward you, glowing red as it charges
+        const p = game.player, a = Math.atan2(p.y - e.y, p.x - e.x), q = e.aim != null ? Math.min(1, e.aim / SHOOTER.tele) : 0;
+        ctx.fillStyle = COL.floor; circle(Math.cos(a) * s * 0.45, Math.sin(a) * s * 0.45, s * 0.36);
+        if (q) { ctx.fillStyle = COL.bad; ctx.globalAlpha = 0.4 + 0.6 * q; circle(Math.cos(a) * s * 0.45, Math.sin(a) * s * 0.45, s * 0.36 * q); ctx.globalAlpha = 1; }
       }
-      ctx.restore();
     }
-    if (e.hp < e.maxHp) {
-      const bw = e.r * 2, by = e.y - e.r - 7;
-      ctx.fillStyle = COL.line; ctx.fillRect(e.x - e.r, by, bw, 2);
-      ctx.fillStyle = enemyCol(e); ctx.fillRect(e.x - e.r, by, bw * Math.max(0, e.hp / e.maxHp), 2);
-    }
+    ctx.restore();
+  }
+  // the shooters' orbs: slow, red and glowing (they don't home)
+  for (const b of game.eshots) {
+    const pulse = reducedMotion ? 0 : Math.sin(b.t * 10) * 1.5;
+    ctx.fillStyle = COL.bad; ctx.globalAlpha = 0.18; circle(b.x, b.y, b.r * 2.4 + pulse);
+    ctx.globalAlpha = 0.35; circle(b.x, b.y, b.r * 1.5);
+    ctx.globalAlpha = 1; circle(b.x, b.y, b.r);
+    ctx.fillStyle = COL.player; ctx.globalAlpha = 0.8; circle(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.4); ctx.globalAlpha = 1;
   }
   drawSilicaTop();                       // frost on chilled enemies, the ring of ice, falling bombs, the lion's bite
   drawDebris();                          // OBI ONE phase 2: red circles warn where the force will drop debris (obi.js)
@@ -759,7 +807,7 @@ function draw() {
   tctx.save();
   tctx.clearRect(0, 0, VW, VH);
   tctx.scale(viewZoom, viewZoom);
-  if (NET.run) tctx.translate(-cam.x, -cam.y);
+  tctx.translate(-cam.x, -cam.y);
   if (game.shake > 0 && !reducedMotion) { const s = game.shake * 28; tctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s); }
   drawCoopFaces();                        // co-op: emojis (coop.js), under the numbers
   tctx.textAlign = 'center';

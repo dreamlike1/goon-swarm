@@ -47,6 +47,14 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.51' },
+  { tag: 'View', text: 'The camera is zoomed out while you fight the swarm, so you see more of the arena.' },
+  { tag: 'Boss', text: 'Boss fights zoom back in to a square arena with a glowing wall in the boss’s colour. It’s bigger than the screen, and the view follows you round it.' },
+  { tag: 'Boss', text: 'OBI ONE’s thrown saber no longer chases you. Where it turns, a second lane shows it coming at you, then it flies straight down it.' },
+  { tag: 'Boss', text: 'OBI ONE’s force: stay in his melee range for 2 s and he pushes you away; stay beyond his throw range for 2 s and he pulls you in.' },
+  { tag: 'Enemies', text: 'After OBI ONE, red squares come half as often and a quarter of the swarm are green squares that shoot slow red orbs at you (they don’t home).' },
+  { tag: 'Enemies', text: 'Purple triangles don’t split any more. They explode: close to you they stop and flash, then blow up, hurting you and any enemies nearby.' },
+  { tag: 'Enemies', text: 'Only bosses show a health bar now.' },
   { ver: 'v0.50' },
   { tag: 'Boss', text: 'Boss fights zoom out: the arena grows to about twice the room, so you can get far away. It shrinks back once the boss is down.' },
   { tag: 'Boss', text: 'OBI ONE phase 2 has more HP (600, was 450), attacks faster and dashes further at you.' },
@@ -395,6 +403,7 @@ function startPractice(k, card, extra) {
   document.body.classList.add('in-practice');
   renderPractice();
   $('practice').hidden = false;
+  resetZoom();                                      // the test mode is at full size (arena.js)
   placeDummies();                                    // after the panel is up, so they sit in the open space under it
   last = performance.now();
   document.activeElement?.blur();
@@ -853,7 +862,7 @@ function resetRun() {
     projectiles: [], particles: [], rings: [], floaters: [], orbs: [], muzzle: null, shake: 0, kills: 0, over: false,
     level: 1, xp: 0, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], upQueue: [], mines: [], potions: [], diamonds: [], won: [], timers: [], shield: 0, shieldHit: 0,
     beams: [], sweeps: [], swooshes: [], practice: null, goldBonus: 0,
-    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [], boulders: [],
+    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [], boulders: [], eshots: [],
   });
   resetStats();
   resetBoss();

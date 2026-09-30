@@ -100,7 +100,8 @@ function updateCracks(dt) {
 function spawnBoss() {
   const p = game.player;
   // Enter from the edge furthest from the player.
-  const x = p.x < W / 2 ? W - BOSS.r - 4 : BOSS.r + 4, y = Math.min(playH || H, H) / 2;
+  // (v0.50: a little way in, so the bigger boss arena's zoom doesn't leave it under the stats)
+  const x = p.x < W / 2 ? W * 0.8 : W * 0.2, y = Math.min(playH || H, H) / 2;
   const b = {
     boss: true, type: 'boss', shape: 'boss', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: BOSS.r, size: BOSS.r, flip: 1,
     hp: Math.round(BOSS.hp * coopBossHp()), maxHp: Math.round(BOSS.hp * coopBossHp()), dmg: BOSS.dmg,   // co-op: tougher
@@ -253,6 +254,84 @@ function moveRaptor(e, dt) {
     if (e.t <= 0) { e.state = 'walk'; e.cd = RAPTOR.every[0] + Math.random() * (RAPTOR.every[1] - RAPTOR.every[0]); }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
+}
+
+/* ---------- shooters and exploders (v0.51, user) ---------- */
+// A shooter (after OBI ONE): walks in to about SHOOTER.keep px, backs off if you come closer, and when its timer is up
+// and you're in range it stops, glows, and fires a slow red orb at where you are (it doesn't home).
+function moveShooter(e, dt) {
+  const S = SHOOTER, p = game.player, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+  const decay = Math.exp(-6 * dt);
+  e.kx *= decay; e.ky *= decay;
+  e.cd = (e.cd ?? between(S.every)) - dt;
+  if (e.aim != null) {                                      // charging its shot: planted
+    e.vx = e.kx; e.vy = e.ky;
+    if ((e.aim += dt) >= S.tele) {
+      const a = Math.atan2(dy, dx), v = S.shot.speed;
+      game.eshots.push({ x: e.x + Math.cos(a) * e.r, y: e.y + Math.sin(a) * e.r, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: S.shot.r, t: 0,
+        dmg: Math.round(S.shot.dmg * e.dmg / ENEMY_TYPES.shooter.dmg) });
+      e.aim = null; e.cd = between(S.every);
+      SFX.pulse();
+    }
+  } else {
+    const go = d > S.keep ? 1 : d < S.keep * 0.7 ? -0.6 : 0;
+    e.vx = (dx / d) * e.speed * go + e.kx; e.vy = (dy / d) * e.speed * go + e.ky;
+    if (e.cd <= 0 && d < S.range) e.aim = 0;
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+}
+function updateEnemyShots(dt) {
+  for (let i = game.eshots.length - 1; i >= 0; i--) {
+    const b = game.eshots[i];
+    b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.t > SHOOTER.shot.life || b.x < -20 || b.y < -20 || b.x > W + 20 || b.y > H + 20) { game.eshots.splice(i, 1); continue; }
+    let hit = false;
+    eachLiving(() => {
+      const p = game.player;
+      if (hit || Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
+      hit = true;
+      burst(b.x, b.y, COL.bad, 8, 150);
+      if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+      p.flash = 0.2;
+      hurtPlayer(b.dmg);
+    });
+    if (hit) game.eshots.splice(i, 1);
+  }
+}
+// An exploder close to you lights its fuse: it stops and flashes (draw.js), then blows up. True while it's lit.
+function fuseStep(e, dt, d) {
+  const X = EXPLODER;
+  if (e.fuse == null) {
+    if (d > X.trigger + PLAYER.r) return false;
+    e.fuse = 0; SFX.growl();
+  }
+  const decay = Math.exp(-6 * dt);
+  e.kx *= decay; e.ky *= decay;
+  e.vx = e.kx; e.vy = e.ky;
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  if ((e.fuse += dt) >= X.fuse) e.blowNow = true;          // (combat.js blows it up after the enemy loop)
+  return true;
+}
+function blowUp(e) {
+  const X = EXPLODER, col = COL.boom;
+  e.blowNow = false; e.dead = true; e.gone = true;
+  SFX.boom();
+  game.shake = Math.max(game.shake, 0.2);
+  game.rings.push({ x: e.x, y: e.y, r: 8, max: X.r, life: 0.4, color: col });
+  game.rings.push({ x: e.x, y: e.y, r: 4, max: X.r * 0.6, life: 0.3, color: COL.player });
+  burst(e.x, e.y, col, 30, 320);
+  eachLiving(() => {                                        // you, if you're inside it …
+    const p = game.player, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+    if (d > X.r + PLAYER.r) return;
+    if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+    p.flash = 0.25; p.kx = (p.kx || 0) + dx / d * 300; p.ky = (p.ky || 0) + dy / d * 300;
+    hurtPlayer(X.dmg);
+  });
+  for (const o of game.enemies.slice()) {                   // … and every other enemy caught in it (user)
+    if (o === e || o.dead || o.gone || o.boss || o.obi || o.makora || o.mrock || o.dummy || hitGap(o, e.x, e.y) > X.r) continue;
+    const dx = o.x - e.x, dy = o.y - e.y, d = Math.hypot(dx, dy) || 1;
+    hitEnemy({ card: 'boom', look: 'blast', dmg: X.enemyDmg, knock: X.knock, vx: dx / d, vy: dy / d, x: o.x, y: o.y, noCrit: true }, o);
+  }
 }
 
 // Broken ground where it lands (user: to sell the debris circle): a crater with jagged cracks running out of it and a

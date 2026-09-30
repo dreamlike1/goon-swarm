@@ -14,11 +14,14 @@ function vacuumStep(o, dt) {
 }
 
 // A random type among those unlocked at this level, by weight.
+// After OBI ONE (v0.51), a quarter are green shooters and the red squares come half as often.
 function pickType() {
+  if (game.obiDone && Math.random() < SHOOTER.share) return 'shooter';
   const ids = TYPE_IDS.filter(k => game.level >= ENEMY_TYPES[k].from);
-  const total = ids.reduce((s, k) => s + ENEMY_TYPES[k].weight, 0);
+  const wt = k => ENEMY_TYPES[k].weight * (game.obiDone && k === 'square' ? SHOOTER.squareMul : 1);
+  const total = ids.reduce((s, k) => s + wt(k), 0);
   let x = Math.random() * total;
-  for (const k of ids) if ((x -= ENEMY_TYPES[k].weight) < 0) return k;
+  for (const k of ids) if ((x -= wt(k)) < 0) return k;
   return ids[0];
 }
 
@@ -35,7 +38,10 @@ function spawnEnemy() {
     if (!best || d > best.d) best = { x, y, d };
     if (d > Math.min(W, H) * 0.4) break;
   }
-  game.enemies.push(makeEnemy(type, best.x, best.y, SPLIT.types.includes(type) && Math.random() < splitChance(game.level)));
+  // the purple ones: squares split in two; a triangle is an exploder (v0.51)
+  const special = Math.random() < splitChance(game.level), e = makeEnemy(type, best.x, best.y, special && SPLIT.types.includes(type));
+  if (special && type === 'triangle') e.boom = true;
+  game.enemies.push(e);
   aliveEl.textContent = game.enemies.length;
 }
 
@@ -51,7 +57,7 @@ function makeEnemy(type, x, y, split = false) {
   if (T.shape === 'crab') Object.assign(e, { state: 'walk', t: 0, dir: 0, face: 0, step: 0, anim: 0, throwing: null, recoil: 0, cd: RAPTOR.every[0] });
   return e;
 }
-const enemyCol = e => COL[e.split ? `${e.type}-split` : e.type];
+const enemyCol = e => COL[e.split ? `${e.type}-split` : e.boom ? 'triangle-split' : e.type];
 
 // A splitter's two halves: normal red ones, a bit smaller, popping apart.
 function splitEnemy(e) {
@@ -364,7 +370,7 @@ function hitEnemy(pr, e) {
     }
     return;
   }
-  if (Math.random() < critChance()) {                // a crit (v0.41): rolled per hit; a gold spark on the enemy (v0.42)
+  if (!pr.noCrit && Math.random() < critChance()) {                // a crit (v0.41): rolled per hit; a gold spark on the enemy (v0.42)
     pr = { ...pr, dmg: critHit(pr.dmg), crit: true };
     game.rings.push({ x: e.x, y: e.y, r: e.r * 0.5, max: e.r + 22, life: 0.25, color: COL.wheelHi });
     burst(e.x, e.y, COL.wheelHi, 8, 260);
@@ -595,6 +601,8 @@ function update(dt) {
     else if (e.obi) moveObi(e, dt);
     else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
     else if (e.shape === 'crab') moveRaptor(e, dt);
+    else if (e.type === 'shooter') moveShooter(e, dt);         // v0.51: keeps off and shoots (boss.js)
+    else if (e.boom && fuseStep(e, dt, d)) { /* an exploder, lit: it stops and flashes (boss.js) */ }
     else {
       e.kx *= decay; e.ky *= decay;
       e.vx = (dx / d) * e.speed + e.kx;
@@ -619,6 +627,7 @@ function update(dt) {
       else { p.flash = 0.2; hurtPlayer(e.dmg); }
     }
   }
+  for (const e of es.filter(e => e.blowNow)) blowUp(e);   // exploders whose fuse ran out (after the loop: it can kill others)
   for (let i = es.length - 1; i >= 0; i--) if (es[i].gone) es.splice(i, 1);   // MAKORA's rocks that broke or flew off
   for (let i = 0; i < es.length; i++) {
     for (let j = i + 1; j < es.length; j++) {
@@ -637,6 +646,7 @@ function update(dt) {
   for (const e of es) if (!e.mrock) clampTo(e, e.r);
 
   updateRocks(dt);
+  updateEnemyShots(dt);                 // the shooters' orbs (boss.js)
   updateSabers(dt); updateBolts(dt);    // OBI ONE's thrown saber and the shots he knocks back (obi.js)
   updateDebris(dt); updateBoulders(dt);   // (phase 3's rocks, v0.50)                     // OBI ONE phase 2: the force rains debris down (obi.js)
   updateSprays(dt); updateSoak(dt); updateTrails(dt);   // the Powerwash pack (user)

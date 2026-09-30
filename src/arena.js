@@ -16,8 +16,8 @@ function resize() {
   // VW × VH is the view; W × H is the world. They're the same, except in co-op, where the world is bigger and
   // the view follows you round it (coop.js).
   VW = Math.max(1, arena.clientWidth); VH = Math.max(1, arena.clientHeight);
-  // (a boss fight zooms the view out, so the world is the view ÷ the zoom: see VIEW below)
-  if (NET.run && NET.world) { W = NET.world.w; H = NET.world.h; } else { W = VW / viewZoom; H = VH / viewZoom; }
+  // (single player: the world's size depends on the view, zoomed out, or a square boss arena: see VIEW below)
+  if (NET.run && NET.world) { W = NET.world.w; H = NET.world.h; } else { const sz = worldSize(arenaMode); W = sz.w; H = sz.h; }
   cv.width = Math.max(1, Math.round(VW * dpr)); cv.height = Math.max(1, Math.round(VH * dpr));
   ctx.setTransform(cv.width / VW, 0, 0, cv.height / VH, 0, 0);
   // the text layer stays at full resolution, so numbers read even under the CRT filter
@@ -25,7 +25,7 @@ function resize() {
   tcv.width = Math.round(VW * tdpr); tcv.height = Math.round(VH * tdpr);
   tctx.setTransform(tdpr, 0, 0, tdpr, 0, 0);
   NET.viewSafe = bottomSafeY(r);
-  playH = NET.run ? H : NET.viewSafe / viewZoom;
+  playH = NET.run ? H : worldSize(arenaMode).playH;
   // Centre the player once the arena has a real size (it can measure 0 before layout settles).
   if (first && W > 100 && H > 100) { game.player.x = W / 2; game.player.y = H / 2; first = false; }
   clampTo(game.player, PLAYER.r);
@@ -33,32 +33,49 @@ function resize() {
 }
 new ResizeObserver(resize).observe(arena);
 
-/* ---------- boss arenas (v0.50, user: room to run far away from a boss) ----------
-   While a boss is on (its intro, the fight, MAKORA's scenes) the view eases out to `VIEW.boss`: everything is drawn
-   smaller and the arena grows round its middle to fill the screen (×1/0.7 each way, about twice the room). When the
-   boss is gone it eases back and the walls close in again, pushing anything outside back in. In co-op the arena is
-   already bigger than the screen, so there only the view zooms out (the world stays the same size). */
-const VIEW = { boss: 0.7, rate: 2.4 };                 // rate: how fast it eases (per second)
-let viewZoom = 1;
+/* ---------- the view and the arenas (v0.50; reversed in v0.51, user) ----------
+   Normal play is zoomed out (`VIEW.normal`): everything is drawn smaller and the whole arena, ×1/0.7 the screen each
+   way, is in view. A boss fight (its intro, the fight, MAKORA's scenes) zooms back in to full size inside a SQUARE
+   arena with a glowing wall (draw.js drawArenaWall), `VIEW.side` × the screen's longer side, and the view follows you
+   round it (bigger than the screen, so you can run a long way). The arena changes round its middle, and anything
+   outside the new walls is pushed back in; the zoom and the camera ease so nothing jumps. The store's test mode stays
+   at full size. In co-op the arena is already bigger than the screen and the same for everyone, so there only the
+   zoom changes (out for the swarm, in for a boss) and the wall goes round the whole arena. */
+// rate: how fast the zoom eases; cam: how fast the view follows; edge: how far past a boss arena's wall the view can go
+const VIEW = { normal: 0.7, boss: 1, side: 1.3, rate: 2.4, cam: 9, edge: 110 };
+let viewZoom = VIEW.normal, arenaMode = 'normal';
 const bossArena = () => !game.practice && !game.inMenu && !!(game.intro || game.boss || game.obi || game.makora || game.cine);
+const modeNow = () => (game.practice ? 'plain' : bossArena() ? 'boss' : 'normal');
+const zoomFor = m => (m === 'plain' ? 1 : m === 'boss' ? VIEW.boss : VIEW.normal);
+// The world for a mode (single player): the view ÷ its zoom, or the boss's square. `playH`: how far down you can go.
+function worldSize(m) {
+  if (m === 'boss') { const s = Math.round(Math.max(VW, VH) * VIEW.side); return { w: s, h: s, playH: s }; }
+  const z = zoomFor(m);
+  return { w: VW / z, h: VH / z, playH: (NET.viewSafe || VH) / z };
+}
 function zoomStep(dt) {
-  const want = bossArena() ? VIEW.boss : 1;
+  const m = modeNow();
+  if (m !== arenaMode) {                                // into or out of a boss arena: the world changes round its middle
+    arenaMode = m;
+    if (!NET.run) {
+      const w0 = W, h0 = H, sz = worldSize(m);
+      W = sz.w; H = sz.h; playH = sz.playH;
+      shiftWorld((W - w0) / 2, (H - h0) / 2);
+      cam.x += (W - w0) / 2; cam.y += (H - h0) / 2;     // the view stays where it was, then eases (updateCam)
+    }
+  }
+  const want = zoomFor(m);
   if (viewZoom === want) return;
   let z = viewZoom + (want - viewZoom) * Math.min(1, dt * VIEW.rate);
   if (Math.abs(want - z) < 0.002) z = want;
-  setZoom(z);
-}
-function setZoom(z) {
   viewZoom = z;
-  if (NET.run) return;                                  // co-op: only the view (coop.js updateCam)
-  const w0 = W, h0 = H;
-  W = VW / z; H = VH / z; playH = NET.viewSafe / z;
-  shiftWorld((W - w0) / 2, (H - h0) / 2);               // it grows (or shrinks) round its middle
 }
-function resetZoom() { viewZoom = 1; resize(); }
+// A new run (or the test mode): straight to its view, no easing.
+function resetZoom() { arenaMode = modeNow(); viewZoom = zoomFor(arenaMode); resize(); camSnap = true; }
+let camSnap = true;
 // Moves everything in the arena by (dx, dy), then keeps what must stay inside inside.
 const WORLD_LISTS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'particles',
-  'beams', 'sprays', 'trails', 'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders'];
+  'beams', 'sprays', 'trails', 'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots'];
 const PAIRS = [['x', 'y'], ['x0', 'y0'], ['x1', 'y1'], ['x2', 'y2'], ['sx', 'sy'], ['px', 'py']];
 function shiftObj(o, dx, dy) {
   if (!o || typeof o !== 'object') return;

@@ -535,8 +535,8 @@ function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
-  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders'];
-const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts', 'boulders']);
+  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots'];
+const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts', 'boulders', 'eshots']);
 const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
 function snapReplacer(k, v) {
@@ -764,11 +764,21 @@ function localInput() {
   return [mx, my];
 }
 // The view follows you round the bigger arena (draw.js).
+// Single player too (v0.51): in a boss's square arena, which is bigger than the screen. There it eases after you, so
+// the arena changing size (arena.js) doesn't make it jump; co-op follows you straight.
+let camAt = 0;
 function updateCam() {
-  if (!NET.run) { cam.x = cam.y = 0; return; }
-  const p = game.player, z = viewZoom, vw = VW / z, bottom = (NET.viewSafe || VH) / z;   // (zoomed out in a boss fight: arena.js)
-  cam.x = W <= vw ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, p.x - vw / 2));
-  cam.y = H <= bottom ? (H - bottom) / 2 : Math.max(0, Math.min(H - bottom, p.y - bottom / 2));
+  // (the part of the view above the HUD, in a world you can walk right to the bottom of; otherwise the whole view)
+  const p = game.player, z = viewZoom, vw = VW / z, vh = (NET.run || arenaMode === 'boss' ? (NET.viewSafe || VH) : VH) / z;
+  // in a boss's square arena it goes a little past the walls (`m`), so you can see where the arena ends (user)
+  const m = arenaMode === 'boss' && !NET.run ? VIEW.edge : 0;
+  const tx = W <= vw ? (W - vw) / 2 : Math.max(-m, Math.min(W - vw + m, p.x - vw / 2));
+  const ty = H <= vh ? (H - vh) / 2 : Math.max(-m, Math.min(H - vh + m, p.y - vh / 2));
+  const now = performance.now(), dt = Math.min(0.1, (now - camAt) / 1000);
+  camAt = now;
+  if (NET.run || camSnap || game.inMenu) { cam.x = tx; cam.y = ty; camSnap = false; return; }
+  const f = Math.min(1, dt * VIEW.cam);
+  cam.x += (tx - cam.x) * f; cam.y += (ty - cam.y) * f;
 }
 
 /* ---------- sounds and callouts go to the guests too ---------- */

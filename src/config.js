@@ -20,7 +20,17 @@ const ENEMY_TYPES = {
   // v0.12: red and bigger (user); r 12 before
   // v0.46 (user): the mini dino is now a crab (same moves), half the size (r 18 before)
   raptor:   { name: 'Crab',       shape: 'crab',     hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 90,  r: 9,  dmg: 12, weight: 1,   xp: 2, from: 11 },
+  // v0.51 (user): green squares that shoot, once OBI ONE is beaten (SHOOTER below picks them, not the weights)
+  shooter:  { name: 'Shooter',    shape: 'square',   hp: 6, hpPerLevel: 0, hpPerLevelLate: 0, speed: 95,  r: 13, dmg: 10, weight: 0,   xp: 2, from: 99 },
 };
+// Shooters (v0.51, user): after OBI ONE is beaten, a quarter of the swarm (`share`) are green squares, and the red
+// squares come half as often (`squareMul`). A shooter keeps about `keep` px off, and every `every` s, once you're
+// within `range`, it glows for `tele` s and fires a slow, glowing red orb straight at where you are (it doesn't home).
+const SHOOTER = { share: 0.25, squareMul: 0.5, keep: 230, range: 320, every: [2.2, 3.2], tele: 0.45, shot: { speed: 150, r: 7, dmg: 12, life: 6 } };
+// Exploders (v0.51, user: the purple triangles don't split any more): one that gets within `trigger` px of you stops,
+// flashes faster and faster for `fuse` s with its blast ring showing, then blows up: `dmg` to you inside `r`, and
+// `enemyDmg` (and a shove) to every other enemy there too. Shot down first, it just dies.
+const EXPLODER = { trigger: 75, fuse: 0.9, r: 90, dmg: 16, enemyDmg: 10, knock: 380 };
 // Crabs (mini dinos until v0.46; user: after level 10, they dash at you): they walk in, and once you're within `sight` they stop,
 // wind up (`windup` s, shaking, with a short aim line), dash along that line, then rest. Placeholders.
 const RAPTOR = { sight: 230, windup: 0.5, dash: 0.42, dashSpeed: 560, rest: 0.7, every: [1.4, 2.4] };
@@ -28,7 +38,8 @@ const RAPTOR = { sight: 230, windup: 0.5, dash: 0.42, dashSpeed: 560, rest: 0.7,
 // rare. When one dies it splits into two normal red ones. `chance`: share of spawns; `hp` and `r`: the halves'
 // HP and size compared to a normal one. Placeholders.
 // v0.12: they only start at level `from`, rare at first (`chance`), + `perLevel` each level after, up to `max`.
-const SPLIT = { from: 4, chance: 0.06, perLevel: 0.02, max: 0.18, types: ['square', 'triangle', 'big'], hp: 0.6, r: 0.8, push: 200 };
+// v0.51: the triangles' purple version is an exploder now (EXPLODER above), not a splitter.
+const SPLIT = { from: 4, chance: 0.06, perLevel: 0.02, max: 0.18, types: ['square', 'big'], hp: 0.6, r: 0.8, push: 200 };
 const splitChance = level => level < SPLIT.from ? 0 : Math.min(SPLIT.max, SPLIT.chance + SPLIT.perLevel * (level - SPLIT.from));
 const HP_KNEE = 10;          // the level where enemy HP growth speeds up
 // Enemies also hit harder and move faster with the player's level (user: they get harder as you level).
@@ -119,6 +130,7 @@ const COL = {
   floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), frozen: tok('--frozen'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
   obiRobe: tok('--obi-robe'), obiRobeDark: tok('--obi-robe-dark'), obiUnder: tok('--obi-under'), obiBelt: tok('--obi-belt'), obiBoot: tok('--obi-boot'), obiSkin: tok('--obi-skin'), obiHair: tok('--obi-hair'), obiEye: tok('--obi-eye'), obiHilt: tok('--obi-hilt'), obiHiltDark: tok('--obi-hilt-dark'), saber: tok('--saber'), saberCore: tok('--saber-core'), saberBad: tok('--saber-2'), saberBadCore: tok('--saber-2-core'),
+  shooter: tok('--enemy-shooter'), boom: tok('--enemy-fast-split'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),
   ...Object.fromEntries(RARITIES.map(r => [`r-${r}`, tok(`--r-${r}`)])),
