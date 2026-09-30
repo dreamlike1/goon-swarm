@@ -538,8 +538,9 @@ function update(dt) {
 
   // attacks: the timer only runs out while the next card has an enemy within its range (not in the store's test mode)
   game.cooldown -= dt;
-  if (game.practice?.loadout) game.practice.t += dt;           // Test loadout: your deck plays as in a run
-  if (game.practice && !game.practice.loadout) game.cooldown = attackInterval();
+  const autoTest = game.practice?.card === DECK_TAB;             // Test loadout's Whole deck: your deck plays as in a run
+  if (autoTest) game.practice.t += dt;
+  if (game.practice && !autoTest) game.cooldown = attackInterval();
   else if (game.cooldown <= 0) {
     const next = deck.sequence[deck.seqPos];
     if (next && inRange(next)) {
