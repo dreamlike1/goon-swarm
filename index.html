@@ -1,11 +1,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Goon Swarm</title>
+<title>Packs Silica</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Pixelify+Sans:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="preload" as="image" href="assets/GS_title.webp" type="image/webp">
+<link rel="preload" as="image" href="assets/PS.webp" type="image/webp">
 <!-- The game is split across style.css and src/*.js: classic scripts, loaded in order, sharing globals.
      They are plain scripts rather than ES modules so the page still works when opened straight from disk. -->
 
@@ -13,13 +13,10 @@
 
 <div class="menu" id="menu">
   <section class="screen" id="scr-title" aria-labelledby="t-title">
-    <!-- The logo (user's art, assets/GS_title.png; the .webp is a trimmed, lighter copy of it) -->
+    <!-- The logo (user's art, PS.png; PS.webp is a trimmed copy of it, PS_px.png a small one for the CRT filter) -->
     <h1 class="title-logo" id="t-title">
-      <picture class="logo-hd">
-        <source srcset="assets/GS_title.webp" type="image/webp">
-        <img src="assets/GS_title.png" alt="Goon Swarm" width="1652" height="850" decoding="async" fetchpriority="high">
-      </picture>
-      <img class="logo-px" src="assets/GS_title_px.png" alt="Goon Swarm" width="240" height="123">
+      <img class="logo-hd" src="assets/PS.webp" alt="Packs Silica" width="1666" height="808" decoding="async" fetchpriority="high">
+      <img class="logo-px" src="assets/PS_px.png" alt="Packs Silica" width="360" height="175">
     </h1>
     <button class="start" id="btn-title" type="button">Start</button>
     <p class="gold" id="title-note" hidden></p>
@@ -28,7 +25,7 @@
   <section class="screen" id="scr-pack" aria-labelledby="k-title" hidden>
     <p class="eyebrow">New player</p>
     <h2 id="k-title">Your starter pack</h2>
-    <p class="sub">5 Bullets and 5 Lasers: your first deck.</p>
+    <p class="sub">5 Bullets and 5 Cannons: your first deck.</p>
     <button class="pack-open" id="btn-starter" type="button" aria-label="Open the starter pack"></button>
     <p class="sub small hint-keys">Click the pack, or press Space, to rip it open</p>
     <p class="sub small hint-touch">Tap the pack to rip it open</p>
@@ -49,11 +46,8 @@
 
   <section class="screen" id="scr-main" aria-label="Main menu" hidden>
     <div class="menu-logo">
-      <picture class="logo-hd">
-        <source srcset="assets/GS_title.webp" type="image/webp">
-        <img src="assets/GS_title.png" alt="Goon Swarm" width="1652" height="850" decoding="async">
-      </picture>
-      <img class="logo-px" src="assets/GS_title_px.png" alt="Goon Swarm" width="240" height="123">
+      <img class="logo-hd" src="assets/PS.webp" alt="Packs Silica" width="1666" height="808" decoding="async">
+      <img class="logo-px" src="assets/PS_px.png" alt="Packs Silica" width="360" height="175">
     </div>
     <p class="gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b class="gold-n">0</b> gold</p>
     <div class="nav">
@@ -75,16 +69,34 @@
     </div>
   </section>
 
-  <section class="screen" id="scr-loadout" aria-labelledby="l-title" hidden>
-    <h2 id="l-title">Loadout</h2>
-    <p class="sub" id="loadout-sub"></p>
-    <p class="sub small" id="loadout-hint" hidden></p>
-    <div class="types" id="types"></div>
+  <!-- Loadout (v0.31, user: a deck builder like Legends of Runeterra's): your deck as a list on the left, the cards
+       you own on the right. Click or drag a card across to add it; click a deck row, or drag it out, to take one off. -->
+  <section class="screen is-builder" id="scr-loadout" aria-labelledby="l-title" hidden>
+    <div class="builder" id="builder">
+      <aside class="deck-panel" id="deck-panel" aria-label="Your deck">
+        <div class="deck-head">
+          <p class="eyebrow">Your deck</p>
+          <p class="deck-count"><b id="deck-n">0</b> / <span id="deck-max">31</span> cards</p>
+        </div>
+        <ol class="deck-list" id="deck-list"></ol>
+        <p class="deck-empty" id="deck-empty" hidden>Drag cards here, or click one to add it.</p>
+        <div class="deck-tools">
+          <button type="button" id="btn-auto" title="Build a deck from your best cards">Auto</button>
+          <button type="button" id="btn-clear" title="Take every card out of the deck">Clear</button>
+        </div>
+      </aside>
+      <div class="coll-panel" id="coll-panel">
+        <div class="coll-head">
+          <h2 id="l-title">Loadout</h2>
+          <p class="sub small" id="loadout-hint">Click or drag a card to add it. Click a deck row, or drag it out, to take one off.</p>
+        </div>
+        <div class="coll-grid" id="coll" role="list" aria-label="Your cards"></div>
+      </div>
+    </div>
     <div class="row">
       <button class="back" id="btn-loadout-back" type="button">Back</button>
       <button id="btn-loadout-test" type="button">Test loadout</button>
     </div>
-    <p class="sub small">Test loadout: fire each weapon's Single, ×3 and ×7 yourself, or watch your whole deck play.</p>
   </section>
 
   <section class="screen" id="scr-store" aria-labelledby="s-title" hidden>
@@ -140,7 +152,9 @@
 <!-- MAKORA's black-screen scenes (makora.js): the summoning lines, and its wheel turning -->
 <div class="cine" id="cine" aria-live="assertive" hidden>
   <p class="cine-line" id="cine-line"></p>
-  <img class="cine-wheel" id="cine-wheel" src="assets/makora_wheel.png" alt="" hidden>
+  <!-- the wheel: flat gold, drawn and turned by makora.js -->
+  <canvas class="cine-wheel" id="cine-wheel" width="440" height="440" aria-hidden="true" hidden></canvas>
+  <button class="cine-skip" id="cine-skip" type="button" hidden>Skip <kbd>Space</kbd></button>
 </div>
 <p class="toast" id="toast" role="status" hidden></p>
 <div class="intro" id="intro" role="status" aria-live="assertive" hidden></div>
@@ -176,7 +190,7 @@
 <div class="crt-screen" aria-hidden="true"></div>
 
 <div class="practice" id="practice" role="region" aria-label="Test weapons" hidden>
-  <p class="eyebrow" id="pr-eyebrow">Test</p>
+  <div class="pr-head"><h2 class="pr-title" id="pr-title">Test pack</h2><p class="eyebrow" id="pr-eyebrow"></p></div>
   <div class="pr-tabs" id="pr-tabs" role="group" aria-label="Weapon"></div>
   <div class="pr-fire" id="pr-fire" role="group" aria-label="Attack"></div>
   <p class="pr-dmg">Damage dealt <b id="pr-dmg">0</b><span id="pr-dps" hidden> · per second <b id="pr-dps-n">–</b></span></p>
@@ -262,3 +276,5 @@
 <script src="src/upgrades.js"></script>
 <script src="src/menus.js"></script>
 <script src="src/main.js"></script>
+<!-- The test panel (src/devtools.js): loaded only on localhost, and never pushed to GitHub -->
+<script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.write('<script src="src/devtools.js"><\/script>');</script>

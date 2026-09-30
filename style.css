@@ -2,11 +2,12 @@
    Single deliberate look: basic shapes on a dark floor. */
 :root {
   color-scheme: dark;
-  --floor: #111a20;
-  --card: #17232b;
-  --line: #2a3a44;
-  --text: #d6e0e6;
-  --muted: #6f8592;
+  /* v0.30: the neutrals lean magenta, after the PACKS SILICA logo (they were blue-grey) */
+  --floor: #150f18;
+  --card: #211725;
+  --line: #3b2a3f;
+  --text: #f1e4ee;
+  --muted: #a08aa0;
   --player: #eef3f6;
   --enemy: #e5484d;              /* normal enemies are red (user) */
   --enemy-split: #b8479e;        /* splitters are red-purple */
@@ -18,18 +19,22 @@
   --boss: #3f9e7f;        /* KURTSAURUS: a friendly green dino */
   --boss-dark: #2b7560;   /* its far legs and arm */
   --boss-eye: #f3efe0;
-  /* MAKORA (flat, like the dino): grey skin, dark cloth, black bands, pale feathers, a gold wheel, a silver blade */
-  --makora: #a9aeb6;
-  --makora-dark: #7f858e;
-  --makora-line: #555a63;       /* its outline, like the reference's line art */
-  --makora-band: #1c1f23;
-  --makora-cloth: #3a3f46;
-  --makora-feather: #d6d9de;
-  --makora-mouth: #8a5a86;
+  /* MAKORA (v0.38, user: like their new reference): a flat cartoon, grey skin with a dark grey outline, a charcoal
+     cloth, black rings, a purple mouth */
+  --makora: #c5c8cf;
+  --makora-dark: #a2a6b0;       /* the far horn and tufts */
+  --makora-line: #4b4e57;       /* the outline */
+  --makora-band: #17181c;       /* rings, the chest mark */
+  --makora-cloth: #3a3e46;
+  --makora-cloth-dark: #272a30; /* its folds and knot */
+  --makora-mouth: #5a3456;
+  --wheel-hi: #f7e64e;
   --wheel: #e6b83c;
   --wheel-dark: #9a7414;
   --blade: #e4e8ee;
   --rock: #9c8a78;
+  --rock-dark: #7a6a5a;    /* MAKORA's big rock (v0.38): its shaded side … */
+  --rock-hi: #c2b19c;      /* … and a pale facet */
   --crack: #070b0e;        /* broken ground */
   --relic: #ff9f43;
   --xp: #6ea8ff;
@@ -44,6 +49,8 @@
   --firebolt: #ff4a3d;
   --spaceimpact: #9be15d;
   --mine: #d9a55b;
+  --sniper: #3dffa8;     /* v0.30: a mint-green tracer */
+  --missiles: #ff5cf0;   /* v0.30: Arcane Missiles, arcane magenta */
   /* rarity colours, used for rarity labels and reveal glows */
   --r-common: #8fa3b0;
   --r-uncommon: #6fcf97;
@@ -52,12 +59,13 @@
   --r-legendary: #ffb23e;
   --r-sss: #ff5ab4;
   --ok: #6fcf97;
-  --scrim: rgba(17, 26, 32, .86);   /* --floor, see-through, behind the menus */
+  --scrim: rgba(21, 15, 24, .86);   /* --floor, see-through, behind the menus */
   --cw: 58px; --ch: 64px; --gap: 8px;   /* deck card size */
   --pv: 1.4;                            /* menu cards are this many times bigger */
   --bad: #ff5a5a;
-  --f-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-num: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* v0.30 (user: the pixel fonts were unreadable): Chakra Petch, a clear, squared-off face that suits the chrome logo */
+  --f-ui: "Chakra Petch", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: "Chakra Petch", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 html, body { height: 100%; }
@@ -66,7 +74,8 @@ body {
   overflow: hidden;
   background: var(--floor);
   color: var(--text);
-  font: 13px/1.4 var(--f-ui);
+  font: 500 13px/1.4 var(--f-ui);
+  font-variant-numeric: tabular-nums;
 }
 
 .arena { position: fixed; inset: 0; touch-action: none; }
@@ -263,13 +272,13 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .screen:not([hidden]) { animation: screen-in .25s ease-out; }
 .menu h1 { margin: 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-wrap: balance; }
 
-/* Title logo (user's art): slams in, then a slow red glow breathes behind it. Sized to clear the changelog panel. */
+/* Title logo (user's art): slams in, then a slow pink glow breathes behind it. Sized to clear the changelog panel. */
 .title-logo { position: relative; width: min(640px, 100%); margin: 0; line-height: 0; }
 .title-logo picture, .title-logo img { display: block; width: 100%; height: auto; }
 .title-logo img { position: relative; animation: logo-in .7s cubic-bezier(.2, .9, .25, 1.15) both; }
 .title-logo::before {
   content: ""; position: absolute; inset: 8% 4%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--bad) 55%, transparent), transparent);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--neon) 55%, transparent), transparent);
   filter: blur(18px); opacity: .35;
   animation: logo-glow 3.2s ease-in-out .7s infinite alternate;
 }
@@ -292,7 +301,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 
 .menu button, .pause button { color: var(--text); }
 .pause {
-  position: fixed; inset: 0; z-index: 9;
+  position: fixed; inset: 0; z-index: 13;           /* over MAKORA's black screens (.cine, 12), so Esc there shows it (v0.33; was 9) */
   display: grid; place-items: center;
   padding-inline: 16px;
   background: var(--scrim);
@@ -340,16 +349,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .go { width: 160px; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .go > span { display: block; height: 100%; background: var(--bullet); transform-origin: left; transform: scaleX(0); }
 
-/* Loadout */
-.types { display: grid; grid-template-columns: repeat(auto-fill, minmax(244px, 1fr)); gap: 8px; width: 780px; max-width: calc(100vw - 32px); text-align: left; }
-.type { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-.type .mcard { --pv: 1; }
-.type.is-out { opacity: .6; }
-.type-body { min-width: 0; }
-.stepper .owned { font: 11px var(--f-num); color: var(--muted); margin-left: 2px; white-space: nowrap; }
-.type .stepper { gap: 6px; }
-.type .stepper button { width: 26px; height: 26px; }
-.type-stats.is-combos { margin-top: 0; color: var(--muted); }
+/* Weapon details (the store's pack preview) */
 .type-name { margin: 0; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .type-name b { color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 6px; }
 .type-stats { margin: 2px 0 0; font: 12px var(--f-num); color: var(--text); }
@@ -450,29 +450,62 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .pv-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .pv-detail-head .type-stats { margin: 0; }
 .pv-detail .type-combo i { font-style: normal; font-weight: 700; color: var(--text); margin-right: 4px; }
-.pv-test { margin-left: auto; padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.pv-test { margin-left: auto; padding: 6px 14px; border-radius: 4px; font-size: 12px; font-weight: 700; color: var(--c, var(--text)); }
+/* Test pack (v0.33, user): next to Buy, a dark slab with a pink edge and a crosshair */
+.pv-testpack {
+  display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px 10px; border: 0; border-radius: 0; clip-path: var(--chip);
+  font: 400 17px/1 var(--f-metal); letter-spacing: .12em; text-transform: uppercase; color: var(--chrome-hi);
+  background: var(--grain), linear-gradient(180deg, #2e1f2c, var(--slab));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--neon) 70%, transparent), inset 0 0 16px -4px color-mix(in srgb, var(--neon) 60%, transparent);
+}
+.pv-testpack svg { width: 18px; height: 18px; color: var(--neon-hi); }
+.pv-testpack:hover { filter: brightness(1.2); transform: translateY(-1px); }
 
 /* Test mode: the HUD a run needs is hidden; a panel at the top fires the attacks */
 body.in-practice .hud, body.in-practice .deck, body.in-practice .deck-status, body.in-practice .xp, body.in-practice .hp,
 body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, body.in-practice .rapid { visibility: hidden; }
+/* v0.33 (user: a better look for TEST PACK): a dark slab with a pink edge and chipped corners, a chrome TEST PACK
+   title with the pack under it, weapon chips with their icon, attack slabs, and a big damage count */
 .practice {
   position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top, 0px) + 14px); width: min(560px, calc(100% - 32px)); box-sizing: border-box;
+  top: calc(env(safe-area-inset-top, 0px) + 12px); width: min(620px, calc(100% - 32px)); box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--scrim);
+  padding: 12px 16px 10px; clip-path: var(--chip);
+  background: var(--grain), linear-gradient(180deg, rgba(40, 24, 42, .96), rgba(20, 12, 22, .96));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 50%, transparent), inset 0 1px 0 rgba(255, 255, 255, .06);
 }
+.pr-head { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 2px 14px; }
+.pr-title {
+  margin: 0; font: 400 26px/1.1 var(--f-metal); letter-spacing: .06em; text-transform: uppercase;
+  background: linear-gradient(180deg, var(--chrome-hi) 15%, #ffc2e4 48%, var(--neon) 54%, #b01566 85%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 var(--neon-dark)) drop-shadow(0 0 10px color-mix(in srgb, var(--neon) 35%, transparent));
+}
+.pr-head .eyebrow { margin: 0; font: 400 13px var(--f-metal); letter-spacing: .18em; text-transform: uppercase; color: var(--neon-hi); }
 .pr-tabs, .pr-fire { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-.pr-tabs button { padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--c); }
-.pr-tabs button[aria-pressed="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
-.pr-fire button[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: 0 0 14px -4px var(--c); }
+.pr-tabs button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 9px; border: 0; border-radius: 4px;
+  font-size: 12px; font-weight: 700; color: var(--c);
+  background: color-mix(in srgb, var(--c) 8%, #140c15); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent);
+}
+.pr-tabs svg { width: 15px; height: 15px; flex: none; }
+.pr-tabs button:hover { box-shadow: inset 0 0 0 1px var(--c); }
+.pr-tabs button[aria-pressed="true"] { color: #fff; background: color-mix(in srgb, var(--c) 30%, #140c15); box-shadow: inset 0 0 0 2px var(--c), 0 0 14px -4px var(--c); }
+.pr-fire button {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 128px; padding: 10px 14px 8px;
+  border: 0; border-radius: 0; clip-path: var(--chip); color: var(--chrome-hi);
+  background: var(--grain), linear-gradient(180deg, color-mix(in srgb, var(--c) 18%, #2a1c2c), #150d16);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent);
+}
+.pr-fire button:hover { filter: brightness(1.15); }
+.pr-fire button[aria-pressed="true"] { background: var(--grain), linear-gradient(180deg, color-mix(in srgb, var(--c) 42%, #2a1c2c), color-mix(in srgb, var(--c) 14%, #150d16)); box-shadow: inset 0 0 0 2px var(--c), inset 0 0 18px -4px var(--c); }
+.pr-fire button b { font: 400 14px var(--f-metal); letter-spacing: .06em; text-transform: uppercase; }
+.pr-fire button small { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--c); }
+.pr-fire .up-key { position: absolute; top: 5px; left: 9px; font: 400 11px var(--f-metal); color: var(--muted); }
 .pr-keys { margin: 0; font-size: 11px; color: var(--muted); }
 .pr-keys kbd { font: 600 10px var(--f-num); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--text); }
-.pr-fire button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 110px; padding: 8px 14px 7px; border-radius: 8px; border-color: var(--c); color: var(--text); }
-.pr-fire button b { font-size: 13px; }
-.pr-fire button small { font: 600 9px var(--f-num); letter-spacing: .06em; color: var(--c); }
-.pr-fire .up-key { position: absolute; top: 3px; left: 6px; font: 600 9px var(--f-num); color: var(--muted); }
-.pr-dmg { margin: 0; font-size: 12px; color: var(--muted); }
-.pr-dmg b { font: 700 14px var(--f-num); color: var(--text); font-variant-numeric: tabular-nums; }
+.pr-dmg { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.pr-dmg b { font: 400 22px var(--f-metal); letter-spacing: .02em; color: var(--chrome-hi); vertical-align: -3px; margin-left: 6px; font-variant-numeric: tabular-nums; }
 .menu:not([hidden]) ~ .practice { visibility: hidden; }
 /* Test loadout shows the deck tray, so you can watch the sequences play */
 body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-status { visibility: visible; }
@@ -505,7 +538,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 
 /* Sound: a gear, top right, above every screen, opening the three volumes */
 .audio {
-  position: fixed; z-index: 11;
+  position: fixed; z-index: 14;                     /* above the pause menu (13) */
   top: calc(env(safe-area-inset-top, 0px) + 12px); right: 16px;
 }
 #gear { position: relative; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--text); }
@@ -670,12 +703,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .menu:not([hidden]) ~ .rapid { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .rapid-bar.is-max { animation: none; } }
 
-/* Loadout deck builder (Free pack): − count + under each card; cards not in the deck are dimmed. */
-.stepper { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; }
-.stepper button { width: 28px; height: 28px; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; color: var(--text); }
-.stepper button:disabled { opacity: .35; cursor: default; }
-.stepper b { min-width: 2ch; text-align: center; font: 600 14px var(--f-num); color: var(--text); }
-.type.is-out .preview, .type.is-out .type-name, .type.is-out .type-stats { opacity: .45; }
+
 
 /* Weapon wheel: slices sized by rarity, a pointer at the top, labels along each slice's middle. */
 .wheel-box { display: flex; flex-direction: column; align-items: center; gap: 14px; }
@@ -807,81 +835,82 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 @media (min-width: 1280px) { .news { width: 300px; } }
 
 /* ---------- Menu look (user: fit the title art) ----------
-   The logo is grey stone letters splashed with blood red. The menus follow it: heavy condensed capitals (Anton,
-   falling back to Impact), stone-grey headings, blood-red stone slabs for the main buttons, dark slabs with a red edge
-   for the rest, chipped corners, a fine grain, and a dark red vignette behind every menu. */
+   v0.30: PACKS SILICA. The logo is hot-pink chrome letters with white highlights, glowing on black. The menus follow
+   it: blocky capitals (Russo One), chrome headings (white on top, hot pink below a bright horizon line), hot-pink
+   chrome slabs for the main buttons, dark slabs with a pink edge for the rest, chipped corners, a fine grain, and a
+   dark magenta vignette behind every menu. (v0.19 to v0.29 it was GOON SWARM's blood red and stone grey.) */
 :root {
-  --blood: #c8141c;
-  --blood-hi: #e4262e;
-  --blood-dark: #6e0a0f;
-  --stone-hi: #f1ede8;
-  --stone: #bdb6ae;
-  --stone-lo: #7d7670;
-  --slab: #1d1b1b;
-  --f-metal: "Anton", Impact, "Haettenschweiler", "Arial Narrow Bold", sans-serif;
+  --neon: #ff2d9b;
+  --neon-hi: #ff6cc0;
+  --neon-dark: #5e0934;
+  --chrome-hi: #fff3fb;
+  --chrome: #e9bfda;
+  --chrome-lo: #a07892;
+  --slab: #1d131c;
+  --f-metal: "Russo One", "Chakra Petch", Impact, sans-serif;
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   --chip: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 .menu, .pause:not(.levelup) {
   background:
-    radial-gradient(ellipse 75% 70% at 50% 45%, transparent 45%, color-mix(in srgb, var(--blood-dark) 55%, transparent) 100%),
+    radial-gradient(ellipse 75% 70% at 50% 45%, transparent 45%, color-mix(in srgb, var(--neon-dark) 55%, transparent) 100%),
     var(--scrim);
 }
 .menu h2, .pause h2 {
-  font: 400 32px/1.05 var(--f-metal); letter-spacing: .06em;
-  background: linear-gradient(180deg, var(--stone-hi) 20%, var(--stone-lo));
+  font: 400 32px/1.1 var(--f-metal); letter-spacing: .04em;
+  background: linear-gradient(180deg, var(--chrome-hi) 15%, #ffc2e4 48%, var(--neon) 54%, #b01566 85%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 0 var(--blood-dark)) drop-shadow(0 0 10px color-mix(in srgb, var(--blood) 35%, transparent));
+  filter: drop-shadow(0 2px 0 var(--neon-dark)) drop-shadow(0 0 10px color-mix(in srgb, var(--neon) 35%, transparent));
 }
-.menu .eyebrow, .pause .eyebrow { font: 400 13px var(--f-metal); letter-spacing: .22em; color: var(--blood-hi); }
+.menu .eyebrow, .pause .eyebrow { font: 400 13px var(--f-metal); letter-spacing: .22em; color: var(--neon-hi); }
 .menu-logo { display: block; width: min(300px, 80vw); line-height: 0; }
 .menu-logo img { display: block; width: 100%; height: auto; }
 
-/* the main button: a blood-red stone slab */
+/* the main button: a hot-pink chrome slab */
 .menu .start, .pause .start {
   position: relative;
   padding: 12px 40px 11px; border: 0; border-radius: 0; clip-path: var(--chip);
   font: 400 20px/1 var(--f-metal); letter-spacing: .14em; text-transform: uppercase;
-  color: var(--stone-hi) !important;
-  background: var(--grain), linear-gradient(180deg, var(--blood-hi), var(--blood) 45%, var(--blood-dark));
+  color: var(--chrome-hi) !important;
+  background: var(--grain), linear-gradient(180deg, #ffa3d6, var(--neon-hi) 30%, var(--neon) 50%, #c0126d 52%, var(--neon-dark));
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, .22), inset 0 -3px 0 rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(0, 0, 0, .4);
-  text-shadow: 0 2px 0 rgba(40, 0, 3, .75);
+  text-shadow: 0 2px 0 rgba(60, 0, 30, .8);
   transition: transform .12s ease, filter .12s ease;
 }
 #btn-title { padding: 15px 64px 14px; font-size: 26px; }
 .menu .start:hover:not(:disabled), .pause .start:hover:not(:disabled) { filter: brightness(1.15) saturate(1.1); transform: translateY(-1px) scale(1.02); }
 .menu .start:active:not(:disabled), .pause .start:active:not(:disabled) { transform: translateY(1px) scale(.99); filter: brightness(.95); }
 
-/* the other menu buttons: dark stone with a red edge */
+/* the other menu buttons: dark slabs with a pink edge */
 .menu .nav button:not(.start), .pause .nav button:not(.start),
 .menu .row button:not(.start):not(.danger):not(.back) {
   border: 0; border-radius: 0; clip-path: var(--chip);
   font: 400 17px/1 var(--f-metal); letter-spacing: .12em; text-transform: uppercase;
-  color: var(--stone);
-  background: var(--grain), linear-gradient(180deg, #2c2929, var(--slab));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blood) 55%, transparent), inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--chrome);
+  background: var(--grain), linear-gradient(180deg, #2e1f2c, var(--slab));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 55%, transparent), inset 0 1px 0 rgba(255, 255, 255, .08);
   transition: color .12s ease, box-shadow .12s ease, transform .12s ease;
 }
 .menu .nav button:not(.start), .pause .nav button:not(.start) { padding: 12px 10px 11px; }
 .menu .row button:not(.start):not(.danger):not(.back) { padding: 10px 22px 9px; }
 .menu .nav button:not(.start):hover:not(:disabled), .pause .nav button:not(.start):hover:not(:disabled),
 .menu .row button:not(.start):not(.danger):not(.back):hover:not(:disabled) {
-  color: var(--stone-hi);
-  box-shadow: inset 0 0 0 2px var(--blood), inset 0 0 18px color-mix(in srgb, var(--blood) 35%, transparent);
+  color: var(--chrome-hi);
+  box-shadow: inset 0 0 0 2px var(--neon), inset 0 0 18px color-mix(in srgb, var(--neon) 35%, transparent);
   transform: translateY(-1px);
 }
 .menu .nav { width: 240px; gap: 12px; }
 /* Start in the main menu's list keeps the red slab, full width */
 .menu .nav .start { width: 100%; padding: 13px 10px 12px; font-size: 21px; }
 
-/* Back and the quieter links: plain capitals that go red on hover */
+/* Back and the quieter links: plain capitals that go pink on hover */
 .menu .back, .pause .back, .practice .back {
   border: 0; border-radius: 0; padding: 6px 12px; background: none;
   font: 400 14px/1 var(--f-metal); letter-spacing: .16em; text-transform: uppercase;
-  color: var(--stone-lo) !important;
+  color: var(--chrome-lo) !important;
   transition: color .12s ease;
 }
-.menu .back:hover, .pause .back:hover, .practice .back:hover { color: var(--blood-hi) !important; }
+.menu .back:hover, .pause .back:hover, .practice .back:hover { color: var(--neon-hi) !important; }
 .menu .danger { border-radius: 0; clip-path: var(--chip); font: 400 15px/1 var(--f-metal); letter-spacing: .12em; text-transform: uppercase; padding: 9px 18px 8px; }
 
 /* the chipped corners would clip a focus outline, so focus shows inside the button instead */
@@ -906,42 +935,37 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .crt-switch[aria-checked="true"] .switch-led { background: #22ff55; box-shadow: 0 0 6px #22ff55; }
 
 /* ---------- The CRT filter (display.js; user, after Lucas Bebber's "CSS CRT screen effect") ----------
-   On (html.crt): the arena is drawn at 1/3 resolution and scaled up with hard edges, the menus and HUD use pixel fonts,
-   the logo is a small copy blown up, and a CRT screen (scanlines, colour stripes, flicker, dark corners) sits over
-   everything. Off: none of this, full resolution. */
+   On (html.crt): the arena is drawn at 1/2 resolution and scaled up with hard edges, the logo is a small copy blown
+   up, and a CRT screen (scanlines, colour stripes, flicker, dark corners) sits over everything. Off: none of this,
+   full resolution. Text keeps its normal fonts either way (v0.30, user: the pixel fonts were unreadable). */
 .logo-px { display: none !important; }
 .crt .logo-hd { display: none !important; }
 .crt .logo-px { display: block !important; image-rendering: pixelated; }
 .crt .arena canvas { image-rendering: pixelated; }
-.crt {
-  /* readable first (user): Pixelify Sans everywhere, Silkscreen only on the big headings and main buttons */
-  --f-ui: "Pixelify Sans", system-ui, sans-serif;
-  --f-num: "Pixelify Sans", ui-monospace, monospace;
-  --f-metal: "Pixelify Sans", Impact, sans-serif;
-  background: #000;                                   /* the dark tube behind the switch-on */
-}
-.crt body { font-size: 14px; letter-spacing: .01em; }
-.crt .menu h2, .crt .pause h2, .crt .menu .start, .crt .pause .start, .crt .intro-name { font-family: "Silkscreen", "Pixelify Sans", sans-serif; }
-.crt .menu .nav button:not(.start), .crt .pause .nav button:not(.start), .crt .menu .row button, .crt .menu .back, .crt .pause .back, .crt .practice .back { font-weight: 700; letter-spacing: .1em; }
-.crt .menu .eyebrow, .crt .pause .eyebrow { font-weight: 700; font-size: 13px; letter-spacing: .16em; }
+.crt { background: #000; }                           /* the dark tube behind the switch-on */
 
 .crt-screen { display: none; position: fixed; inset: 0; z-index: 100; pointer-events: none; }
 .crt .crt-screen {
   display: block;
-  background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 62%, rgba(0, 0, 0, .5) 100%);   /* the tube's dark corners */
+  /* the tube's dark corners, and a faint glow from the middle of the glass (v0.32, user: a stronger filter) */
+  background:
+    radial-gradient(ellipse 72% 68% at 50% 50%, transparent 55%, rgba(0, 0, 0, .72) 100%),
+    radial-gradient(ellipse 60% 55% at 50% 45%, rgba(255, 120, 200, .045), transparent 70%);
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, .55), inset 0 0 12px rgba(0, 0, 0, .8);
 }
-/* scanlines: one dark line under every row of game pixels (3px), and faint red / green / blue stripes */
+/* scanlines: a dark line under every row of game pixels (2px), and red / green / blue stripes like a tube's phosphor.
+   v0.30 made them lighter for readable text; v0.32 (user) turned the filter back up, text is still in clear fonts. */
 .crt-screen::before {
   content: ""; position: absolute; inset: 0;
   background:
-    linear-gradient(rgba(18, 16, 16, 0) 66%, rgba(0, 0, 0, .18) 66%),
-    linear-gradient(90deg, rgba(255, 0, 0, .06), rgba(0, 255, 0, .02), rgba(0, 0, 255, .06));
-  background-size: 100% 3px, 3px 100%;
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, .26) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, .08), rgba(0, 255, 0, .03), rgba(0, 0, 255, .08));
+  background-size: 100% 2px, 3px 100%;
 }
 /* flicker: a faint dark wash whose strength jumps about */
 .crt-screen::after {
   content: ""; position: absolute; inset: 0;
-  background: rgba(18, 16, 16, .1); opacity: 0;
+  background: rgba(18, 16, 16, .12); opacity: 0;
   animation: crt-flicker .15s infinite;
 }
 @keyframes crt-flicker {
@@ -965,8 +989,6 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
   .crt-screen::after { animation: none; }
   .crt-on body { animation: none; }
 }
-/* Silkscreen is wide: the tight spots (Loadout tiles) use the narrower Pixelify Sans instead */
-.crt .type-stats, .crt .stepper .owned { font-family: "Pixelify Sans", system-ui, sans-serif; }
 
 /* ---------- MAKORA (makora.js): the black-screen scenes and its bar ---------- */
 .cine {
@@ -978,7 +1000,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .cine-line {
   grid-area: 1 / 1; margin: 0; padding-inline: 16px; text-align: center;
   font: 400 clamp(22px, 4.2vw, 40px)/1.15 var(--f-metal); letter-spacing: .14em; text-transform: uppercase;
-  color: var(--stone-hi); opacity: 0;
+  color: var(--chrome-hi); opacity: 0;
 }
 .cine-line.is-in { animation: cine-in .6s ease-out forwards; }
 .cine-line.is-out { opacity: 1; animation: cine-out .35s ease-in forwards; }
@@ -987,14 +1009,137 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .cine-line.is-name.is-in { animation: cine-name .9s cubic-bezier(.2, .9, .25, 1.2) forwards, intro-shake .5s .1s 2 ease-in-out; }
 @keyframes cine-in { from { opacity: 0; transform: translateY(8px); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
 @keyframes cine-name { 0% { opacity: 0; transform: scale(1.6); filter: blur(8px); } 60% { opacity: 1; transform: scale(.96); filter: blur(0); } 100% { opacity: 1; transform: none; } }
-/* the wheel: fades in, then turns one notch (45°) with a heavy, settling turn */
-.cine-wheel { grid-area: 1 / 1; width: min(62vmin, 440px); height: auto; opacity: 0; transform: rotate(var(--turn, 0deg)) scale(.92); transition: opacity .35s ease, transform .35s ease; }
-.cine-wheel.is-shown { opacity: 1; transform: rotate(var(--turn, 0deg)) scale(1); }
-.cine-wheel.is-turning { transition: opacity .35s ease, transform 1s cubic-bezier(.55, 0, .25, 1.35); }
-@media (prefers-reduced-motion: reduce) { .cine-line.is-in, .cine-line.is-name.is-in { animation: none; opacity: 1; } .cine-line.is-out { animation: none; opacity: 0; } .cine-wheel.is-turning { transition: none; } }
+/* the wheel: flat gold, drawn small by makora.js and blown up with hard edges for a little retro pixelation (v0.37,
+   user), turned one notch, with a soft gold glow and a pink one behind; it shakes as it lands */
+.cine-wheel {
+  grid-area: 1 / 1; width: min(60vmin, 440px); height: auto; aspect-ratio: 1; max-width: 100%;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--wheel) 45%, transparent)) drop-shadow(0 0 60px color-mix(in srgb, var(--neon) 30%, transparent));
+  opacity: 0; transform: scale(.92); transition: opacity .35s ease, transform .35s ease;
+}
+.cine-wheel.is-shown { opacity: 1; transform: none; }
+.cine-wheel.is-clunk { animation: wheel-clunk .45s ease-out both; }
+@keyframes wheel-clunk {
+  0% { translate: 0 0; } 15% { translate: -10px 6px; } 30% { translate: 8px -6px; } 45% { translate: -6px 3px; }
+  60% { translate: 4px -2px; } 80% { translate: -2px 1px; } 100% { translate: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cine-line.is-in, .cine-line.is-name.is-in { animation: none; opacity: 1; } .cine-line.is-out { animation: none; opacity: 0; }
+  .cine-wheel.is-clunk { animation: none; }
+}
+/* Skip MAKORA's intro (user): bottom right, quiet until you point at it */
+.cine-skip {
+  position: fixed; right: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); pointer-events: auto;
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--chrome-lo); border-radius: 0; background: none;
+  font: 400 14px/1 var(--f-metal); letter-spacing: .16em; text-transform: uppercase; color: var(--chrome-lo);
+  transition: color .12s ease, border-color .12s ease;
+}
+.cine-skip:hover, .cine-skip:focus-visible { color: var(--neon-hi); border-color: var(--neon-hi); }
+.cine-skip kbd { font: 600 10px var(--f-num); letter-spacing: .04em; padding: 2px 5px; border: 1px solid currentColor; border-radius: 3px; }
+.crt .cine-skip { font-weight: 700; letter-spacing: .1em; }
 .bossbar.is-makora .boss-name { color: var(--wheel); }
 .bossbar.is-makora .boss-hp { box-shadow: 0 0 14px -2px var(--wheel); }
-.bossbar.is-makora .boss-hp span { background: var(--makora-feather); }
+.bossbar.is-makora .boss-hp span { background: var(--makora-dark); }
 .boss-sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-/* small HUD numbers under the CRT filter: Silkscreen, whose digits stay distinct (Pixelify's 2 read as an 8) */
-.crt .hp-num, .crt .xp-num, .crt .xp-lv b, .crt .card-idx, .crt .deck-status, .crt .stats b, .crt .statpanel b { font-family: "Silkscreen", ui-monospace, monospace; font-weight: 400; font-size: 11px; letter-spacing: .02em; }
+
+/* ---------- Loadout: the deck builder (v0.31, user: like Legends of Runeterra's) ----------
+   Left, the deck: one row per card, its damage in a gem, its name on a strip of its colour, and how many are in.
+   Right, your cards: a grid of tall cards with damage (top left) and free copies (top right). Click or drag across
+   to add; click a row, or drag it out, to take one off. The deck lights up while a card is dragged over it. */
+.screen.is-builder { width: min(1080px, 100%); gap: 12px; padding-block: 16px; }
+.builder {
+  display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 16px;
+  width: 100%; height: min(660px, calc(100vh - 110px)); min-height: 380px; text-align: left;
+}
+.deck-panel {
+  display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 14px 12px 12px;
+  background: var(--grain), linear-gradient(180deg, #24182a, #150e17);
+  clip-path: var(--chip);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 35%, transparent);
+  transition: box-shadow .15s ease, background-color .15s ease;
+}
+.builder.is-adding .deck-panel { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--neon) 55%, transparent); }
+.deck-panel.is-over { box-shadow: inset 0 0 0 2px var(--neon), inset 0 0 40px -8px color-mix(in srgb, var(--neon) 60%, transparent); }
+.deck-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.deck-head .eyebrow { margin: 0; }
+.deck-count { margin: 0; font-size: 12px; color: var(--muted); }
+.deck-count b { font: 400 18px var(--f-metal); color: var(--chrome-hi); }
+.deck-panel.is-full .deck-count b { color: var(--neon-hi); }
+.deck-list { list-style: none; margin: 0; padding: 0 2px 0 0; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.deck-empty { flex: 1; display: grid; place-items: center; margin: 0; padding: 16px; text-align: center; font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; }
+.drow, .drag-ghost {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 9px;
+  width: 100%; height: 40px; padding: 0 12px 0 5px; border: 0; border-radius: 5px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 50%, #140c15), color-mix(in srgb, var(--c) 16%, #140c15) 72%, #140c15);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--chrome-hi); text-align: left; cursor: grab; touch-action: none; user-select: none;
+}
+.drow:hover { filter: brightness(1.15); }
+.drow:focus-visible { outline: 2px solid var(--neon-hi); outline-offset: 1px; }
+.drow-dmg {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a2640, #120b13);
+  box-shadow: 0 0 0 2px var(--rc), 0 2px 4px rgba(0, 0, 0, .5);
+  font: 400 13px var(--f-metal); color: #fff;
+}
+.drow-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; font-size: 14px; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
+.drow-n { font: 400 17px var(--f-metal); color: var(--neon-hi); text-shadow: 0 0 8px color-mix(in srgb, var(--neon) 60%, transparent); }
+.drow:hover .drow-n::before { content: "−"; margin-right: 6px; color: var(--muted); }
+.deck-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.deck-tools button {
+  padding: 10px 8px 9px; border: 0; border-radius: 0; clip-path: var(--chip);
+  font: 400 14px/1 var(--f-metal); letter-spacing: .1em; text-transform: uppercase; color: var(--chrome);
+  background: var(--grain), linear-gradient(180deg, #2e1f2c, var(--slab));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 55%, transparent);
+}
+.deck-tools #btn-auto { color: var(--chrome-hi); background: var(--grain), linear-gradient(180deg, var(--neon-hi), var(--neon) 50%, #c0126d 52%, var(--neon-dark)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25); }
+.deck-tools button:hover:not(:disabled) { filter: brightness(1.15); }
+.deck-tools button:disabled { opacity: .4; cursor: default; }
+
+.coll-panel { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+.coll-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 18px; }
+.coll-head h2 { margin: 0; }
+.coll-head .sub { margin: 0; text-align: left; transition: color .15s ease; }
+.coll-head .sub.is-warn { color: var(--bad); }
+.coll-grid {
+  flex: 1; min-height: 0; overflow-y: auto; align-content: start;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 16px 14px; padding: 8px 6px 12px 4px;
+}
+.ccard {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  aspect-ratio: 3 / 4; padding: 34px 10px 12px; border: 0; border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--c) 32%, transparent), transparent 58%),
+    linear-gradient(180deg, #2c1e30, #150e17);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rc) 75%, #000), inset 0 0 0 5px #140c15, inset 0 0 0 6px color-mix(in srgb, var(--c) 30%, transparent), 0 8px 16px rgba(0, 0, 0, .45);
+  color: var(--text); cursor: grab; touch-action: none; user-select: none;
+  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+}
+.ccard:hover:not([aria-disabled="true"]) { transform: translateY(-4px); box-shadow: inset 0 0 0 2px var(--rc), inset 0 0 0 5px #140c15, inset 0 0 0 6px color-mix(in srgb, var(--c) 55%, transparent), 0 12px 22px rgba(0, 0, 0, .5), 0 0 22px -6px var(--c); }
+.ccard:focus-visible { outline: 2px solid var(--neon-hi); outline-offset: 3px; }
+.ccard[aria-disabled="true"] { cursor: default; }
+.ccard.is-used { filter: grayscale(.75) brightness(.55); }
+.ccard-dmg {
+  position: absolute; top: 8px; left: 8px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a2640, #120b13); box-shadow: 0 0 0 2px var(--rc), 0 3px 6px rgba(0, 0, 0, .5);
+  font: 400 15px var(--f-metal); color: #fff;
+}
+.ccard-free { position: absolute; top: 12px; right: 10px; padding: 3px 7px 2px; border-radius: 4px; background: rgba(0, 0, 0, .55); box-shadow: inset 0 0 0 1px var(--line); font: 400 12px var(--f-metal); color: var(--chrome-hi); }
+.ccard-art { width: 52%; height: auto; margin: 2px 0 auto; color: var(--c); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 70%, transparent)); }
+.ccard-name { font: 400 13px/1.1 var(--f-metal); letter-spacing: .04em; text-transform: uppercase; text-align: center; text-wrap: balance; color: var(--chrome-hi); }
+.ccard-rar { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--rc); }
+.ccard-stats { font-size: 11px; color: var(--muted); text-align: center; }
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 200; width: 230px; margin: -20px 0 0 -115px; pointer-events: none;
+  grid-template-columns: 30px minmax(0, 1fr); box-shadow: inset 0 0 0 1px var(--c), 0 10px 26px rgba(0, 0, 0, .6), 0 0 20px -4px var(--c);
+  rotate: -2deg; cursor: grabbing;
+}
+.builder.is-adding, .builder.is-removing, .builder.is-adding *, .builder.is-removing * { cursor: grabbing !important; }
+.builder.is-removing .coll-panel { outline: 2px dashed color-mix(in srgb, var(--bad) 55%, transparent); outline-offset: 4px; border-radius: 6px; }
+@media (max-width: 720px) {
+  .screen.is-builder { padding-top: 52px; }            /* clear of the settings gear */
+  .builder { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .deck-list { max-height: 220px; }
+  .coll-grid { overflow: visible; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { .ccard, .deck-panel { transition: none; } .ccard:hover:not([aria-disabled="true"]) { transform: none; } }

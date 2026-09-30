@@ -10,15 +10,17 @@
 const RARITY_WEIGHTS = { common: 6000, uncommon: 2500, rare: 1000, epic: 400, legendary: 98, sss: 2 };   // out of 10,000
 
 // `cards`, if set, limits a pack to those cards; otherwise it can hold any card of its rarities.
-// Store packs (user, v0.6): 20 gold each, 5 cards, Common and Uncommon only.
+// Store packs (user, v0.6): 20 gold each, 5 cards, Common and Uncommon only. v0.30 (user): Laser joins Artillery with
+// the new Sniper, Cannon leaves it for the starter pack, and Magus gets Arcane Missiles.
 const PACK_PRICE = 20;
 const PACKS = {
-  artillery: { name: 'Artillery pack', short: 'Artillery', size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['cannon', 'mine', 'spaceimpact'] },
-  magus:     { name: 'Magus pack',     short: 'Magus',     size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['arcane', 'shuriken', 'firebolt'] },
+  artillery: { name: 'Artillery pack', short: 'Artillery', size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['laser', 'mine', 'spaceimpact', 'sniper'] },
+  magus:     { name: 'Magus pack',     short: 'Magus',     size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['arcane', 'shuriken', 'missiles', 'firebolt'] },
 };
 const STORE_PACKS = ['artillery', 'magus'];
 // Every new player (and a reset) opens this first, before anything else (user). Nothing is rolled.
-const STARTER = { name: 'Starter pack', short: 'Starter', cards: { bullet: 5, laser: 5 } };
+// v0.30 (user): 5 Bullets and 5 Cannons (it was Bullets and Lasers).
+const STARTER = { name: 'Starter pack', short: 'Starter', cards: { bullet: 5, cannon: 5 } };
 const starterCards = () => Object.entries(STARTER.cards).flatMap(([id, n]) => Array(n).fill(id));
 
 function cardsOfRarity(rarity, pack = null) {

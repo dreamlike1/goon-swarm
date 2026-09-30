@@ -18,10 +18,13 @@ function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));   // never negative: `last` can be reset just after this frame began
   last = now;
   // The fight pauses while a level-up choice is open. Held keys are still tracked (arena.js), so you move off the moment you pick.
-  if (!game.paused && !game.inMenu && !game.over && !game.choosing && (deck || game.practice)) update(dt);
-  if (nextCard) nextCard.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);
-  draw();
-  syncMusic(dt);
+  // A bug in one frame must never stop the game for good (v0.32): the error is logged and the next frame still comes.
+  try {
+    if (!game.paused && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || game.practice)) update(dt);
+    if (nextCard) nextCard.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);
+    draw();
+    syncMusic(dt);
+  } catch (err) { console.error(err); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

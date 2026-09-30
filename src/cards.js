@@ -9,7 +9,9 @@
    weapon has its own range, halved from the first numbers, then +15% in v0.8 and +20% in v0.26, all but Laser; placeholders). The Attack range upgrade stretches it. `look` picks how the projectile is drawn: streak, orb, heavy (Cannon's trail, ring and shake), spin or missile. */
 // Ids stay as they were so the code and saves keep working; the names changed (user, v0.6): `arcane` is now Arcane
 // Blast, `shuriken` is Arcane Bolt and `firebolt` is Arcane Fire. Dart was removed. The rarities follow the packs:
-// Artillery (Cannon, Mine: Common; Space Impact: Uncommon) and Magus (Arcane Blast, Arcane Bolt: Common; Arcane Fire: Uncommon).
+// Artillery (Laser, Mine: Common; Space Impact, Sniper: Uncommon) and Magus (Arcane Blast, Arcane Bolt, Arcane Missiles:
+// Common; Arcane Fire: Uncommon). v0.30 (user): Sniper and Arcane Missiles are new, Laser moved to Artillery and
+// Cannon to the starter pack.
 const CARDS = {
   bullet:   { name: 'Bullet',      rarity: 'common',   range: 248, dmg: 5,  speed: 580, r: 4,  knock: 40,  look: 'streak', desc: 'Basic attack.' },
   // Laser (user): a long zap that hits instantly, the same damage as a Bullet. Twice a Bullet's range at first; it kept
@@ -28,6 +30,14 @@ const CARDS = {
   mine: { name: 'Mine', rarity: 'common', range: 152, dmg: 30, speed: 0, r: 7, knock: 260, look: 'mine', radius: 75, arm: 0.35,
           desc: 'Drops a landmine where you stand. An enemy that touches it sets off an explosion: 30 damage to everything nearby.' },
   firebolt: { name: 'Arcane Fire', rarity: 'uncommon', range: 290, dmg: 20, speed: 760, r: 6,  knock: 90,  look: 'streak', desc: 'A fast, strong bolt of arcane fire.' },
+  // Sniper (user, v0.30): a super long shot that deals 50 damage. It flies straight and very fast (`start` = `speed`,
+  // so no climb) until it hits something or leaves the arena. Rarity, range, speed and knockback are placeholders.
+  sniper: { name: 'Sniper', rarity: 'uncommon', range: 560, dmg: 50, speed: 1500, start: 1500, ramp: 0.01, r: 3, knock: 140, look: 'sniper', homing: false, pierce: 0,
+            desc: 'A super long, super fast shot: 50 damage.' },
+  // Arcane Missiles (user, v0.30): fires 2 homing missiles. They curve out to the sides, then steer in (`volley`
+  // missiles per play). Damage, speed, range and rarity are placeholders.
+  missiles: { name: 'Arcane Missiles', rarity: 'common', range: 250, dmg: 4, speed: 430, r: 4, knock: 25, look: 'amissile', volley: 2,
+              desc: 'Fires 2 homing missiles that curve in on their targets.' },
 };
 const CARD_IDS = Object.keys(CARDS);   // roster order, used for sorting
 

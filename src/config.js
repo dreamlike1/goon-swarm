@@ -92,13 +92,14 @@ const XP = {
 };
 // For now (user, v0.25: level up faster): every enemy drops an orb, orbs are worth ×1.5, and every level needs the same
 // `flat` XP instead of more each level. Set `on: false` to go back to the normal curve above.
-const XP_BOOST = { on: true, drop: 1, value: 1.5, flat: 12 };
+// v0.33 (user: nerf the XP a bit): orbs ×1.5 → ×1.3 and 12 → 14 XP a level, so levels take about a quarter longer.
+const XP_BOOST = { on: true, drop: 1, value: 1.3, flat: 14 };
 const xpNeeded = level => XP_BOOST.on ? XP_BOOST.flat : Math.round(XP.first * XP.grow ** (level - 1) + XP.step * (level - 1));
 
 const css = getComputedStyle(document.documentElement);
 const tok = n => css.getPropertyValue(n).trim();
 const COL = {
-  floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraFeather: tok('--makora-feather'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), blade: tok('--blade'), rock: tok('--rock'), crack: tok('--crack'), relic: tok('--relic'),
+  floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--enemy'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),

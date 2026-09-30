@@ -3,17 +3,17 @@
 
 /* With the filter on:
    - The arena is drawn at 1/`pixel` of the screen's resolution and scaled up with hard edges (arena.js), so the game
-     world is chunky pixels. The menus and HUD switch to pixel fonts, and the logo to a 240 px wide copy blown up
-     the same way.
+     world is chunky pixels. The logo switches to a small copy blown up the same way. (The menus and HUD used pixel
+     fonts until v0.30; the user found them unreadable, so text keeps the normal fonts now.)
    - A CRT screen sits over everything: scanlines, faint red/green/blue stripes, a gentle flicker and dark corners.
    - Turning the filter on switches the screen on like an old TV: a bright line that jumps and opens out, and a black
      screen that brightens. Loading the game doesn't (user), and turning the filter off is instant (user).
-   - Text stays readable (user): small text uses Pixelify Sans, Silkscreen is kept for big headings and buttons, and
-     the arena's floating numbers are drawn crisp on their own full-resolution layer (the `cv-text` canvas).
+   - Text stays readable (user): the arena's floating numbers are drawn crisp on their own full-resolution layer
+     (the `cv-text` canvas).
    After the reference the user shared: Lucas Bebber's "CSS CRT screen effect" on CodePen. Off: everything is back
    to the original full resolution. Saved on this computer (not in the game save), on by default. */
 const DISPLAY_KEY = 'rogue.display';
-const CRT = { pixel: 3, onMs: 2400 };
+const CRT = { pixel: 2, onMs: 2400 };                   // pixel: 3 until v0.30 (user: too chunky to read)
 const display = { crt: true };
 try {
   const d = JSON.parse(localStorage.getItem(DISPLAY_KEY) || 'null');

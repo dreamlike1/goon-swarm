@@ -20,7 +20,7 @@ function blankSave() {
     owned: {},              // card id → usable copies (0–5)
     upgradeCopies: {},      // card id → extra copies waiting for the upgrade rules
     equipped: {},           // card id → copies in the deck
-    gold: 0,                // for the store
+    gold: 100,              // for the store. A new save (or a reset) starts with 100 (v0.30, user; it was 0)
     starterDone: false,     // the starter pack has been opened (its cards are in the collection)
     starterSeen: false,     // …and its reveal finished
   };

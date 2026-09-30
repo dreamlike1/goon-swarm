@@ -65,7 +65,7 @@ const audible = () => audio.ctx && audio.ctx.state === 'running' && sfxGain() > 
    - Each run's level music and each boss fight's music start from the top (phase 2's from its chorus), and so does the lobby's after a run
      (after a weapon test it carries on). Test mode has no music.
    - Autoplay (user: must play on open, no "click to play"): it's started the moment the page loads. Browsers only allow
-     that when the site may autoplay; `Play Goon Swarm.command` opens the game in Chrome with autoplay allowed. Anywhere
+     that when the site may autoplay; `Play Packs Silica.command` opens the game in Chrome with autoplay allowed. Anywhere
      else it quietly starts from inside your first click, tap or key press. */
 const TRACKS = {
   lobby: { opus: 'assets/lobby_music.m4a', aac: 'assets/lobby_music_aac.m4a', vol: 'music', fadeIn: 1.4, fadeOut: 1.4 },
@@ -120,7 +120,7 @@ function musicWanted() {
   if (document.hidden) return { ...none, hold: true };
   if (!document.getElementById('menu').hidden) return current === 'scr-preview' ? { ...none, level: 1 } : { ...none, lobby: 1 };
   if (game.practice || game.over) return none;
-  if (game.paused) return { ...none, hold: true };
+  if (game.paused || game.cineHold) return { ...none, hold: true };
   if (game.intro) return none;                                 // the footsteps: the level track fades away under them
   // MAKORA's black screens: the summoning is its voice alone until "MAKORA!", when its music comes in; the wheel
   // turning dips its music
@@ -244,7 +244,8 @@ function often(key, ms) {
 }
 
 const COMBO_VOICE = { bullet: [440, 'square'], laser: [660, 'sawtooth'], arcane: [392, 'sine'], cannon: [196, 'triangle'],
-  shuriken: [523, 'triangle'], spaceimpact: [330, 'square'], mine: [262, 'triangle'], firebolt: [349, 'sawtooth'] };
+  shuriken: [523, 'triangle'], spaceimpact: [330, 'square'], mine: [262, 'triangle'], firebolt: [349, 'sawtooth'],
+  sniper: [587, 'square'], missiles: [466, 'sine'] };
 
 const SFX = {
   // Every weapon has its own sound (user).
@@ -259,6 +260,8 @@ const SFX = {
       case 'spaceimpact': noise({ dur: 0.35, vol: 0.14, freq: 500, f2: 2600, filter: 'bandpass', q: 1.2 }); tone({ type: 'square', f: 220, f2: 660, dur: 0.3, vol: 0.05 }); break;   // rocket
       case 'mine':     tone({ type: 'triangle', f: 320, f2: 180, dur: 0.08, vol: 0.12 }); tone({ type: 'square', f: 1400, dur: 0.02, vol: 0.05, delay: 0.09 }); break;   // clunk, beep
       case 'firebolt': noise({ dur: 0.22, vol: 0.25, freq: 900, f2: 3200, filter: 'bandpass', q: 0.8 }); tone({ type: 'sawtooth', f: 300, f2: 120, dur: 0.2, vol: 0.08 }); break;   // fiery whoosh
+      case 'sniper':   noise({ dur: 0.09, vol: 0.4, freq: 2400, filter: 'highpass' }); tone({ type: 'square', f: 1800, f2: 200, dur: 0.12, vol: 0.09 }); tone({ type: 'sine', f: 120, f2: 60, dur: 0.2, vol: 0.25 }); break;   // a sharp crack
+      case 'missiles': [0, 0.05].forEach(d => tone({ type: 'sine', f: 520, f2: 1500, dur: 0.14, vol: 0.09, delay: d })); noise({ dur: 0.16, vol: 0.07, freq: 1800, filter: 'bandpass', q: 2 }); break;   // two quick whooshes
       default:         tone({ f: 700, dur: 0.05, vol: 0.1 });
     }
   },
@@ -325,13 +328,43 @@ const SFX = {
     tone({ type: 'triangle', f: 330, f2: 220, dur: 1.1, vol: 0.05, delay: 0.1, attack: 0.2 });
   },
   // … its wheel turning (user: a heavy wooden turn): a creaking ratchet, then a deep wooden clunk as it locks …
-  wheelTurn() {
-    for (let i = 0; i < 9; i++) noise({ dur: 0.05, vol: 0.18 - i * 0.01, freq: 950 - i * 45, filter: 'bandpass', q: 5, delay: i * 0.075 });
-    tone({ type: 'square', f: 62, f2: 54, dur: 0.7, vol: 0.05, attack: 0.1 });
-    tone({ type: 'sine', f: 98, f2: 42, dur: 0.5, vol: 0.6, delay: 0.72 });
-    noise({ dur: 0.28, vol: 0.45, freq: 420, filter: 'bandpass', q: 1.8, delay: 0.72 });
-    tone({ type: 'triangle', f: 190, f2: 120, dur: 0.12, vol: 0.18, delay: 0.72 });
-    noise({ dur: 0.6, vol: 0.12, freq: 180, f2: 60, delay: 0.76 });
+  // MAKORA's wheel (v0.33, it spins): a heavy shove, a wooden tick each time a spoke passes (quieter as it slows),
+  // and the deep clunk as it lands on the notch
+  // MAKORA's punch: a deep thump and the crack of the shockwave (v0.37)
+  punch() {
+    tone({ type: 'sine', f: 110, f2: 38, dur: 0.35, vol: 0.55 });
+    noise({ dur: 0.3, vol: 0.4, freq: 700, f2: 180, filter: 'lowpass' });
+    noise({ dur: 0.12, vol: 0.25, freq: 2400, filter: 'bandpass', q: 1.5, delay: 0.02 });
+  },
+  wheelSpin() {
+    noise({ dur: 0.35, vol: 0.3, freq: 300, f2: 1400, filter: 'bandpass', q: 1.2 });
+    tone({ type: 'square', f: 58, f2: 70, dur: 0.5, vol: 0.06, attack: 0.05 });
+  },
+  makoraTick(v = 1) {                                  // (was wheelTick, which the old weapon wheel's tick below overrode)
+    noise({ dur: 0.04, vol: 0.08 + 0.14 * v, freq: 900 + 300 * v, filter: 'bandpass', q: 5 });
+    tone({ type: 'triangle', f: 240 + 120 * v, dur: 0.03, vol: 0.05 });
+  },
+  wheelLand() {
+    tone({ type: 'sine', f: 98, f2: 42, dur: 0.5, vol: 0.6 });
+    noise({ dur: 0.28, vol: 0.45, freq: 420, filter: 'bandpass', q: 1.8 });
+    tone({ type: 'triangle', f: 190, f2: 120, dur: 0.12, vol: 0.18 });
+    noise({ dur: 0.6, vol: 0.12, freq: 180, f2: 60, delay: 0.04 });
+  },
+  // … the kick (v0.38): it stamps and the ground cracks up, then a heavy swing and the rock launching …
+  kickStomp() {
+    tone({ type: 'sine', f: 80, f2: 30, dur: 0.4, vol: 0.45 });
+    noise({ dur: 0.45, vol: 0.3, freq: 600, f2: 90, filter: 'lowpass' });
+  },
+  kick() {
+    noise({ dur: 0.22, vol: 0.3, freq: 350, f2: 2600, filter: 'bandpass', q: 1.1 });
+    tone({ type: 'sine', f: 130, f2: 40, dur: 0.3, vol: 0.5, delay: 0.05 });
+    noise({ dur: 0.2, vol: 0.3, freq: 1400, f2: 250, delay: 0.05 });
+  },
+  // … the rock bursting when you shoot it apart …
+  rockBlast() {
+    tone({ type: 'sine', f: 95, f2: 30, dur: 0.6, vol: 0.6 });
+    noise({ dur: 0.6, vol: 0.5, freq: 1500, f2: 120 });
+    noise({ dur: 0.35, vol: 0.2, freq: 3000, f2: 800, filter: 'bandpass', q: 1.2, delay: 0.03 });
   },
   // … its three slices …
   slice(kind) {
@@ -450,7 +483,7 @@ renderAudio();
 // A click sound for every menu button: Start-type buttons chime, Back buttons dip, the rest pop.
 document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('.menu button, .pause button:not(.upcard), .hud button, .practice button');
-  if (!b || b.disabled) return;
+  if (!b || b.disabled || b.closest('.builder')) return;   // the deck builder plays its own sounds
   if (b.classList.contains('start')) SFX.confirm();
   else if (b.classList.contains('back')) SFX.back();
   else SFX.click();

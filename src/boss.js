@@ -327,6 +327,7 @@ function tryDash() {
   const l = Math.hypot(mx, my) || 1;
   game.dash = { t: BULL.time, dx: mx / l, dy: my / l, hit: new Set(), smashed: false, sx: p.x, sy: p.y };
   game.dashCd = BULL.cd;
+  if (game.makora && !game.makora.down) game.makora.dashesSeen++;   // MAKORA is watching: dash a lot and it learns to (makora.js)
   p.safe = Math.max(p.safe, BULL.time + 0.1);
   SFX.bullDash();                                          // a swoosh (user)
   // Launch: a shockwave where you start and dust kicked out behind you.

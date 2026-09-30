@@ -342,6 +342,7 @@ function draw() {
   for (const e of game.enemies) {
     if (e.boss) { drawBoss(e); continue; }
     if (e.makora) { if (!e.down) drawMakora(e); continue; }
+    if (e.mrock) { drawKickRock(e); continue; }
     if (e.dummy) { drawDummy(e); continue; }
     const s = e.r * (0.4 + 0.6 * e.born);
     if (e.shape === 'dino') drawBoss(e);                     // mini dino: the boss drawing, small
@@ -369,6 +370,36 @@ function draw() {
   // projectiles, by look: streak (a line trail), orb and heavy (fading circles), spin (a turning square)
   for (const pr of game.projectiles) {
     const color = COL[pr.card], t = pr.trail;
+    if (pr.look === 'sniper') {              // Sniper (v0.30): a long, thin tracer with a bright core; the Railgun is a thick one with a glow
+      const L = Math.min(pr.flown, pr.big ? 150 : 110), bx = pr.x - Math.cos(pr.a) * L, by = pr.y - Math.sin(pr.a) * L;
+      const g = ctx.createLinearGradient(bx, by, pr.x, pr.y);
+      g.addColorStop(0, 'rgba(0, 0, 0, 0)'); g.addColorStop(1, color);
+      ctx.lineCap = 'round';
+      if (pr.big) { ctx.globalAlpha = 0.25; ctx.fillStyle = color; circle(pr.x, pr.y, pr.r + 10); }
+      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = pr.r * 2;
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(pr.x, pr.y); ctx.stroke();
+      ctx.strokeStyle = COL.player; ctx.lineWidth = Math.max(1, pr.r * 0.7); ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.moveTo(pr.x - Math.cos(pr.a) * L * 0.4, pr.y - Math.sin(pr.a) * L * 0.4); ctx.lineTo(pr.x, pr.y); ctx.stroke();
+      ctx.fillStyle = COL.player; circle(pr.x, pr.y, pr.r);
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    if (pr.look === 'amissile') {            // Arcane Missiles (v0.30): a glowing dart with a curving, fading trail
+      ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let i = 2; i < t.length; i += 2) {
+        const k = i / t.length;
+        ctx.globalAlpha = k * 0.6; ctx.lineWidth = 1 + k * pr.r;
+        ctx.beginPath(); ctx.moveTo(t[i - 2], t[i - 1]); ctx.lineTo(t[i], t[i + 1]); ctx.stroke();
+      }
+      const a = Math.atan2(pr.vy, pr.vx);
+      ctx.globalAlpha = 0.3; ctx.fillStyle = color; circle(pr.x, pr.y, pr.r + 4);
+      ctx.globalAlpha = 1;
+      ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(a);
+      ctx.beginPath(); ctx.moveTo(pr.r * 2, 0); ctx.lineTo(-pr.r, -pr.r); ctx.lineTo(-pr.r * 0.4, 0); ctx.lineTo(-pr.r, pr.r); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = COL.player; ctx.beginPath(); ctx.arc(pr.r * 0.5, 0, pr.r * 0.45, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      continue;
+    }
     if (pr.look === 'missile') {             // Space Impact: a short body pointing where it flies, with an exhaust trail that grows as it speeds up
       const k = Math.min(1, pr.age / pr.ramp);
       ctx.strokeStyle = color; ctx.lineCap = 'round';
@@ -527,8 +558,9 @@ function draw() {
   for (const f of game.floaters) {
     tctx.globalAlpha = Math.min(1, f.life * 3);
     tctx.fillStyle = f.color;
-    tctx.font = display.crt ? `700 ${f.big ? 17 : 13}px "Pixelify Sans", ui-monospace, monospace` : `600 ${f.big ? 15 : 11}px ui-monospace, Menlo, monospace`;
-    if (display.crt) { tctx.lineWidth = 3; tctx.strokeStyle = 'rgba(0, 0, 0, .75)'; tctx.lineJoin = 'round'; tctx.strokeText(f.text, f.x, f.y); }   // a dark edge, for the scanlines
+    // v0.30 (user): bigger, 11/15 px before, with a dark edge so they read over anything
+    tctx.font = `700 ${f.big ? 22 : 16}px "Chakra Petch", system-ui, sans-serif`;
+    tctx.lineWidth = 4; tctx.strokeStyle = 'rgba(0, 0, 0, .8)'; tctx.lineJoin = 'round'; tctx.strokeText(f.text, f.x, f.y);
     tctx.fillText(f.text, f.x, f.y);
   }
   tctx.restore();

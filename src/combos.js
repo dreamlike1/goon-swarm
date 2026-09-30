@@ -30,6 +30,12 @@ const COMBOS = {
                  7: { name: 'INFERNO!',      does: 'A ring of 14 bolts of Arcane Fire, straight out in every direction.' } },
   mine:        { 3: { name: 'MINEFIELD!',    does: '3 mines at once, spread around you.' },
                  7: { name: 'MINE RING!',    does: '7 mines in a ring around you. One blast can set off the lot.' } },
+  // v0.30 (user): Sniper ×3 fires 3 shots that pierce; ×7 a super large shot that pierces and explodes at the end.
+  sniper:      { 3: { name: 'PIERCING SHOTS!', does: '3 shots that pierce through every enemy in their line.' },
+                 7: { name: 'RAILGUN!',      does: 'One huge round that pierces everything for ×2 damage, then explodes where it ends.' } },
+  // v0.30 (user): Arcane Missiles ×2 fires 4 right away; ×7 fires 7 super-fast missiles that split in two on a hit.
+  missiles:    { 2: { name: 'BARRAGE!',      does: 'Fires 4 missiles at once.' },
+                 7: { name: 'MISSILE STORM!', does: '7 super-fast missiles. Each splits into 2 more when it hits.' } },
 };
 const TUNE = {
   rapidGap: 0.1,                                     // Bullet ×3: seconds between shots
@@ -45,6 +51,11 @@ const TUNE = {
   storm: { speedMul: 2.2, bounces: 7, mult: 2, range: 420 },   // Shuriken ×7
   burst: 12, megaBurst: 24, megaRange: 300, megaBlast: 45,     // Space Impact ×3 / ×7
   cone: { spread: 0.45, volleys: 2, gap: 0.2 },      // Fire Bolt ×3: cone width (radians), volleys, seconds between
+  pierceShots: { gap: 0.14 },                         // Sniper ×3: seconds between the 3 shots
+  railgun: { r: 12, mult: 2, radius: 130 },           // Sniper ×7: size, damage ×, blast radius where it ends
+  missile: { spread: 0.75, curve: 0.16, turn: 7 },    // Arcane Missiles: fan-out angle, straight time, turn rate (rad/s, grows)
+  barrage: { count: 4, spread: 1.25 },                // Arcane Missiles ×2
+  storm: { count: 7, speedMul: 2.2, split: 2 },       // Arcane Missiles ×7: each splits into `split` on a hit
 };
 
 // The combo that starts at `pos` in this sequence, if any: { card, n, name }.
@@ -70,7 +81,7 @@ function combosIn(seq, pos) {
 
 // The nearest `n` enemies within `range` (repeating the nearest if there are fewer), for shots that each want their own target.
 function targets(n, range = Infinity) {
-  const p = game.player, dist = e => Math.hypot(e.x - p.x, e.y - p.y);
+  const p = game.player, dist = e => Math.hypot(e.x - p.x, e.y - p.y) - e.r;   // to its edge, like nearestEnemy
   const byDist = game.enemies.filter(e => dist(e) <= range).sort((a, b) => dist(a) - dist(b));
   return Array.from({ length: n }, (_, i) => byDist[i % Math.max(1, byDist.length)]).filter(Boolean);
 }
@@ -80,6 +91,7 @@ const aimAngle = e => Math.atan2(e.y - game.player.y, e.x - game.player.x);
 function runCombo(cb, echo = false) {
   const p = game.player, { card } = cb, spec = CARDS[card], range = rangeOf(card), e0 = inRange(card) || nearestEnemy();
   if (!e0 && card !== 'arcane' && card !== 'mine') return;   // nothing to shoot at (the pulse and mines still happen)
+  const aim = e => aimAt(p.x, p.y, e, spec.speed).a;         // leads a moving target (the Sniper's shots fly straight)
   if (!echo) {
     game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 12, text: cb.name, color: COL[card], life: 0.9, vy: -40, big: true });
     game.rings.push({ x: p.x, y: p.y, r: PLAYER.r, max: 50, life: 0.3, color: COL[card] });
@@ -157,6 +169,29 @@ function runCombo(cb, echo = false) {
       for (let k = 0; k < count; k++) launch(card, a0 + (k / count) * Math.PI * 2, null, o);
       SFX.burst();
       game.shake = Math.max(game.shake, mega ? 0.16 : 0.1);
+      break;
+    }
+    case 'sniper3':                                     // 3 quick shots at the same enemy, each piercing everything in its line
+      for (let k = 0; k < 3; k++) later(k * TUNE.pierceShots.gap, () => {
+        const e = game.enemies.includes(e0) ? e0 : inRange(card);
+        if (e) lockAngle = aim(e);
+        launch(card, lockAngle, e || e0, { pierce: Infinity });
+      });
+      break;
+    case 'sniper7': {                                   // one huge round through everything, then a blast where it ends
+      const r = TUNE.railgun, a = aim(e0), dmg = spec.dmg * r.mult;
+      launch(card, a, e0, { pierce: Infinity, r: r.r, dmg, range: edgeDist(p.x, p.y, a), endBlast: { radius: r.radius, dmg: damageOf(dmg) }, big: true });
+      game.shake = Math.max(game.shake, 0.22);
+      break;
+    }
+    case 'missiles2':                                   // 4 at once, fanned wide, each at its own target if there are enough
+    case 'missiles7': {
+      const storm = cb.n === 7, n = storm ? TUNE.storm.count : TUNE.barrage.count, ts = targets(n, range), a0 = aimAngle(e0);
+      for (let k = 0; k < n; k++) {
+        const side = n > 1 ? k / (n - 1) - 0.5 : 0;
+        shoot(card, ts[k] || e0, { one: true, angle: a0 + side * 2 * TUNE.barrage.spread, quiet: k > 0,
+          ...(storm ? { speedMul: TUNE.storm.speedMul, split: TUNE.storm.split } : {}) });
+      }
       break;
     }
     case 'firebolt3': {                                // both volleys follow the cone aimed at the start, straight (no homing)

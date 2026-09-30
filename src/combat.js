@@ -68,11 +68,13 @@ function splitEnemy(e) {
 }
 
 // The nearest enemy to a point, skipping any in `skip`, optionally within `range`.
+// Distances are to the enemy's edge, not its middle (v0.30, user: you had to be right up against SKURTOSAURUS, whose
+// middle is 50 px in, before your cards would fire at it).
 function nearestEnemy(from = game.player, skip = null, range = Infinity) {
-  let best = null, bd = range * range;
+  let best = null, bd = range;
   for (const e of game.enemies) {
     if (skip && skip.has(e)) continue;
-    const d = (e.x - from.x) ** 2 + (e.y - from.y) ** 2;
+    const d = Math.hypot(e.x - from.x, e.y - from.y) - e.r;
     if (d < bd) { bd = d; best = e; }
   }
   return best;
@@ -197,29 +199,46 @@ function explode(m) {
 // Space Impact only fires when an enemy is within its attack range, but once fired its missiles have no range (user):
 // they fly until they hit or leave the arena. o.range: it bursts when it has flown this far (MEGA IMPACT! uses this
 // so its missiles explode where they end); o.endBlast: { radius, dmg } where it ends (hit, range or edge).
+// Also the Sniper's shots (v0.30), which start at full speed. o.pierce / o.r / o.dmg override the card's; o.big: the
+// Railgun (drawn bigger, and its blast is the big kind).
 function launch(card, a, e, o = {}) {
   const spec = CARDS[card], p = game.player;
   game.projectiles.push({
-    card, look: spec.look, r: spec.r, dmg: damageOf(spec.dmg), knock: knockOf(spec.knock), speed: spec.start, top: spec.speed,
-    start: spec.start, ramp: spec.ramp, age: 0, straight: true, pierce: spec.pierce || 0, bounces: 0, hits: new Set(), spin: 0,
-    target: null, a, x: p.x + Math.cos(a) * (PLAYER.r + 4), y: p.y + Math.sin(a) * (PLAYER.r + 4),
+    card, look: spec.look, r: o.r || spec.r, dmg: damageOf(o.dmg ?? spec.dmg), knock: knockOf(spec.knock), speed: spec.start, top: spec.speed,
+    start: spec.start, ramp: spec.ramp, age: 0, straight: true, pierce: o.pierce ?? (spec.pierce || 0), bounces: 0, hits: new Set(), spin: 0,
+    target: null, a, x: p.x + Math.cos(a) * (PLAYER.r + 4), y: p.y + Math.sin(a) * (PLAYER.r + 4), big: !!o.big,
     vx: Math.cos(a) * spec.start, vy: Math.sin(a) * spec.start, trail: [], flown: 0, range: o.range || 0, endBlast: o.endBlast || null,
   });
   if (!e) return;                       // part of a burst: the burst handles sound and muzzle
   game.muzzle = { a, life: 0.12, card };
   SFX.fire(card);
+  if (o.big) SFX.boom();
+}
+// How far a straight shot from (x, y) at angle a flies before it reaches the arena's edge (the Railgun ends there).
+function edgeDist(x, y, a) {
+  const cx = Math.cos(a), cy = Math.sin(a), h = playH || H;
+  const tx = cx > 0 ? (W - 12 - x) / cx : cx < 0 ? (12 - x) / cx : Infinity;
+  const ty = cy > 0 ? (h - 12 - y) / cy : cy < 0 ? (12 - y) / cy : Infinity;
+  return Math.max(40, Math.min(tx, ty));
 }
 
 // One homing shot of `card` at enemy `e`. Options (all optional), for combos:
 //   dmg: exact damage (before Base damage) · speedMul · r (size) · bounces · bounceRange
 //   aoe: { radius, dmg } splash where it hits · angle + homeDelay: fly this way for a moment, then home in
 //   angle + noHome: fly straight this way (cone shots) · quiet: no sound or muzzle (the combo plays its own)
+//   from: { x, y } to start from instead of the player · split: on a hit it splits into this many (Arcane Missiles ×7)
+//   one: just one shot, for a card that fires a volley (Arcane Missiles fire 2)
 // Every shot fizzles once it has flown a bit past its card's range.
 function shoot(card, e, o = {}) {
   const spec = CARDS[card];
-  const p = game.player;
+  const p = o.from || game.player;
   if (spec.look === 'mine') { dropMine(card); return; }
   if (spec.look === 'laser') { zap(card, e, o); return; }
+  if (spec.volley && !o.one && e) {                          // Arcane Missiles: 2, fanned out to the sides, each at its own target
+    const ts = targets(spec.volley, rangeOf(card)), a0 = Math.atan2(e.y - p.y, e.x - p.x);
+    for (let k = 0; k < spec.volley; k++) shoot(card, ts[k] || e, { ...o, one: true, angle: a0 + (k % 2 ? 1 : -1) * TUNE.missile.spread, quiet: o.quiet || k > 0 });
+    return;
+  }
   const speed = spec.speed * (o.speedMul || 1);
   if (spec.homing === false) {
     // A straight shot can't correct its course, so it leads using its average speed over the climb.
@@ -228,18 +247,35 @@ function shoot(card, e, o = {}) {
     return;
   }
   const aim = aimAt(p.x, p.y, e, speed);
-  const a = o.angle ?? aim.a;
+  const a = o.angle ?? aim.a, steer = spec.look === 'amissile', off = o.from ? 2 : PLAYER.r + 4;
   game.projectiles.push({
     card, look: spec.look, r: o.r || spec.r, dmg: damageOf(o.dmg ?? spec.dmg), knock: knockOf(spec.knock), speed,
-    bounces: o.bounces ?? (spec.bounces || 0), bounceRange: o.bounceRange || BOUNCE_RANGE, hits: new Set(), spin: 0, target: e,
-    aoe: o.aoe ? { radius: o.aoe.radius, dmg: damageOf(o.aoe.dmg) } : null, homeDelay: o.noHome ? Infinity : (o.homeDelay || 0), big: !!o.r,
-    flown: 0, maxDist: rangeOf(card) * 1.35,
-    x: p.x + Math.cos(a) * (PLAYER.r + 4), y: p.y + Math.sin(a) * (PLAYER.r + 4), vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [],
+    bounces: o.bounces ?? (spec.bounces || 0), bounceRange: o.bounceRange || BOUNCE_RANGE, hits: new Set(o.skip ? [o.skip] : []), spin: 0, target: e,
+    aoe: o.aoe ? { radius: o.aoe.radius, dmg: damageOf(o.aoe.dmg) } : null, big: !!o.r,
+    // missiles fly out to the side for a moment, then steer in (a turn rate rather than snapping round)
+    homeDelay: o.noHome ? Infinity : (o.homeDelay ?? (steer ? TUNE.missile.curve : 0)), split: o.split || 0,
+    turn: steer ? TUNE.missile.turn * speed / spec.speed : 0,   // faster missiles turn faster, so they still curve in the same space
+    flown: 0, maxDist: rangeOf(card) * (steer ? 2.2 : 1.35), age: 0,
+    x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [],
   });
   if (o.quiet) return;
   game.muzzle = { a, life: 0.12, card };
   SFX.fire(card);
   if (spec.look === 'heavy') game.shake = Math.max(game.shake, 0.08);
+}
+
+// MISSILE STORM!: a missile that hits splits into `pr.split` smaller ones, each after the nearest other enemies (they
+// fly off to the sides and fizzle if there are none).
+function splitMissile(pr, hit) {
+  const others = game.enemies.filter(en => en !== hit && !en.dead).sort((a, b) => Math.hypot(a.x - pr.x, a.y - pr.y) - Math.hypot(b.x - pr.x, b.y - pr.y));
+  const a0 = Math.atan2(pr.vy, pr.vx);
+  for (let k = 0; k < pr.split; k++) {
+    const e = others[k % Math.max(1, others.length)] || null, side = k % 2 ? 1 : -1;
+    const o = { one: true, from: { x: pr.x, y: pr.y }, angle: a0 + side * 1.1, quiet: true, skip: hit, speedMul: 1.3, r: 3 };
+    if (e) shoot(pr.card, e, o);
+    else shoot(pr.card, hit, { ...o, noHome: true });
+  }
+  burst(pr.x, pr.y, COL[pr.card], 8, 160);
 }
 
 function hitEnemy(pr, e) {
@@ -259,7 +295,7 @@ function hitEnemy(pr, e) {
     renderPrDmg();
   }
   e.hit = 0.1;
-  const len = Math.hypot(pr.vx, pr.vy) || 1, kr = e.boss ? BOSS.knockResist : e.makora ? MAKORA.knockResist : 1;
+  const len = Math.hypot(pr.vx, pr.vy) || 1, kr = e.boss ? BOSS.knockResist : e.makora ? MAKORA.knockResist : e.mrock ? 0 : 1;
   e.kx += (pr.vx / len) * pr.knock * kr;
   e.ky += (pr.vy / len) * pr.knock * kr;
   if (e.boss) renderBossBar();
@@ -275,6 +311,7 @@ function hitEnemy(pr, e) {
 
   if (e.hp <= 0 && e.boss && bossNextPhase(e)) return;   // SKURTOSAURUS: phase 1's bar is gone, phase 2 begins
   if (e.hp <= 0 && e.makora) { makoraDown(e, pr.card); return; }   // MAKORA never stays down: it adapts and comes back
+  if (e.hp <= 0 && e.mrock) { rockBlast(e); return; }                // MAKORA's kicked rock: shot apart, it explodes (makora.js)
   if (e.hp <= 0) {
     e.dead = true;
     SFX.kill(e.r > 15);
@@ -432,6 +469,7 @@ function update(dt) {
     const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
+    else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
     else if (e.shape === 'dino') moveRaptor(e, dt);
     else {
       e.kx *= decay; e.ky *= decay;
@@ -452,9 +490,11 @@ function update(dt) {
       else { p.flash = 0.2; hurtPlayer(e.dmg); }
     }
   }
+  for (let i = es.length - 1; i >= 0; i--) if (es[i].gone) es.splice(i, 1);   // MAKORA's rocks that broke or flew off
   for (let i = 0; i < es.length; i++) {
     for (let j = i + 1; j < es.length; j++) {
       const a = es[i], b = es[j];
+      if (a.mrock || b.mrock) continue;                        // a flying rock goes through everything
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
       const overlap = (a.r + b.r) * 1.1 - d;
       if (overlap > 0) {
@@ -465,7 +505,7 @@ function update(dt) {
       }
     }
   }
-  for (const e of es) clampTo(e, e.r);
+  for (const e of es) if (!e.mrock) clampTo(e, e.r);
 
   updateRocks(dt);
 
@@ -557,7 +597,11 @@ function update(dt) {
   // Each hits the first enemy it touches. A bouncing one (Shuriken) then heads for the nearest enemy it
   // hasn't hit yet, within its bounce range; with none, it ends. Every shot fizzles past its range.
   for (let i = game.projectiles.length - 1; i >= 0; i--) {
+    // MAKORA going down clears every shot mid-loop (makoraDown), so the list can shrink under us (v0.32: this threw,
+    // and the frame loop stopped for good: "the game freezes after the second wheel turn")
+    if (game.cine) break;
     const pr = game.projectiles[i];
+    if (!pr) continue;
     pr.trail.push(pr.x, pr.y);
     if (pr.trail.length > 16) pr.trail.splice(0, 2);
     // Straight missiles: no homing. They ease in slowly, then speed up. They pierce `pierce` enemies;
@@ -567,21 +611,24 @@ function update(dt) {
       const k = Math.min(1, pr.age / pr.ramp);
       pr.speed = pr.start + (pr.top - pr.start) * k * k;
       pr.vx = Math.cos(pr.a) * pr.speed; pr.vy = Math.sin(pr.a) * pr.speed;
-      pr.x += pr.vx * dt; pr.y += pr.vy * dt;
-      pr.flown += pr.speed * dt;
-      const hit = es.find(en => !pr.hits.has(en) && Math.hypot(pr.x - en.x, pr.y - en.y) < pr.r + en.r);
+      // in small steps, so a very fast shot (the Sniper) can't skip past an enemy between frames
+      const steps = Math.max(1, Math.ceil(pr.speed * dt / 8));
       let end = false;
-      if (hit) {
-        hitEnemy(pr, hit);
-        pr.hits.add(hit);
-        if (pr.pierce > 0) pr.pierce--;
-        else end = true;
+      for (let st = 0; st < steps && !end; st++) {
+        pr.x += pr.vx * dt / steps; pr.y += pr.vy * dt / steps;
+        pr.flown += pr.speed * dt / steps;
+        for (const hit of es.filter(en => !pr.hits.has(en) && Math.hypot(pr.x - en.x, pr.y - en.y) < pr.r + en.r)) {
+          hitEnemy(pr, hit);
+          pr.hits.add(hit);
+          if (pr.pierce > 0) pr.pierce--;
+          else { end = true; break; }
+        }
+        if (pr.range && pr.flown >= pr.range) end = true;
       }
-      if (pr.range && pr.flown >= pr.range) end = true;
       const out = pr.x < -40 || pr.y < -40 || pr.x > W + 40 || pr.y > H + 40;
       if (end || out) {
         game.projectiles.splice(i, 1);
-        if (pr.endBlast && !out) blast(pr.x, pr.y, pr.card, pr.endBlast.radius, pr.endBlast.dmg, { knock: 80 });
+        if (pr.endBlast && !out) blast(pr.x, pr.y, pr.card, pr.endBlast.radius, pr.endBlast.dmg, { knock: pr.big ? 220 : 80, big: pr.big });
       }
       continue;
     }
@@ -593,7 +640,13 @@ function update(dt) {
     if (spread) { pr.x += pr.vx * dt; pr.y += pr.vy * dt; }
     else if (tg) {
       const dx = tg.x - pr.x, dy = tg.y - pr.y, d = Math.hypot(dx, dy) || 1;
-      pr.vx = (dx / d) * pr.speed; pr.vy = (dy / d) * pr.speed;
+      if (pr.turn && d > 70) {                        // Arcane Missiles: turn toward it at a rate that grows, so they curve in; close up
+                                                      // they go straight for it (they could circle it otherwise)
+        pr.age += dt;
+        const cur = Math.atan2(pr.vy, pr.vx), want = Math.atan2(dy, dx), max = (pr.turn + pr.age * 30) * dt;
+        const diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur)), na = cur + Math.max(-max, Math.min(max, diff));
+        pr.vx = Math.cos(na) * pr.speed; pr.vy = Math.sin(na) * pr.speed;
+      } else { pr.vx = (dx / d) * pr.speed; pr.vy = (dy / d) * pr.speed; }
       // Arrives this frame: land on it, so a fast shot can't step past its target.
       if (d <= pr.speed * dt + pr.r + tg.r) { pr.x = tg.x - (dx / d) * tg.r * 0.8; pr.y = tg.y - (dy / d) * tg.r * 0.8; }
       else { pr.x += pr.vx * dt; pr.y += pr.vy * dt; }
@@ -608,6 +661,7 @@ function update(dt) {
       hitEnemy(pr, target);
       pr.hits.add(target);
       if (pr.aoe) blast(target.x, target.y, pr.card, pr.aoe.radius, pr.aoe.dmg, { skip: target, big: pr.big });
+      if (pr.split) splitMissile(pr, target);
       const next = pr.bounces > 0 && nearestEnemy(pr, pr.hits, pr.bounceRange || BOUNCE_RANGE);
       if (next) {
         pr.bounces--;

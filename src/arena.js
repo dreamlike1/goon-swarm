@@ -57,6 +57,7 @@ addEventListener('keydown', e => {
   if (game.practice && onPracticeKey(e)) return;   // the store's test mode: 1–3 fire, Esc goes back
   if (game.choosing && onChoiceKey(e)) return;   // number keys (and Space on the wheel) pick; movement keys are still recorded
   if (e.target.closest && e.target.closest('button') && (e.code === 'Space' || e.code === 'Enter')) return;
+  if (game.cine?.kind === 'summon' && !game.paused && (e.code === 'Space' || e.code === 'Enter')) { if (!e.repeat) skipIntro(); e.preventDefault(); return; }   // skip MAKORA's intro (user)
   if (MOVE[e.code]) { keys.add(e.code); e.preventDefault(); }
   if (e.code === 'Space') { if (!e.repeat) tryDash(); e.preventDefault(); }   // BULL relic (user: Space)
   if (e.code === 'Escape') { togglePause(); e.preventDefault(); }             // pause (user: Esc)
@@ -64,9 +65,19 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); autoPause(); });
 // Alt-tab, another window or a hidden tab pauses the run (user).
-document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); else releaseHold(); });
+addEventListener('focus', releaseHold);
 function autoPause() {
-  if (!game.inMenu && !game.over && !game.choosing && !game.paused && !game.practice && deck) setPaused(true);
+  if (game.inMenu || game.over || game.choosing || game.paused || game.practice || !deck) return;
+  // During MAKORA's black-screen scenes it just holds, with no pause menu, and carries on when you come back
+  // (v0.33, user: alt-tab there froze the scene, or a click landed on the pause menu hidden behind it)
+  if (game.cine) { game.cineHold = true; return; }
+  setPaused(true);
+}
+function releaseHold() {
+  if (!game.cineHold || document.hidden) return;
+  game.cineHold = false;
+  last = performance.now();                          // no jump for the time away
 }
 
 let pointer = null;

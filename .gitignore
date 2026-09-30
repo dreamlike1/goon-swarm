@@ -1,0 +1,7 @@
+.DS_Store
+
+# Local only, not part of the game: docs, the Mac launcher and the test panel
+*.md
+docs/
+*.command
+src/devtools.js

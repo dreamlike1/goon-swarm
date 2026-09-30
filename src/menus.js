@@ -47,6 +47,48 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.39' },
+  { tag: 'Boss', text: "MAKORA's punch shockwave fades out as it reaches the end of its cone, instead of hanging there." },
+  { tag: 'Boss', text: 'From its 2nd wheel turn, MAKORA kicks 3 rocks in a row when you keep your distance.' },
+  { tag: 'Boss', text: 'From its 2nd wheel turn, up close it makes huge slashes, nearly a half circle with twice the reach. Watch the red cone and get out, or dash through it.' },
+  { ver: 'v0.38' },
+  { tag: 'Boss', text: 'A new MAKORA, drawn after the reference: grey and muscular, horns curling round its gold wheel, feathery tufts, a torn dark cloth, black rings and a short blade.' },
+  { tag: 'Boss', text: 'Its punch sends a shockwave rolling out across a cone. Get out of the red cone, or let the wave pass.' },
+  { tag: 'Boss', text: 'Its slices come 1 or 3 at a time, at random.' },
+  { tag: 'Boss', text: 'New kick: it stamps, a huge rock bursts up and it kicks it at you down a red lane. Shoot the rock apart and it explodes, hurting MAKORA if it is close.' },
+  { tag: 'Boss', text: 'MAKORA gets faster every time it adapts: it walks faster and its warnings get shorter.' },
+  { ver: 'v0.37' },
+  { tag: 'Boss', text: 'MAKORA is a white winged silhouette now, with a little retro pixelation, like its wheel.' },
+  { tag: 'Boss', text: 'MAKORA starts slow and tanky: 150 HP, and ×2 HP and damage each time its wheel turns.' },
+  { tag: 'Boss', text: 'New punch: a red circle marks where its shockwave will land. Its slices keep their red cones.' },
+  { tag: 'Boss', text: 'Dash a lot with BULL and MAKORA learns it: from its next return, it dashes at you too.' },
+  { ver: 'v0.36' },
+  { tag: 'Boss', text: 'A new MAKORA, in the same flat style as the dinosaur: pale lavender, spiky swept-back hair, the gold wheel floating over its head, a black cape and a long blade arm.' },
+  { tag: 'Boss', text: 'Its wheel scene is flat gold to match.' },
+  { ver: 'v0.33' },
+  { tag: 'Fix', text: "Alt-tabbing during MAKORA's scenes no longer freezes them or sends you back to the menu. They wait and carry on when you come back." },
+  { tag: 'Boss', text: "MAKORA's wheel really turns now: one heavy nudge to the next notch, then a clunk." },
+  { tag: 'Balance', text: 'A little less XP: levels take about a quarter longer.' },
+  { tag: 'Store', text: 'A big Test pack button next to Buy, a new look for the test screen, and the targets sit in the middle.' },
+  { ver: 'v0.32' },
+  { tag: 'Fix', text: 'The game no longer freezes when MAKORA goes down with shots still in the air (it happened most after the second wheel turn).' },
+  { tag: 'Boss', text: "MAKORA's wheel is chunky gold pixel art now. It turns with a heavy clunk and a shake, and says what it adapted to." },
+  { tag: 'Look', text: 'A stronger CRT filter: deeper scanlines, darker corners and more colour in the stripes.' },
+  { ver: 'v0.31' },
+  { tag: 'Loadout', text: 'A new deck builder: your deck on the left, your cards on the right. Click or drag a card across to add it; click a deck row, or drag it out, to take one off.' },
+  { tag: 'Loadout', text: 'Auto builds a deck from your best cards in one click. Clear empties it.' },
+  { ver: 'v0.30' },
+  { tag: 'Title', text: 'GOON SWARM is now PACKS SILICA, with a new hot-pink chrome logo. The menus follow its colours.' },
+  { tag: 'Look', text: 'Clearer fonts everywhere, and the CRT filter is less pixelated.' },
+  { tag: 'Look', text: 'Bigger damage numbers.' },
+  { tag: 'Weapons', text: 'New in Artillery: Sniper, a super long shot for 50 damage. ×3 fires 3 shots that pierce; ×7 is a RAILGUN that pierces everything and explodes where it ends.' },
+  { tag: 'Weapons', text: 'New in Magus: Arcane Missiles, 2 homing missiles. ×2 fires 4 at once; ×7 fires 7 super-fast missiles that split in two when they hit.' },
+  { tag: 'Packs', text: 'Laser moves to the Artillery pack, and Cannon to the starter pack.' },
+  { tag: 'Boss', text: 'Easier to hit SKURTOSAURUS: your weapons fire as soon as its edge is in range, not its middle.' },
+  { tag: 'Gold', text: 'New players start with 100 gold.' },
+  { ver: 'v0.29' },
+  { tag: 'Boss', text: 'Skip MAKORA\'s summoning with the Skip button, Space or Enter.' },
+  { tag: 'Boss', text: '"I SUMMON" now shows right as the voice says it.' },
   { ver: 'v0.28' },
   { tag: 'Loadout', text: 'Test loadout works like the store test now: pick any weapon in your deck and fire its Single, Passive ×3 or Ult ×7 yourself. Whole deck still plays your deck on its own, with damage per second.' },
   { ver: 'v0.27' },
@@ -243,6 +285,7 @@ function renderPackView() {
       + `<span class="pv-tab-name">${CARDS[id].name}</span><span class="pv-tab-rar">${RARITY_NAME[CARDS[id].rarity]}</span><b>${(odds[id] * 100).toFixed(1)}%</b></button>`).join('')
     + `</div>`
     + `<div class="pv-buy"><button class="start" type="button" id="btn-buy"${afford ? '' : ' disabled'}>Buy <span class="coin" aria-hidden="true"></span>${pk.price}</button>`
+    + `<button type="button" class="pv-testpack" id="btn-testpack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${CARD_ICON.sniper}</svg>Test pack</button>`
     + `<span class="sub small">${afford ? `You have ${save.gold} gold` : `You have ${save.gold}: ${pk.price - save.gold} more to go`}</span></div>`
     + `</div></div>`
     + `<div class="pv-detail" role="tabpanel">${weaponDetail(viewCard)}</div>`;
@@ -251,7 +294,7 @@ function weaponDetail(id) {
   const k = CARDS[id], t = COMBOS[id] || {}, passive = Object.keys(t).map(Number).sort((a, b) => a - b).find(n => n !== 7);
   return `<div class="pv-detail-head"><p class="type-name" style="color: var(--${id})">${k.name}</p>`
     + `<p class="type-stats">${k.dmg} dmg · range ${k.range}</p>`
-    + `<button type="button" class="pv-test" data-card="${id}">Test it</button></div>`
+    + `<button type="button" class="pv-test" data-card="${id}" style="--c: var(--${id})">Test ${k.name}</button></div>`
     + `<p class="type-desc">${k.desc}</p>`
     + (passive ? `<p class="type-combo"><b>Passive ×${passive}</b> <i>${t[passive].name}</i> ${t[passive].does}</p>` : '')
     + (t[7] ? `<p class="type-combo"><b>Ult ×7</b> <i>${t[7].name}</i> ${t[7].does}</p>` : '')
@@ -261,6 +304,7 @@ $('pv').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
   if (b.id === 'btn-buy') buyViewed();
+  else if (b.id === 'btn-testpack') startPractice(viewing, viewCard);   // v0.33 (user): a clear way into the pack's test
   else if (b.classList.contains('pv-tab')) { viewCard = b.dataset.card; renderPackView(); $('pv').querySelector(`.pv-tab[data-card="${viewCard}"]`).focus(); }
   else if (b.classList.contains('pv-test')) startPractice(viewing, b.dataset.card);
 });
@@ -288,14 +332,12 @@ function startPractice(k, card, extra) {
   resetRun();
   game.practice = { pack: k, card, dummies: [], dmg: 0, ...extra };
   game.started = true;
-  const p = game.player;
-  p.x = W * 0.28; p.y = (playH || H) * 0.5;
-  placeDummies();
   game.inMenu = false;
   menuEl.hidden = true;
   document.body.classList.add('in-practice');
   renderPractice();
   $('practice').hidden = false;
+  placeDummies();                                    // after the panel is up, so they sit in the open space under it
   last = performance.now();
   document.activeElement?.blur();
 }
@@ -312,13 +354,17 @@ function prCards(loadout = game.practice?.loadout) {
   return loadout ? CARD_IDS.filter(id => save.equipped[id] > 0) : PACKS[game.practice.pack].cards;
 }
 const prAuto = () => game.practice?.card === DECK_TAB;
+// The three targets sit in the middle of the open space under the panel (v0.33, user: centre them), and you stand to
+// their left, inside the weapon's range. The loadout test's Whole deck puts them inside every card's range, so no card
+// in the deck ever waits.
 function placeDummies() {
   const pr = game.practice, p = game.player;
-  // the loadout test puts them inside every card's range, so no card in the deck ever waits
   const reach = pr.card === DECK_TAB ? Math.min(...prCards().map(rangeOf)) : rangeOf(pr.card);
-  const d = Math.min(reach * 0.75, W * 0.45);
+  const top = Math.min(H * 0.5, ($('practice').getBoundingClientRect().bottom || 0) + 20), cy = (top + H) / 2, cx = W / 2 + 30;
+  const d = Math.max(90, Math.min(reach * 0.75, cx - 30 - 60));   // how far left of the main target you stand
+  p.x = cx - 30 - d; p.y = cy; p.kx = p.ky = 0;
   const mk = (x, y, r) => ({ dummy: true, type: 'dummy', shape: 'dummy', x, y, r, hp: 1e9, maxHp: 1e9, vx: 0, vy: 0, kx: 0, ky: 0, speed: 0, dmg: 0, hit: 0, born: 1 });
-  pr.dummies = [mk(p.x + d, p.y, 18), mk(p.x + d + 60, p.y - 70, 13), mk(p.x + d + 60, p.y + 70, 13)];
+  pr.dummies = [mk(cx - 30, cy, 18), mk(cx + 30, cy - 70, 13), mk(cx + 30, cy + 70, 13)];
   for (const e of pr.dummies) clampTo(e, e.r);
   game.enemies = pr.dummies.slice();
   game.mines = []; game.projectiles = []; game.timers = []; game.sweeps = [];
@@ -342,9 +388,11 @@ function renderPractice() {
   $('btn-pr-back').textContent = pr.loadout ? 'Back to loadout' : 'Back to pack';
   if (pr.loadout) {
     const n = equippedCards().length;
-    $('pr-eyebrow').textContent = `Test · Your loadout · ${n} card${n === 1 ? '' : 's'}`;
-  } else $('pr-eyebrow').textContent = `Test · ${PACKS[pr.pack].name}`;
-  $('pr-tabs').innerHTML = prCards().map(id => `<button type="button" data-card="${id}" aria-pressed="${id === pr.card}" style="--c: var(--${id})">${CARDS[id].name}</button>`).join('')
+    $('pr-title').textContent = 'Test loadout';
+    $('pr-eyebrow').textContent = `Your deck · ${n} card${n === 1 ? '' : 's'}`;
+  } else { $('pr-title').textContent = 'Test pack'; $('pr-eyebrow').textContent = PACKS[pr.pack].name; }
+  $('pr-tabs').innerHTML = prCards().map(id => `<button type="button" data-card="${id}" aria-pressed="${id === pr.card}" style="--c: var(--${id})">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CARD_ICON[id] || ''}</svg>${CARDS[id].name}</button>`).join('')
     + (pr.loadout ? `<button type="button" data-card="${DECK_TAB}" aria-pressed="${auto}" style="--c: var(--text)">Whole deck</button>` : '');
   if (auto) { $('pr-fire').innerHTML = ''; renderPrDmg(); return; }
   const atk = practiceAttacks(pr.card);
@@ -495,44 +543,143 @@ function finishReveal() {
 $('btn-reveal-all').addEventListener('click', skipReveal);
 $('btn-reveal-done').addEventListener('click', () => revealAfter?.());
 
-/* ---------- loadout: one row per card type in the equipped deck ---------- */
-// Loadout: a deck builder. Every card you own, with − / + for how many copies are in the deck.
+/* ---------- loadout: the deck builder (v0.31, user: like Legends of Runeterra's) ---------- */
+// Left: your deck, one row per card (damage, name, copies). Right: every card you own, with how many are still free.
+// Click a card, or drag it onto the deck, to add one; click a deck row, or drag it off the deck, to take one out.
+// Auto builds a deck from your best cards; Clear empties it.
+const CARD_ICON = {                                  // a small picture of each weapon's shot, for the collection
+  bullet: '<path d="M8 16l8-8M13 6l5 5-6 3-2-2z"/><path d="M6 18l2-2"/>',
+  laser: '<path d="M3 12h4l2-4 3 8 2-4h7"/>',
+  arcane: '<circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 3"/>',
+  cannon: '<circle cx="12" cy="13" r="6"/><path d="M15 6l3-3M17 8l3-1"/>',
+  shuriken: '<path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/><circle cx="12" cy="12" r="1.5"/>',
+  spaceimpact: '<path d="M5 19l3-6 8-8 3 3-8 8z"/><path d="M8 13l3 3M5 19l-1 1"/>',
+  mine: '<circle cx="12" cy="14" r="6"/><path d="M12 8V4M9 5h6M6 14H3M21 14h-3"/>',
+  firebolt: '<path d="M12 3c1 4 5 5 5 10a5 5 0 01-10 0c0-3 2-4 2-6 1 1 2 2 3 2 0-2-1-4 0-6z"/>',
+  sniper: '<circle cx="12" cy="12" r="7"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="1"/>',
+  missiles: '<path d="M4 18c4-1 7-4 9-9M13 9l1-4 3 3z"/><path d="M8 20c4-1 8-3 11-8M19 12l1-4 2 3z"/>',
+};
+const RARITY_RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
+const freeCopies = id => Math.min(COPY_LIMIT, save.owned[id] || 0) - (save.equipped[id] || 0);
 function renderLoadout() {
-  const cards = equippedCards(), build = true;
-  $('loadout-sub').textContent = `Deck · ${cards.length} card${cards.length === 1 ? '' : 's'} · sequences of ${SEQUENCE_SIZE}`;
-  const hint = $('loadout-hint');
-  hint.hidden = false;
-  hint.textContent = `${cards.length ? 'Up to' : 'Add cards to build your deck: up to'} ${COPY_LIMIT} of each card you own, ${DECK_LIMIT} in all. Get more cards in the Store.`;
-  // Compact tiles (user: the screens were too long): the card, how many you own, one line of stats and − / +.
-  // Each weapon's full details and combos are in the store's pack preview; its description is the tile's tooltip.
-  $('types').innerHTML = CARD_IDS.filter(id => build ? save.owned[id] : save.equipped[id]).map(c => {
-    const k = CARDS[c], n = save.equipped[c] || 0, max = Math.min(COPY_LIMIT, save.owned[c] || 0);
-    const t = COMBOS[c] || {}, sizes = Object.keys(t).map(Number).sort((a, b) => a - b);
-    return `<div class="type${!n ? ' is-out' : ''}" title="${k.desc}"><ol class="preview">${mcard(c, { rarity: true })}</ol><div class="type-body">`
-      + `<p class="type-name" style="color: var(--${c})">${k.name}</p>`
-      + `<p class="type-stats">${k.dmg} dmg · range ${k.range}</p>`
-      + (sizes.length ? `<p class="type-stats is-combos">combos ${sizes.map(x => `×${x}`).join(' ')}</p>` : '')
-      + `<div class="stepper" role="group" aria-label="${k.name} copies in the deck">`
-      + `<button type="button" data-id="${c}" data-d="-1" aria-label="Remove one ${k.name}"${n <= 0 ? ' disabled' : ''}>−</button>`
-      + `<b aria-live="polite">${n}</b>`
-      + `<button type="button" data-id="${c}" data-d="1" aria-label="Add one ${k.name}"${n >= max || cards.length >= DECK_LIMIT ? ' disabled' : ''}>+</button>`
-      + `<span class="owned">of ${save.owned[c] || 0} owned</span>`
-      + `</div></div></div>`;
+  const cards = equippedCards(), full = cards.length >= DECK_LIMIT;
+  $('deck-n').textContent = cards.length;
+  $('deck-max').textContent = DECK_LIMIT;
+  $('deck-panel').classList.toggle('is-full', full);
+  const inDeck = CARD_IDS.filter(id => save.equipped[id] > 0);
+  $('deck-empty').hidden = inDeck.length > 0;
+  $('deck-list').innerHTML = inDeck.map(id => {
+    const k = CARDS[id];
+    return `<li><button type="button" class="drow" data-id="${id}" style="--c: var(--${id}); --rc: var(--r-${k.rarity})" aria-label="${k.name}, ${save.equipped[id]} in the deck. Take one out">`
+      + `<span class="drow-dmg">${k.dmg}</span><span class="drow-name">${k.name}</span><span class="drow-n">${save.equipped[id]}</span></button></li>`;
   }).join('');
-  fitNames($('types'));
+  $('coll').innerHTML = CARD_IDS.filter(id => save.owned[id]).map(id => {
+    const k = CARDS[id], free = freeCopies(id), t = COMBOS[id] || {}, sizes = Object.keys(t).map(Number).sort((a, b) => a - b);
+    const can = free > 0 && !full;
+    return `<button type="button" role="listitem" class="ccard${free <= 0 ? ' is-used' : ''}" data-id="${id}" style="--c: var(--${id}); --rc: var(--r-${k.rarity})"`
+      + ` title="${k.desc}" aria-label="${k.name}, ${free} free of ${save.owned[id]} owned.${can ? ' Add one to the deck' : ''}"${can ? '' : ' aria-disabled="true"'}>`
+      + `<span class="ccard-dmg" title="Damage">${k.dmg}</span><span class="ccard-free" title="Free copies">×${Math.max(0, free)}</span>`
+      + `<svg class="ccard-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CARD_ICON[id] || ''}</svg>`
+      + `<span class="ccard-name">${k.name}</span><span class="ccard-rar">${RARITY_NAME[k.rarity]}</span>`
+      + `<span class="ccard-stats">range ${k.range}${sizes.length ? ` · combos ${sizes.map(x => `×${x}`).join(' ')}` : ''}</span></button>`;
+  }).join('');
+  $('btn-clear').disabled = !cards.length;
+  $('btn-auto').disabled = !CARD_IDS.some(id => save.owned[id]);
   $('btn-play').disabled = $('btn-loadout-test').disabled = deckProblems().length > 0;
 }
-$('types').addEventListener('click', e => {
-  const b = e.target.closest('.stepper button');
-  if (!b || b.disabled) return;
-  const id = b.dataset.id, n = (save.equipped[id] || 0) + Number(b.dataset.d);
-  if (n < 0 || n > Math.min(COPY_LIMIT, save.owned[id] || 0) || (Number(b.dataset.d) > 0 && equippedCards().length >= DECK_LIMIT)) return;
+// Add (d = 1) or take out (d = -1) one copy. Returns false if it can't.
+function changeDeck(id, d) {
+  const n = (save.equipped[id] || 0) + d;
+  if (n < 0 || n > Math.min(COPY_LIMIT, save.owned[id] || 0) || (d > 0 && equippedCards().length >= DECK_LIMIT)) return false;
   if (n) save.equipped[id] = n; else delete save.equipped[id];
   writeSave();
   renderLoadout();
-  $('types').querySelector(`.stepper button[data-id="${id}"][data-d="${b.dataset.d}"]:not(:disabled)`)?.focus()
-    || $('types').querySelector(`.stepper button[data-id="${id}"]:not(:disabled)`)?.focus();
+  const row = $('deck-list').querySelector(`.drow[data-id="${id}"]`);   // a quick flash on the row that changed
+  if (row && animOk) row.animate([{ filter: 'brightness(1.8)', transform: 'scale(1.03)' }, { filter: 'none', transform: 'none' }], { duration: 260, easing: 'ease-out' });
+  (d > 0 ? SFX.click : SFX.back)();
+  return true;
+}
+// Why a card can't go in, said under the heading for a moment.
+let hintTimer = 0;
+function builderHint(text) {
+  const h = $('loadout-hint');
+  h.textContent = text; h.classList.add('is-warn');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { h.classList.remove('is-warn'); h.textContent = 'Click or drag a card to add it. Click a deck row, or drag it out, to take one off.'; }, 1800);
+}
+function addCard(id) {
+  if (changeDeck(id, 1)) return;
+  const own = save.owned[id] || 0, name = CARDS[id].name;
+  builderHint(equippedCards().length >= DECK_LIMIT ? `The deck is full: ${DECK_LIMIT} cards at most.`
+    : own >= COPY_LIMIT ? `${COPY_LIMIT} ${name} is the most a deck can hold.`
+    : `All ${own} of your ${name} cards are in the deck. Get more in the Store.`);
+}
+// Auto: your best cards first (rarest, then hardest-hitting), up to 5 of each, until the deck is full.
+function autoDeck() {
+  const ids = CARD_IDS.filter(id => save.owned[id]).sort((a, b) => RARITY_RANK[CARDS[b].rarity] - RARITY_RANK[CARDS[a].rarity] || CARDS[b].dmg - CARDS[a].dmg);
+  save.equipped = {};
+  let left = DECK_LIMIT;
+  for (const id of ids) {
+    const n = Math.min(COPY_LIMIT, save.owned[id], left);
+    if (n > 0) { save.equipped[id] = n; left -= n; }
+  }
+  writeSave(); renderLoadout(); SFX.confirm();
+}
+
+// Dragging, with the pointer (mouse or touch): a card follows you, the deck lights up, and it lands where you let go.
+// A press that barely moves is a click instead.
+let drag = null, dragClick = false;
+function dragStart(e) {
+  const src = e.target.closest('.ccard, .drow');
+  if (!src || e.button > 0) return;
+  drag = { id: src.dataset.id, from: src.classList.contains('drow') ? 'deck' : 'coll', x: e.clientX, y: e.clientY, pid: e.pointerId, ghost: null };
+}
+function dragMove(e) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  if (!drag.ghost) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+    const k = CARDS[drag.id];
+    drag.ghost = document.createElement('div');
+    drag.ghost.className = 'drag-ghost';
+    drag.ghost.style.cssText = `--c: var(--${drag.id})`;
+    drag.ghost.innerHTML = `<span class="drow-dmg">${k.dmg}</span><span class="drow-name">${k.name}</span>`;
+    document.body.appendChild(drag.ghost);
+    $('builder').classList.add(drag.from === 'coll' ? 'is-adding' : 'is-removing');
+  }
+  drag.ghost.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+  $('deck-panel').classList.toggle('is-over', drag.from === 'coll' && overDeck(e));
+  e.preventDefault();
+}
+const overDeck = e => { const r = $('deck-panel').getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
+function dragEnd(e) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const d = drag; drag = null;
+  if (!d.ghost) return;                              // it was a click
+  d.ghost.remove();
+  $('builder').classList.remove('is-adding', 'is-removing');
+  $('deck-panel').classList.remove('is-over');
+  dragClick = true; setTimeout(() => { dragClick = false; }, 0);   // the click that follows a drag doesn't count
+  if (e.type === 'pointercancel') return;
+  if (d.from === 'coll' && overDeck(e)) addCard(d.id);
+  else if (d.from === 'deck' && !overDeck(e)) changeDeck(d.id, -1);
+}
+$('builder').addEventListener('pointerdown', dragStart);
+addEventListener('pointermove', dragMove, { passive: false });
+addEventListener('pointerup', dragEnd);
+addEventListener('pointercancel', dragEnd);
+$('builder').addEventListener('dragstart', e => e.preventDefault());
+$('builder').addEventListener('click', e => {
+  if (dragClick) return;
+  const c = e.target.closest('.ccard'), r = e.target.closest('.drow');
+  if (c) addCard(c.dataset.id);
+  else if (r) changeDeck(r.dataset.id, -1);
+  else return;
+  // keep the keyboard where it was after the re-render
+  const again = $('builder').querySelector(`.${c ? 'ccard' : 'drow'}[data-id="${(c || r).dataset.id}"]`) || (r && $('deck-list').querySelector('.drow')) || $('coll').querySelector('.ccard');
+  again?.focus({ preventScroll: true });
 });
+$('btn-auto').addEventListener('click', autoDeck);
+$('btn-clear').addEventListener('click', () => { save.equipped = {}; writeSave(); renderLoadout(); SFX.back(); $('btn-auto').focus(); });
 
 $('btn-title').addEventListener('click', afterTitle);
 

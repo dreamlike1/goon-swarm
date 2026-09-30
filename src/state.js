@@ -30,6 +30,7 @@ const game = {
   timers: [],         // scheduled combo shots: { t, fn }
   beams: [],          // laser zaps being drawn: { x1, y1, x2, y2, life, max, w, card }
   sweeps: [],         // Laser ×7 sweeps in progress
+  cineHold: false,    // MAKORA's scene is holding while the window is away (arena.js autoPause)
   practice: null,     // the store's test mode: { pack, card, dummies, dmg }
   shield: 0,          // mini shield time left (seconds)
   boss: null,         // SKURTOSAURUS while it's on the field (it's also in `enemies`)
