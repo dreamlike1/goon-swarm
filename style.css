@@ -1,0 +1,1000 @@
+/* Layout: the arena fills the window; a thin HUD floats over the top edge (stats · deck · log).
+   Single deliberate look: basic shapes on a dark floor. */
+:root {
+  color-scheme: dark;
+  --floor: #111a20;
+  --card: #17232b;
+  --line: #2a3a44;
+  --text: #d6e0e6;
+  --muted: #6f8592;
+  --player: #eef3f6;
+  --enemy: #e5484d;              /* normal enemies are red (user) */
+  --enemy-split: #b8479e;        /* splitters are red-purple */
+  --bullet: #f2c14e;
+  --cannon: #ff6b3d;
+  --hp: #5fd38d;
+  --potion: #ff4d5e;
+  --diamond: #8ff5ff;
+  --boss: #3f9e7f;        /* KURTSAURUS: a friendly green dino */
+  --boss-dark: #2b7560;   /* its far legs and arm */
+  --boss-eye: #f3efe0;
+  /* MAKORA (flat, like the dino): grey skin, dark cloth, black bands, pale feathers, a gold wheel, a silver blade */
+  --makora: #a9aeb6;
+  --makora-dark: #7f858e;
+  --makora-line: #555a63;       /* its outline, like the reference's line art */
+  --makora-band: #1c1f23;
+  --makora-cloth: #3a3f46;
+  --makora-feather: #d6d9de;
+  --makora-mouth: #8a5a86;
+  --wheel: #e6b83c;
+  --wheel-dark: #9a7414;
+  --blade: #e4e8ee;
+  --rock: #9c8a78;
+  --crack: #070b0e;        /* broken ground */
+  --relic: #ff9f43;
+  --xp: #6ea8ff;
+  --enemy-big: #b8323c;
+  --enemy-fast: #ff7a6b;
+  --enemy-big-split: #8f3a8a;
+  --enemy-fast-split: #d970c4;
+  /* card colours, one per card id (placeholders until card visuals are designed) */
+  --laser: #3ee6ff;
+  --arcane: #b28cff;
+  --shuriken: #8f9dff;   /* Arcane Bolt */
+  --firebolt: #ff4a3d;
+  --spaceimpact: #9be15d;
+  --mine: #d9a55b;
+  /* rarity colours, used for rarity labels and reveal glows */
+  --r-common: #8fa3b0;
+  --r-uncommon: #6fcf97;
+  --r-rare: #5aa9ff;
+  --r-epic: #b86bff;
+  --r-legendary: #ffb23e;
+  --r-sss: #ff5ab4;
+  --ok: #6fcf97;
+  --scrim: rgba(17, 26, 32, .86);   /* --floor, see-through, behind the menus */
+  --cw: 58px; --ch: 64px; --gap: 8px;   /* deck card size */
+  --pv: 1.4;                            /* menu cards are this many times bigger */
+  --bad: #ff5a5a;
+  --f-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--floor);
+  color: var(--text);
+  font: 13px/1.4 var(--f-ui);
+}
+
+.arena { position: fixed; inset: 0; touch-action: none; }
+.arena canvas { display: block; width: 100%; height: 100%; }
+#cv-text { position: absolute; inset: 0; pointer-events: none; }   /* floating numbers, always crisp */
+
+.hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  box-sizing: border-box;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+  padding-inline: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--muted); }
+.stats span { white-space: nowrap; }
+.stats b { color: var(--text); font-weight: 600; }
+.side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+button {
+  pointer-events: auto;
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+button:hover { color: var(--text); }
+button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
+
+/* Deck: the cards in play order, bottom centre. Dimmed = fired. Raised + coloured border + bar = next.
+   Each card sits at slot * (--cw + --gap); --lift raises the next card, and the change is animated. */
+.deck {
+  --n: 7;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  width: calc(var(--n) * var(--cw) + (var(--n) - 1) * var(--gap));
+  height: var(--ch);
+  list-style: none; margin: 0; padding: 0;
+  pointer-events: none;
+}
+.card {
+  --c: var(--bullet); --p: 0;
+  position: absolute;
+  top: 0; left: 0;
+  --lift: 0px;
+  transform: translate(calc(var(--i) * (var(--cw) + var(--gap))), var(--lift));
+  transition: transform .2s ease-out, opacity .25s, border-color .2s;
+  box-sizing: border-box;
+  width: var(--cw); height: var(--ch);
+  display: grid; place-items: center; grid-template-columns: minmax(0, 1fr);   /* names can't widen the card */
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.card-idx { position: absolute; top: 4px; left: 6px; font: 10px/1 var(--f-num); color: var(--muted); }
+/* Two-word names wrap onto two lines; a single long word is shrunk to fit by fitNames() in hud.js */
+.card-name {
+  display: block; box-sizing: border-box; width: 100%; padding-inline: 3px;
+  font-size: 11px; line-height: 1.1; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  text-align: center; color: var(--c); overflow-wrap: normal;
+}
+.card-new { position: absolute; top: 3px; right: 5px; font: 600 10px/1 var(--f-num); color: var(--xp); }   /* first card from the next shuffle */
+.card .card-back { position: absolute; inset: 0; display: grid; place-items: center; background: repeating-linear-gradient(135deg, var(--card) 0 5px, var(--floor) 5px 10px); }
+.card.is-down .card-idx { z-index: 1; }
+.card .card-back::after { content: "?"; font-size: 16px; font-weight: 700; color: var(--muted); }
+.card.is-fired { opacity: .35; }
+.card.is-fired .card-name { color: var(--muted); }
+@media (max-width: 480px) {
+  :root { --cw: 45px; --ch: 56px; --gap: 4px; --pv: 1; }   /* 7 cards fit in 343px */
+  .card-name { font-size: 9px; letter-spacing: 0; }
+  .card-idx { top: 3px; left: 4px; font-size: 9px; }
+  .mcard .card-rarity { letter-spacing: 0; padding-inline: 1px; }
+}
+.card.is-next { --lift: -8px; border-color: var(--c); }
+.cd { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--c); transform-origin: left; transform: scaleX(var(--p)); display: none; }
+.card.is-next .cd { display: block; }
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+
+/* Deck status: sits just above the deck tray — how many cards are left before the deck
+   reshuffles, swapped for a spinning icon for a moment right as that reshuffle happens. */
+.deck-status {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 6px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 10px var(--f-num);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.deck-status b { color: var(--text); font-weight: 700; }
+.shuffle-icon { display: inline-flex; align-items: center; gap: 4px; color: var(--xp); }
+.shuffle-icon svg { width: 12px; height: 12px; animation: deck-shuffle-spin .6s linear infinite; }
+@keyframes deck-shuffle-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .shuffle-icon svg { animation: none; } }
+
+/* Log: one row of dots per cycle, newest first */
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font: 11px/1 var(--f-num); }
+.log li { display: grid; grid-template-columns: 3ch auto 1ch; align-items: center; gap: 8px; height: 14px; }
+.log li:not(:first-child) { opacity: .75; }
+.log .n { color: var(--muted); text-align: right; }
+.log .dots { display: flex; align-items: center; gap: 4px; }
+.ld { --s: 6px; width: var(--s); height: var(--s); border-radius: 50%; background: var(--c, var(--bullet)); flex: none; }
+.log .ok { color: var(--ok); }
+.log .bad { color: var(--bad); }
+
+.check { margin: 0; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.check.ok span { color: var(--ok); }
+.check.bad { color: var(--bad); }
+
+.hint {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 76px);   /* above the HP bar */
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  pointer-events: none;
+  transition: opacity .6s;
+}
+.hint.gone { opacity: 0; }
+.hint-touch { display: none; }
+@media (pointer: coarse) {
+  .hint-keys { display: none; }
+  .hint-touch { display: inline; }
+}
+
+/* Menus: title → main (Loadout / Open packs / Start) → deck preview → arena.
+   They cover the arena; the HUD stays hidden while any menu is up. */
+[hidden] { display: none !important; }
+.menu {
+  position: fixed; inset: 0; z-index: 10;
+  display: grid; place-items: center;
+  padding-inline: 16px;
+  background: var(--scrim);
+  overflow: auto;
+}
+.menu:not([hidden]) ~ .hud,
+.menu:not([hidden]) ~ .deck,
+.menu:not([hidden]) ~ .deck-status,
+.menu:not([hidden]) ~ .hint,
+.menu:not([hidden]) ~ .hp,
+.menu:not([hidden]) ~ .xp,
+.menu:not([hidden]) ~ .statpanel { visibility: hidden; }
+
+/* Player HP: a green bar, bottom centre, just above the deck (clear of a card that pops up when played) */
+.hp {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 50px);
+  width: min(260px, calc(100% - 32px));
+  display: flex; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.hp-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.hp-bar span { display: block; height: 100%; background: var(--hp); transform-origin: left; transition: transform .25s ease-out; }
+.hp-num { font: 600 11px var(--f-num); color: var(--text); min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+@keyframes hp-hit { 0% { box-shadow: 0 0 0 0 var(--bad); } 30% { box-shadow: 0 0 10px 2px var(--bad); } 100% { box-shadow: 0 0 0 0 var(--bad); } }
+.hp.hit .hp-bar { animation: hp-hit .4s ease-out; }
+
+/* XP and level: a wider blue bar just below the HP bar (still clear of a card that pops up when played) */
+.xp {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 28px);
+  width: min(420px, calc(100% - 32px));
+  display: flex; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.xp-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.xp-bar span { display: block; height: 100%; background: var(--xp); transform: scaleX(0); transform-origin: left; transition: transform .2s ease-out; }
+.xp-lv { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.xp-lv b { font: 600 11px var(--f-num); color: var(--xp); letter-spacing: 0; }
+.xp-num { font: 600 10px var(--f-num); color: var(--muted); min-width: 5ch; text-align: right; font-variant-numeric: tabular-nums; }
+@keyframes xp-up { 0% { box-shadow: 0 0 0 0 var(--xp); } 30% { box-shadow: 0 0 12px 3px var(--xp); } 100% { box-shadow: 0 0 0 0 var(--xp); } }
+.xp.up .xp-bar { animation: xp-up .6s ease-out; }
+
+.screen { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; padding-block: 24px; }
+@keyframes screen-in { from { opacity: 0; transform: translateY(8px); } }
+.screen:not([hidden]) { animation: screen-in .25s ease-out; }
+.menu h1 { margin: 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-wrap: balance; }
+
+/* Title logo (user's art): slams in, then a slow red glow breathes behind it. Sized to clear the changelog panel. */
+.title-logo { position: relative; width: min(640px, 100%); margin: 0; line-height: 0; }
+.title-logo picture, .title-logo img { display: block; width: 100%; height: auto; }
+.title-logo img { position: relative; animation: logo-in .7s cubic-bezier(.2, .9, .25, 1.15) both; }
+.title-logo::before {
+  content: ""; position: absolute; inset: 8% 4%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--bad) 55%, transparent), transparent);
+  filter: blur(18px); opacity: .35;
+  animation: logo-glow 3.2s ease-in-out .7s infinite alternate;
+}
+@keyframes logo-in {
+  0% { opacity: 0; transform: scale(1.35) rotate(-2deg); filter: blur(6px); }
+  55% { opacity: 1; transform: scale(.97) rotate(.6deg); filter: blur(0); }
+  70% { transform: translate(-3px, 2px) scale(1.01); }
+  85% { transform: translate(2px, -1px) scale(1); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes logo-glow { from { opacity: .25; transform: scale(.96); } to { opacity: .5; transform: scale(1.03); } }
+/* The title stays centred on the screen (user). On wide screens the changelog panel is on the right, so the logo
+   leaves the same room on both sides of it: (panel + margins) × 2. */
+@media (min-width: 980px) { .title-logo { width: min(680px, calc(100vw - 2 * (240px + 40px))); } }
+@media (min-width: 1280px) { .title-logo { width: min(680px, calc(100vw - 2 * (300px + 40px))); } }
+@media (prefers-reduced-motion: reduce) { .title-logo img, .title-logo::before { animation: none; } }
+.menu h2, .pause h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.eyebrow { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sub { margin: 0; color: var(--muted); }
+
+.menu button, .pause button { color: var(--text); }
+.pause {
+  position: fixed; inset: 0; z-index: 9;
+  display: grid; place-items: center;
+  padding-inline: 16px;
+  background: var(--scrim);
+}
+.start {
+  padding: 10px 34px;
+  font-size: 15px; font-weight: 600; letter-spacing: .04em;
+  color: var(--floor) !important; background: var(--bullet); border-color: var(--bullet);
+}
+.start:hover { filter: brightness(1.08); }
+.nav { display: flex; flex-direction: column; gap: 10px; width: 220px; }
+.nav button {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 10px; border-radius: 8px;
+  font-size: 14px; font-weight: 600; letter-spacing: .04em;
+}
+.nav button:disabled { opacity: .45; cursor: default; }
+.soon { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
+.back { color: var(--muted) !important; }
+
+/* A card at menu size: the deck card scaled by --pv, so the fly-in to the deck is an exact scale */
+.mcard {
+  --c: var(--bullet);
+  position: relative;
+  box-sizing: border-box;
+  width: calc(var(--cw) * var(--pv)); height: calc(var(--ch) * var(--pv));
+  display: grid; place-items: center; grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--card);
+  border: calc(1.5px * var(--pv)) solid var(--line);
+  border-radius: calc(6px * var(--pv));
+  transform-origin: 0 0;
+  flex: none;
+}
+.mcard .card-name { font-size: calc(11px * var(--pv)); padding-inline: calc(3px * var(--pv)); }
+.mcard .card-rarity {
+  position: absolute; left: 0; right: 0; bottom: calc(5px * var(--pv));
+  font-size: calc(8px * var(--pv)); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--rc);
+  text-align: center; white-space: nowrap; overflow: hidden; padding-inline: calc(2px * var(--pv));
+}
+.mcard .card-idx { top: calc(4px * var(--pv)); left: calc(6px * var(--pv)); font-size: calc(10px * var(--pv)); }
+.preview { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--gap) * var(--pv)); max-width: 100%; }
+#preview .mcard:first-child { border-color: var(--c); }   /* matches the raised "next" card in the deck */
+
+.go { width: 160px; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.go > span { display: block; height: 100%; background: var(--bullet); transform-origin: left; transform: scaleX(0); }
+
+/* Loadout */
+.types { display: grid; grid-template-columns: repeat(auto-fill, minmax(244px, 1fr)); gap: 8px; width: 780px; max-width: calc(100vw - 32px); text-align: left; }
+.type { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.type .mcard { --pv: 1; }
+.type.is-out { opacity: .6; }
+.type-body { min-width: 0; }
+.stepper .owned { font: 11px var(--f-num); color: var(--muted); margin-left: 2px; white-space: nowrap; }
+.type .stepper { gap: 6px; }
+.type .stepper button { width: 26px; height: 26px; }
+.type-stats.is-combos { margin-top: 0; color: var(--muted); }
+.type-name { margin: 0; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.type-name b { color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 6px; }
+.type-stats { margin: 2px 0 0; font: 12px var(--f-num); color: var(--text); }
+.type-desc { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.type-combo { margin: 4px 0 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
+.type-combo b { color: var(--text); font: 600 10px var(--f-num); margin-right: 4px; }
+
+/* Card packs: a foil pack with a crimped top strip (the part that tears off when you open it).
+   Every pack uses this look: the starter pack and the store's packs. --pc is the pack's colour. */
+:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); }
+.screen:focus { outline: none; }
+.start:disabled { opacity: .45; cursor: default; filter: none; }
+.pack-art {
+  --pc: var(--bullet); --w: 120px;
+  position: relative; display: flex; flex-direction: column;
+  width: var(--w); height: calc(var(--w) * 1.42); flex: none;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .45));
+}
+.pack-art.is-big { --w: 168px; }
+.pack-starter { --pc: var(--pack-starter); }
+.pack-artillery { --pc: var(--pack-artillery); }
+.pack-magus { --pc: var(--pack-magus); }
+.pack-top, .pack-body {
+  display: block;
+  background:
+    linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--player) 38%, transparent) 45%, transparent 60%) no-repeat,
+    linear-gradient(170deg, color-mix(in srgb, var(--pc) 70%, var(--player)) 0%, var(--pc) 40%, color-mix(in srgb, var(--pc) 55%, var(--floor)) 100%);
+  background-size: 250% 100%, 100% 100%;
+  background-position: 110% 0, 0 0;
+}
+/* the crimped seal: ridges, with a zigzag tear line along its bottom edge */
+.pack-top {
+  height: 17%; border-radius: 6px 6px 0 0;
+  background-image:
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--floor) 30%, transparent) 0 2px, transparent 2px 5px),
+    linear-gradient(170deg, color-mix(in srgb, var(--pc) 70%, var(--player)), color-mix(in srgb, var(--pc) 80%, var(--floor)));
+  clip-path: polygon(0 0, 100% 0, 100% 80%, 95% 100%, 90% 80%, 85% 100%, 80% 80%, 75% 100%, 70% 80%, 65% 100%, 60% 80%, 55% 100%, 50% 80%, 45% 100%, 40% 80%, 35% 100%, 30% 80%, 25% 100%, 20% 80%, 15% 100%, 10% 80%, 5% 100%, 0 80%);
+  transform-origin: 85% 100%;
+}
+.pack-body {
+  flex: 1; margin-top: -3px; border-radius: 0 0 8px 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  clip-path: polygon(0 3%, 5% 0, 10% 3%, 15% 0, 20% 3%, 25% 0, 30% 3%, 35% 0, 40% 3%, 45% 0, 50% 3%, 55% 0, 60% 3%, 65% 0, 70% 3%, 75% 0, 80% 3%, 85% 0, 90% 3%, 95% 0, 100% 3%, 100% 100%, 0 100%);
+  box-shadow: inset 0 -10px 0 color-mix(in srgb, var(--floor) 25%, transparent);   /* a crimp along the bottom */
+  color: var(--floor);
+}
+.pack-emblem { width: 40%; height: auto; padding: 8%; border-radius: 50%; background: color-mix(in srgb, var(--player) 45%, transparent); }
+.pack-logo { font-size: calc(var(--w) * .115); font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.pack-count { font: 700 calc(var(--w) * .075) var(--f-num); letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+@media (prefers-reduced-motion: no-preference) {
+  .pack-open:hover .pack-body, .store-pack:hover .pack-body, .pack-open:focus-visible .pack-body { background-position: -40% 0, 0 0; transition: background-position .6s ease-out; }
+  .pack-open .pack-art:not(.is-ripping) { animation: pack-bob 2.4s ease-in-out infinite; }
+}
+@keyframes pack-bob { 50% { transform: translateY(-6px) rotate(-1deg); } }
+/* opening: light spills out of the torn top */
+.pack-art.is-ripping::after {
+  content: ""; position: absolute; left: 10%; right: 10%; top: 10%; height: 30%; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--player), transparent); opacity: 0;
+  animation: pack-light .5s .3s ease-out forwards;
+}
+@keyframes pack-light { 30% { opacity: .95; } to { opacity: 0; transform: scale(2.2); } }
+.pack-open { padding: 12px; border: 0; background: none; border-radius: 16px; cursor: pointer; }
+.pack-open:focus-visible { outline: 2px solid var(--bullet); outline-offset: 4px; }
+.pack-name { font-size: 14px; font-weight: 600; color: var(--text); }
+
+/* Gold */
+.gold { margin: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.gold b, .gold-n { color: var(--r-legendary); font: 700 14px var(--f-num); font-variant-numeric: tabular-nums; }
+.coin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--r-legendary) 40%, var(--player)), var(--r-legendary) 60%); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--r-legendary) 60%, var(--floor)); }
+
+/* Store */
+.store-packs { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+.store-pack {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 18px 20px 14px; border-radius: 14px; cursor: pointer;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.store-pack:hover, .store-pack:focus-visible { transform: translateY(-4px); border-color: var(--muted); box-shadow: 0 10px 24px -12px var(--floor); }
+.pack-price { display: inline-flex; align-items: center; gap: 5px; font: 700 13px var(--f-num); color: var(--r-legendary); }
+
+/* Pack preview: fits one screen. The pack and its tabs side by side, the chosen weapon's details below. */
+.pv { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 620px; max-width: calc(100vw - 32px); }
+.pv-head { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 20px; }
+.pv-info { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; min-width: 0; flex: 1 1 280px; }
+.pv-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.pv-tab {
+  display: grid; justify-items: start; gap: 1px; min-width: 104px; padding: 6px 10px; border-radius: 8px; text-align: left;
+  transition: border-color .15s, background .15s;
+}
+.pv-tab-name { font-size: 12px; font-weight: 700; color: var(--c); }
+.pv-tab-rar { font: 600 9px var(--f-num); letter-spacing: .08em; text-transform: uppercase; color: var(--rc); }
+.pv-tab b { font: 700 13px var(--f-num); color: var(--text); font-variant-numeric: tabular-nums; }
+.pv-tab[aria-selected="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.pv-buy { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#btn-buy { display: inline-flex; align-items: center; gap: 6px; }
+.pv-detail { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; text-align: left; }
+.pv-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.pv-detail-head .type-stats { margin: 0; }
+.pv-detail .type-combo i { font-style: normal; font-weight: 700; color: var(--text); margin-right: 4px; }
+.pv-test { margin-left: auto; padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+
+/* Test mode: the HUD a run needs is hidden; a panel at the top fires the attacks */
+body.in-practice .hud, body.in-practice .deck, body.in-practice .deck-status, body.in-practice .xp, body.in-practice .hp,
+body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, body.in-practice .rapid { visibility: hidden; }
+.practice {
+  position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 14px); width: min(560px, calc(100% - 32px)); box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--scrim);
+}
+.pr-tabs, .pr-fire { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.pr-tabs button { padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--c); }
+.pr-tabs button[aria-pressed="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.pr-fire button[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: 0 0 14px -4px var(--c); }
+.pr-keys { margin: 0; font-size: 11px; color: var(--muted); }
+.pr-keys kbd { font: 600 10px var(--f-num); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--text); }
+.pr-fire button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 110px; padding: 8px 14px 7px; border-radius: 8px; border-color: var(--c); color: var(--text); }
+.pr-fire button b { font-size: 13px; }
+.pr-fire button small { font: 600 9px var(--f-num); letter-spacing: .06em; color: var(--c); }
+.pr-fire .up-key { position: absolute; top: 3px; left: 6px; font: 600 9px var(--f-num); color: var(--muted); }
+.pr-dmg { margin: 0; font-size: 12px; color: var(--muted); }
+.pr-dmg b { font: 700 14px var(--f-num); color: var(--text); font-variant-numeric: tabular-nums; }
+.menu:not([hidden]) ~ .practice { visibility: hidden; }
+/* Test loadout shows the deck tray, so you can watch the sequences play */
+body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-status { visibility: visible; }
+
+.odds { border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 180px; }
+.odds caption { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; }
+.odds th, .odds td { padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.odds th { text-align: left; font-weight: 600; }
+.odds td { text-align: right; font-family: var(--f-num); }
+.small { font-size: 12px; }
+.warn { color: var(--bad); max-width: 36ch; }
+.row { display: flex; gap: 10px; justify-content: center; }
+.row button { padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+.reset { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); width: 220px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.reset-confirm { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.menu .danger { color: var(--bad); border-color: var(--bad); }
+.menu .danger:hover { background: var(--bad); color: var(--floor); }
+
+/* Reveal: cards start face down; a click (or Reveal all) turns them over */
+.mcard.is-waiting { visibility: hidden; }   /* still in the pack */
+.mcard .card-back {
+  position: absolute; inset: 0; border-radius: inherit;
+  display: none; place-items: center;
+  background: repeating-linear-gradient(45deg, var(--card) 0 6px, var(--floor) 6px 12px);
+}
+.mcard .card-back::after { content: "?"; font-size: calc(18px * var(--pv)); font-weight: 700; color: var(--muted); }
+.mcard.is-down .card-back { display: grid; }
+.mcard.is-down { border-color: var(--line); }
+.reveal .mcard:not(.is-down) { border-color: var(--rc); }
+
+/* Sound: a gear, top right, above every screen, opening the three volumes */
+.audio {
+  position: fixed; z-index: 11;
+  top: calc(env(safe-area-inset-top, 0px) + 12px); right: 16px;
+}
+#gear { position: relative; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--text); }
+#gear svg { transition: transform .35s ease; }
+#gear[aria-expanded="true"] svg { transform: rotate(60deg); }
+#gear.is-muted { color: var(--muted); }
+.gear-mute { display: none; position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--floor); }
+.gear-mute::after { content: ""; position: absolute; left: 3px; right: 3px; top: 5px; height: 2px; background: var(--floor); border-radius: 1px; }
+#gear.is-muted .gear-mute { display: block; }
+@media (prefers-reduced-motion: reduce) { #gear svg { transition: none; } }
+.sound-panel {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  width: 264px; max-width: calc(100vw - 32px); padding: 12px 14px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--floor); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px -12px #000;
+}
+.sound-panel .eyebrow { margin: 0; text-align: left; }
+.vol-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 4ch; align-items: center; gap: 10px; font-size: 12px; color: var(--text); }
+.vol-row b { font: 600 11px var(--f-num); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.sound-panel.is-muted .vol-row { opacity: .5; }
+.vol-row input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px; border-radius: 2px; margin: 0;
+  background: linear-gradient(to right, var(--bullet) var(--v, 20%), var(--line) var(--v, 20%));
+  cursor: pointer;
+}
+.vol-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: 0; }
+.vol-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: 0; }
+.vol-row input[type=range]:focus-visible { outline: 2px solid var(--bullet); outline-offset: 4px; }
+.mute-all { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.mute-all[aria-pressed="true"] { color: var(--bad); border-color: var(--bad); }
+.mute-all kbd { font: 600 10px var(--f-num); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); }
+.hud .side { padding-top: 32px; }   /* room for the sound controls above the log */
+
+/* Stats panel: left side, vertically centred. Muted until a stat is upgraded, then it takes the
+   colour of the best rarity picked for it, with a pip per pick. A new pick flashes its row. */
+.statpanel {
+  position: fixed; left: 16px; top: 50%; transform: translateY(-50%);
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 2px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.statpanel li {
+  display: grid; grid-template-columns: 12ch 6ch auto; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-left: 2px solid var(--line);
+  border-radius: 0 4px 4px 0;
+  color: var(--muted);
+  transition: background .3s, border-color .3s;
+}
+.st-name { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.st-short { display: none; }
+.st-val { font: 600 12px var(--f-num); color: var(--muted); text-align: right; }
+.st-pips { display: flex; align-items: center; gap: 2px; min-width: 0; font: 600 9px var(--f-num); color: var(--rc); }
+.st-pips i { width: 4px; height: 4px; border-radius: 50%; background: var(--rc); }
+.statpanel li.is-up { border-left-color: var(--rc); background: color-mix(in srgb, var(--rc) 12%, transparent); }
+.statpanel li.is-up .st-name { color: var(--rc); }
+.statpanel li.is-up .st-val { color: var(--text); }
+.statpanel li.is-max .st-val::after { content: " MAX"; font-size: 8px; color: var(--rc); }
+@keyframes st-bump {
+  0% { transform: none; box-shadow: none; }
+  25% { transform: translateX(6px) scale(1.08); background: color-mix(in srgb, var(--rc) 40%, transparent); box-shadow: 0 0 14px -2px var(--rc); }
+  100% { transform: none; box-shadow: none; }
+}
+.statpanel li.bump { animation: st-bump .7s ease-out; }
+@media (max-width: 480px) {
+  .statpanel { left: 8px; }
+  .statpanel li { grid-template-columns: 3.5ch 5.5ch; gap: 4px; padding: 2px 6px 2px 5px; }
+  .st-long { display: none; }
+  .st-short { display: inline; font-size: 9px; }
+  .st-val { font-size: 10px; }
+  .st-pips { display: none; }
+}
+
+/* Level up: pick one of 3 upgrade cards. Border and label in the card's rarity colour. */
+.up-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.upcard {
+  position: relative;
+  box-sizing: border-box; width: 160px; min-height: 190px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 18px 12px 14px;
+  border: 1.5px solid var(--rc); border-radius: 10px;
+  background: var(--card);
+  text-align: center;
+  transition: transform .15s ease-out, box-shadow .15s;
+}
+.upcard:hover, .upcard:focus-visible { transform: translateY(-4px); box-shadow: 0 0 20px -4px var(--rc); }
+.upcard.r-epic { box-shadow: 0 0 16px -6px var(--rc); }
+.upcard.r-legendary { box-shadow: 0 0 26px -4px var(--rc); }
+.up-key { position: absolute; top: 8px; left: 10px; font: 10px var(--f-num); color: var(--muted); }
+.up-rarity { font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--rc); }
+.up-name { font-size: 16px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text); text-wrap: balance; }
+.up-gain { font-size: 12px; line-height: 1.35; color: var(--muted); }
+.up-change { margin-top: auto; font: 12px var(--f-num); color: var(--muted); }
+.up-change b { color: var(--rc); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 480px) {
+  .up-cards { flex-direction: column; width: 100%; align-items: center; gap: 8px; }
+  .up-cards li { width: min(100%, 300px); }
+  .upcard { width: 100%; min-height: 0; padding: 12px; gap: 4px; }
+}
+
+/* Augmented deck slot: a gold glow and a ×2 badge; whatever card is in it fires twice. */
+.card.is-aug { box-shadow: 0 0 0 1px var(--r-legendary), 0 0 12px -2px var(--r-legendary); }
+.card.is-aug::after {
+  content: "×2"; position: absolute; right: 4px; bottom: 6px;
+  font: 700 9px/1 var(--f-num); color: var(--r-legendary);
+}
+.card.is-aug.is-fired { box-shadow: 0 0 0 1px color-mix(in srgb, var(--r-legendary) 40%, transparent); }
+@keyframes aug-new { 0% { box-shadow: 0 0 0 0 var(--r-legendary); } 40% { box-shadow: 0 0 0 3px var(--r-legendary), 0 0 28px 4px var(--r-legendary); } 100% { box-shadow: 0 0 0 1px var(--r-legendary), 0 0 12px -2px var(--r-legendary); } }
+.card.aug-new { animation: aug-new .9s ease-out; }
+
+/* Augment picker: the 7 slots as deck-style cards, with the card in each slot right now. */
+.levelup:focus { outline: none; }
+.levelup.is-aug .up-cards { flex-wrap: nowrap; gap: 8px; }
+.slotcard {
+  position: relative; box-sizing: border-box;
+  width: 72px; height: 88px;
+  display: grid; place-items: center; grid-template-columns: minmax(0, 1fr);
+  padding: 4px;
+  border: 1.5px solid var(--line); border-radius: 8px;
+  background: var(--card);
+  transition: transform .15s ease-out, border-color .15s, box-shadow .15s;
+}
+.slotcard:not(:disabled):hover, .slotcard:not(:disabled):focus-visible {
+  transform: translateY(-6px); border-color: var(--r-legendary); box-shadow: 0 0 18px -4px var(--r-legendary);
+}
+.slot-n { position: absolute; top: 5px; left: 7px; font: 600 11px var(--f-num); color: var(--muted); }
+.slot-now { font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--c); text-align: center; line-height: 1.15; }
+.slot-x2 { position: absolute; right: 6px; bottom: 5px; font: 700 10px var(--f-num); color: var(--r-legendary); }
+.slotcard.is-aug { border-color: var(--r-legendary); opacity: .5; cursor: default; }
+@media (max-width: 480px) {
+  .levelup.is-aug .up-cards { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .levelup.is-aug .up-cards li { width: auto; }
+  .slotcard { width: 64px; height: 76px; }
+}
+
+/* Combos (combos.js): a glowing bar in the card's colour sits under each run that will play as one attack.
+   A 7-card combo's bar is thicker and pulses. */
+.rapid {
+  --n: 7;
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px - 8px);
+  width: calc(var(--n) * var(--cw) + (var(--n) - 1) * var(--gap));
+  height: 3px;
+  pointer-events: none;
+}
+.rapid-bar {
+  position: absolute; top: 0;
+  left: calc(var(--from) * (var(--cw) + var(--gap)));
+  width: calc(var(--len) * var(--cw) + (var(--len) - 1) * var(--gap));
+  height: 3px; border-radius: 2px;
+  --bc: var(--bullet);
+  background: var(--bc);
+  box-shadow: 0 0 8px 1px var(--bc);
+  transition: opacity .3s;
+}
+@keyframes rapid-live { 50% { box-shadow: 0 0 14px 3px var(--bc); } }
+.rapid-bar.is-max { height: 5px; top: -1px; animation: rapid-live .6s ease-in-out infinite; }
+.menu:not([hidden]) ~ .rapid { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .rapid-bar.is-max { animation: none; } }
+
+/* Loadout deck builder (Free pack): − count + under each card; cards not in the deck are dimmed. */
+.stepper { display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; }
+.stepper button { width: 28px; height: 28px; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; color: var(--text); }
+.stepper button:disabled { opacity: .35; cursor: default; }
+.stepper b { min-width: 2ch; text-align: center; font: 600 14px var(--f-num); color: var(--text); }
+.type.is-out .preview, .type.is-out .type-name, .type.is-out .type-stats { opacity: .45; }
+
+/* Weapon wheel: slices sized by rarity, a pointer at the top, labels along each slice's middle. */
+.wheel-box { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.wheel-wrap { position: relative; width: min(280px, 78vw); aspect-ratio: 1; max-width: 100%; }
+.wheel { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--line); box-sizing: border-box; overflow: hidden; }
+.wheel-line { position: absolute; left: 50%; top: 0; width: 1px; height: 50%; background: var(--floor); transform-origin: 50% 100%; transform: rotate(var(--a)); }
+.wheel-label {
+  position: absolute; left: 50%; top: 50%;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(var(--a)) translateY(calc(min(280px, 78vw) * -0.34)) rotate(90deg);
+}
+.wheel-pointer {
+  position: absolute; left: 50%; top: -10px; z-index: 1; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 18px solid var(--text);
+  filter: drop-shadow(0 2px 2px var(--floor));
+}
+.wheel-hub { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: var(--card); border: 2px solid var(--line); }
+.wheel-result { margin: 0; min-height: 1.4em; font-size: 14px; color: var(--text); }
+.levelup.is-wheel .up-cards { flex-direction: column; }
+
+
+/* KURTSAURUS: a health bar with its name, top centre */
+.bossbar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 50px);
+  width: min(420px, calc(100% - 32px));
+  display: grid; gap: 4px; justify-items: center;
+  pointer-events: none;
+}
+.boss-name { font-size: 12px; font-weight: 800; letter-spacing: .24em; color: var(--boss); }
+.boss-hp { width: 100%; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; box-shadow: 0 0 12px -4px var(--boss); }
+.boss-hp span { display: block; height: 100%; background: var(--boss); transform-origin: left; transition: transform .15s; }
+/* phase 2: the bar turns red and refills */
+.bossbar.is-phase2 .boss-name { color: var(--bad); }
+.bossbar.is-phase2 .boss-hp { box-shadow: 0 0 14px -2px var(--bad); }
+.bossbar.is-phase2 .boss-hp span { background: var(--bad); transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+
+/* Relics: a chip under the top stats. BULL: its key, and a bar that refills while it cools down. Tap it on touch screens. */
+/* BULL icon: just left of the HP bar (above its left end on narrow screens), so it's in view while you fight */
+.relics {
+  position: fixed; z-index: 2;
+  right: calc(50% + min(130px, 50% - 16px) + 10px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 43px);
+}
+@media (max-width: 620px) {
+  .relics { right: auto; left: max(16px, calc(50% - 130px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 68px); }
+}
+.relic {
+  --k: 1;
+  position: relative; display: grid; place-items: center;
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  color: var(--muted);
+  /* a thick ring (user) that fills clockwise while it recharges */
+  background:
+    radial-gradient(circle, var(--floor) 0 11px, transparent 11.5px),
+    conic-gradient(var(--relic) calc(var(--k) * 360deg), var(--line) 0);
+}
+.relic.is-ready { color: var(--relic); box-shadow: 0 0 12px -2px var(--relic); animation: relic-ready .45s ease-out; }
+@keyframes relic-ready { 0% { transform: scale(1); } 40% { transform: scale(1.18); box-shadow: 0 0 18px 2px var(--relic); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .relic.is-ready { animation: none; } }
+
+/* Announcements (boss, relic): a short banner under the boss bar */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 92px);
+  margin: 0; padding: 8px 16px; border-radius: 8px;
+  font-size: 14px; font-weight: 700; letter-spacing: .04em; text-align: center;
+  background: var(--card); border: 1.5px solid var(--line); color: var(--text);
+  pointer-events: none; max-width: calc(100% - 32px);
+  animation: toast-in .3s ease-out;
+}
+.toast.is-boss { border-color: var(--boss); color: var(--boss); }
+.toast.is-enrage { border-color: var(--bad); color: var(--bad); }
+.toast.is-relic { border-color: var(--relic); color: var(--relic); }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } }
+.menu:not([hidden]) ~ .bossbar, .menu:not([hidden]) ~ .relics, .menu:not([hidden]) ~ .toast { visibility: hidden; }
+
+/* What's new: a compact list on the title screen and main menu, newest first */
+.news { width: min(360px, 100%); box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; text-align: left; background: var(--scrim); }
+.news h3 { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.news-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 190px; overflow-y: auto; }
+.news-list li { display: grid; grid-template-columns: 7.5ch minmax(0, 1fr); gap: 8px; font-size: 12px; line-height: 1.4; color: var(--text); }
+.news-list .news-ver { display: block; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font: 600 10px var(--f-num); letter-spacing: .08em; color: var(--muted); }
+.news-list .news-ver:first-child { margin-top: 0; padding-top: 0; border-top: 0; color: var(--xp); }
+.news-tag { font: 600 9px/1.9 var(--f-num); letter-spacing: .06em; text-transform: uppercase; color: var(--bullet); }
+/* On wide screens the changelog is a panel down the right side, clear of the centred menu */
+@media (min-width: 980px) {
+  .news { position: fixed; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 56px); width: 240px; max-height: calc(100% - 72px - env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; }
+  .news-list { max-height: none; min-height: 0; }
+}
+.wheel-actions { flex-wrap: wrap; }
+#btn-wheel-xp b { color: var(--xp); font-weight: 700; }
+
+/* Random weapon card: a level-up card with a dashed "mystery" border and a glow */
+.upcard.is-weapon { border-style: dashed; box-shadow: 0 0 18px -6px var(--rc); }
+.upcard.is-weapon .up-name::after { content: " ?"; color: var(--rc); }
+.toast.is-weapon { border-color: var(--xp); color: var(--xp); }
+
+/* BULL icon (by the HP bar) */
+.relic-icon { position: relative; display: grid; place-items: center; }
+.relic-icon svg { width: 18px; height: 18px; display: block; stroke-width: 2.6; }
+
+/* Relic message after the boss: the icon, what it does, and a button to carry on */
+.levelup.is-relic .up-cards { flex-direction: column; }
+.relic-box { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 420px; }
+.relic-art { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; color: var(--relic); background: color-mix(in srgb, var(--relic) 14%, var(--floor)); box-shadow: 0 0 28px -6px var(--relic); }
+.relic-art svg { width: 40px; height: 40px; display: block; }
+.relic-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; text-align: left; font-size: 13px; line-height: 1.45; color: var(--text); }
+.relic-facts li { position: relative; padding-left: 16px; }
+.relic-facts li::before { content: ""; position: absolute; left: 2px; top: .55em; width: 6px; height: 6px; border-radius: 50%; background: var(--relic); }
+.relic-facts b { color: var(--relic); font-weight: 700; }
+.relic-facts kbd { font: 600 11px var(--f-num); padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--relic); }
+
+/* KURTSAURUS's intro: a line across the middle of the arena while the footsteps shake it, then its name */
+.intro {
+  position: fixed; inset: 0; z-index: 4; pointer-events: none;
+  display: grid; place-items: center; padding-inline: 16px;
+  background: radial-gradient(ellipse at center, transparent 30%, color-mix(in srgb, var(--floor) 70%, transparent) 100%);
+}
+.intro p { margin: 0; text-align: center; text-wrap: balance; }
+.intro-line { font: 900 clamp(20px, 4.4vw, 40px)/1.15 var(--f-ui); letter-spacing: .08em; color: var(--text); text-shadow: 0 2px 18px var(--floor); animation: intro-in .6s ease-out both, intro-shake .7s 0s 4 ease-in-out; }
+.intro-vs { display: block; margin-bottom: .3em; font-size: .38em; letter-spacing: .5em; color: var(--text); }
+.intro-name { font: 900 clamp(30px, 7vw, 64px)/1 var(--f-ui); letter-spacing: .2em; color: var(--boss); text-shadow: 0 0 28px color-mix(in srgb, var(--boss) 60%, transparent); animation: intro-name 1.4s ease-out both; }
+@keyframes intro-in { from { opacity: 0; letter-spacing: .3em; } }
+@keyframes intro-shake { 0%, 100% { transform: none; } 12% { transform: translateY(4px); } 24% { transform: translateY(-2px); } 36% { transform: none; } }
+@keyframes intro-name { 0% { opacity: 0; transform: scale(1.6); } 20% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .intro-line, .intro-name { animation: none; } }
+.menu:not([hidden]) ~ .intro { visibility: hidden; }
+@media (min-width: 1280px) { .news { width: 300px; } }
+
+/* ---------- Menu look (user: fit the title art) ----------
+   The logo is grey stone letters splashed with blood red. The menus follow it: heavy condensed capitals (Anton,
+   falling back to Impact), stone-grey headings, blood-red stone slabs for the main buttons, dark slabs with a red edge
+   for the rest, chipped corners, a fine grain, and a dark red vignette behind every menu. */
+:root {
+  --blood: #c8141c;
+  --blood-hi: #e4262e;
+  --blood-dark: #6e0a0f;
+  --stone-hi: #f1ede8;
+  --stone: #bdb6ae;
+  --stone-lo: #7d7670;
+  --slab: #1d1b1b;
+  --f-metal: "Anton", Impact, "Haettenschweiler", "Arial Narrow Bold", sans-serif;
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --chip: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.menu, .pause:not(.levelup) {
+  background:
+    radial-gradient(ellipse 75% 70% at 50% 45%, transparent 45%, color-mix(in srgb, var(--blood-dark) 55%, transparent) 100%),
+    var(--scrim);
+}
+.menu h2, .pause h2 {
+  font: 400 32px/1.05 var(--f-metal); letter-spacing: .06em;
+  background: linear-gradient(180deg, var(--stone-hi) 20%, var(--stone-lo));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 var(--blood-dark)) drop-shadow(0 0 10px color-mix(in srgb, var(--blood) 35%, transparent));
+}
+.menu .eyebrow, .pause .eyebrow { font: 400 13px var(--f-metal); letter-spacing: .22em; color: var(--blood-hi); }
+.menu-logo { display: block; width: min(300px, 80vw); line-height: 0; }
+.menu-logo img { display: block; width: 100%; height: auto; }
+
+/* the main button: a blood-red stone slab */
+.menu .start, .pause .start {
+  position: relative;
+  padding: 12px 40px 11px; border: 0; border-radius: 0; clip-path: var(--chip);
+  font: 400 20px/1 var(--f-metal); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--stone-hi) !important;
+  background: var(--grain), linear-gradient(180deg, var(--blood-hi), var(--blood) 45%, var(--blood-dark));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .22), inset 0 -3px 0 rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(0, 0, 0, .4);
+  text-shadow: 0 2px 0 rgba(40, 0, 3, .75);
+  transition: transform .12s ease, filter .12s ease;
+}
+#btn-title { padding: 15px 64px 14px; font-size: 26px; }
+.menu .start:hover:not(:disabled), .pause .start:hover:not(:disabled) { filter: brightness(1.15) saturate(1.1); transform: translateY(-1px) scale(1.02); }
+.menu .start:active:not(:disabled), .pause .start:active:not(:disabled) { transform: translateY(1px) scale(.99); filter: brightness(.95); }
+
+/* the other menu buttons: dark stone with a red edge */
+.menu .nav button:not(.start), .pause .nav button:not(.start),
+.menu .row button:not(.start):not(.danger):not(.back) {
+  border: 0; border-radius: 0; clip-path: var(--chip);
+  font: 400 17px/1 var(--f-metal); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--stone);
+  background: var(--grain), linear-gradient(180deg, #2c2929, var(--slab));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blood) 55%, transparent), inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+.menu .nav button:not(.start), .pause .nav button:not(.start) { padding: 12px 10px 11px; }
+.menu .row button:not(.start):not(.danger):not(.back) { padding: 10px 22px 9px; }
+.menu .nav button:not(.start):hover:not(:disabled), .pause .nav button:not(.start):hover:not(:disabled),
+.menu .row button:not(.start):not(.danger):not(.back):hover:not(:disabled) {
+  color: var(--stone-hi);
+  box-shadow: inset 0 0 0 2px var(--blood), inset 0 0 18px color-mix(in srgb, var(--blood) 35%, transparent);
+  transform: translateY(-1px);
+}
+.menu .nav { width: 240px; gap: 12px; }
+/* Start in the main menu's list keeps the red slab, full width */
+.menu .nav .start { width: 100%; padding: 13px 10px 12px; font-size: 21px; }
+
+/* Back and the quieter links: plain capitals that go red on hover */
+.menu .back, .pause .back, .practice .back {
+  border: 0; border-radius: 0; padding: 6px 12px; background: none;
+  font: 400 14px/1 var(--f-metal); letter-spacing: .16em; text-transform: uppercase;
+  color: var(--stone-lo) !important;
+  transition: color .12s ease;
+}
+.menu .back:hover, .pause .back:hover, .practice .back:hover { color: var(--blood-hi) !important; }
+.menu .danger { border-radius: 0; clip-path: var(--chip); font: 400 15px/1 var(--f-metal); letter-spacing: .12em; text-transform: uppercase; padding: 9px 18px 8px; }
+
+/* the chipped corners would clip a focus outline, so focus shows inside the button instead */
+.menu .start:focus-visible, .pause .start:focus-visible,
+.menu .nav button:focus-visible, .pause .nav button:focus-visible,
+.menu .row button:focus-visible, .menu .danger:focus-visible {
+  outline: none; box-shadow: inset 0 0 0 2px var(--bullet), inset 0 0 14px color-mix(in srgb, var(--bullet) 30%, transparent);
+}
+.menu .gold b, .menu .gold-n { font-family: var(--f-num); }
+@media (prefers-reduced-motion: reduce) {
+  .menu .start, .pause .start, .menu .nav button, .pause .nav button, .menu .row button { transition: none; }
+}
+
+/* ---------- Settings panel: the Display section ---------- */
+.sound-panel .panel-sec { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text); }
+.set-note { margin: -4px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
+/* an on/off switch with a little LED, after the reference's power switch */
+.crt-switch { display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 9px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text); box-shadow: 0 2px 0 var(--line); }
+.crt-switch:active { transform: translateY(2px); box-shadow: none; }
+.switch-led { width: 9px; height: 9px; border-radius: 50%; background: #003321; border: 1px solid #000; }
+.crt-switch[aria-checked="true"] .switch-led { background: #22ff55; box-shadow: 0 0 6px #22ff55; }
+
+/* ---------- The CRT filter (display.js; user, after Lucas Bebber's "CSS CRT screen effect") ----------
+   On (html.crt): the arena is drawn at 1/3 resolution and scaled up with hard edges, the menus and HUD use pixel fonts,
+   the logo is a small copy blown up, and a CRT screen (scanlines, colour stripes, flicker, dark corners) sits over
+   everything. Off: none of this, full resolution. */
+.logo-px { display: none !important; }
+.crt .logo-hd { display: none !important; }
+.crt .logo-px { display: block !important; image-rendering: pixelated; }
+.crt .arena canvas { image-rendering: pixelated; }
+.crt {
+  /* readable first (user): Pixelify Sans everywhere, Silkscreen only on the big headings and main buttons */
+  --f-ui: "Pixelify Sans", system-ui, sans-serif;
+  --f-num: "Pixelify Sans", ui-monospace, monospace;
+  --f-metal: "Pixelify Sans", Impact, sans-serif;
+  background: #000;                                   /* the dark tube behind the switch-on */
+}
+.crt body { font-size: 14px; letter-spacing: .01em; }
+.crt .menu h2, .crt .pause h2, .crt .menu .start, .crt .pause .start, .crt .intro-name { font-family: "Silkscreen", "Pixelify Sans", sans-serif; }
+.crt .menu .nav button:not(.start), .crt .pause .nav button:not(.start), .crt .menu .row button, .crt .menu .back, .crt .pause .back, .crt .practice .back { font-weight: 700; letter-spacing: .1em; }
+.crt .menu .eyebrow, .crt .pause .eyebrow { font-weight: 700; font-size: 13px; letter-spacing: .16em; }
+
+.crt-screen { display: none; position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+.crt .crt-screen {
+  display: block;
+  background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 62%, rgba(0, 0, 0, .5) 100%);   /* the tube's dark corners */
+}
+/* scanlines: one dark line under every row of game pixels (3px), and faint red / green / blue stripes */
+.crt-screen::before {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 66%, rgba(0, 0, 0, .18) 66%),
+    linear-gradient(90deg, rgba(255, 0, 0, .06), rgba(0, 255, 0, .02), rgba(0, 0, 255, .06));
+  background-size: 100% 3px, 3px 100%;
+}
+/* flicker: a faint dark wash whose strength jumps about */
+.crt-screen::after {
+  content: ""; position: absolute; inset: 0;
+  background: rgba(18, 16, 16, .1); opacity: 0;
+  animation: crt-flicker .15s infinite;
+}
+@keyframes crt-flicker {
+  0% { opacity: .28; } 5% { opacity: .35; } 10% { opacity: .24; } 15% { opacity: .91; } 20% { opacity: .18; }
+  25% { opacity: .84; } 30% { opacity: .66; } 35% { opacity: .68; } 40% { opacity: .27; } 45% { opacity: .85; }
+  50% { opacity: .96; } 55% { opacity: .09; } 60% { opacity: .2; } 65% { opacity: .72; } 70% { opacity: .53; }
+  75% { opacity: .37; } 80% { opacity: .71; } 85% { opacity: .7; } 90% { opacity: .7; } 95% { opacity: .36; } 100% { opacity: .24; }
+}
+
+/* Switching on: a bright line that jumps and opens out, then a black screen that brightens */
+.crt-on body { animation: crt-turn-on 2.4s linear; }
+@keyframes crt-turn-on {
+  0% { transform: scale(1, .8) translate3d(0, 0, 0); filter: brightness(30); opacity: 1; }
+  3.5% { transform: scale(1, .8) translate3d(0, 100%, 0); }
+  3.6% { transform: scale(1, .8) translate3d(0, -100%, 0); opacity: 1; }
+  9% { transform: scale(1.3, .6) translate3d(0, 100%, 0); filter: brightness(30); opacity: 0; }
+  11% { transform: scale(1, 1) translate3d(0, 0, 0); filter: contrast(0) brightness(0); opacity: 0; }
+  100% { transform: scale(1, 1) translate3d(0, 0, 0); filter: contrast(1) brightness(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crt-screen::after { animation: none; }
+  .crt-on body { animation: none; }
+}
+/* Silkscreen is wide: the tight spots (Loadout tiles) use the narrower Pixelify Sans instead */
+.crt .type-stats, .crt .stepper .owned { font-family: "Pixelify Sans", system-ui, sans-serif; }
+
+/* ---------- MAKORA (makora.js): the black-screen scenes and its bar ---------- */
+.cine {
+  position: fixed; inset: 0; z-index: 12;                 /* over the arena and HUD, under the CRT screen */
+  display: grid; place-items: center; pointer-events: none;
+  background: #000; opacity: 0; transition: opacity .7s ease;
+}
+.cine.is-on { opacity: 1; }
+.cine-line {
+  grid-area: 1 / 1; margin: 0; padding-inline: 16px; text-align: center;
+  font: 400 clamp(22px, 4.2vw, 40px)/1.15 var(--f-metal); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--stone-hi); opacity: 0;
+}
+.cine-line.is-in { animation: cine-in .6s ease-out forwards; }
+.cine-line.is-out { opacity: 1; animation: cine-out .35s ease-in forwards; }
+@keyframes cine-out { to { opacity: 0; transform: translateY(-6px); } }
+.cine-line.is-name { font-size: clamp(44px, 10vw, 104px); letter-spacing: .1em; color: var(--wheel); text-shadow: 0 0 24px color-mix(in srgb, var(--wheel) 55%, transparent), 0 4px 0 #3a2a00; }
+.cine-line.is-name.is-in { animation: cine-name .9s cubic-bezier(.2, .9, .25, 1.2) forwards, intro-shake .5s .1s 2 ease-in-out; }
+@keyframes cine-in { from { opacity: 0; transform: translateY(8px); letter-spacing: .3em; } to { opacity: 1; transform: none; } }
+@keyframes cine-name { 0% { opacity: 0; transform: scale(1.6); filter: blur(8px); } 60% { opacity: 1; transform: scale(.96); filter: blur(0); } 100% { opacity: 1; transform: none; } }
+/* the wheel: fades in, then turns one notch (45°) with a heavy, settling turn */
+.cine-wheel { grid-area: 1 / 1; width: min(62vmin, 440px); height: auto; opacity: 0; transform: rotate(var(--turn, 0deg)) scale(.92); transition: opacity .35s ease, transform .35s ease; }
+.cine-wheel.is-shown { opacity: 1; transform: rotate(var(--turn, 0deg)) scale(1); }
+.cine-wheel.is-turning { transition: opacity .35s ease, transform 1s cubic-bezier(.55, 0, .25, 1.35); }
+@media (prefers-reduced-motion: reduce) { .cine-line.is-in, .cine-line.is-name.is-in { animation: none; opacity: 1; } .cine-line.is-out { animation: none; opacity: 0; } .cine-wheel.is-turning { transition: none; } }
+.bossbar.is-makora .boss-name { color: var(--wheel); }
+.bossbar.is-makora .boss-hp { box-shadow: 0 0 14px -2px var(--wheel); }
+.bossbar.is-makora .boss-hp span { background: var(--makora-feather); }
+.boss-sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+/* small HUD numbers under the CRT filter: Silkscreen, whose digits stay distinct (Pixelify's 2 read as an 8) */
+.crt .hp-num, .crt .xp-num, .crt .xp-lv b, .crt .card-idx, .crt .deck-status, .crt .stats b, .crt .statpanel b { font-family: "Silkscreen", ui-monospace, monospace; font-weight: 400; font-size: 11px; letter-spacing: .02em; }
