@@ -552,6 +552,7 @@ function playerStep(dt, mx, my) {
 
 function update(dt) {
   if (first) return;                    // wait until the arena has a real size (see resize)
+  zoomStep(dt);                         // a boss fight's bigger arena eases in and out (arena.js)
   if (game.hitstop > 0) { game.hitstop -= dt; return; }   // a BULL hit freezes the frame for a moment
   if (game.intro) { updateIntro(dt); updateEffects(dt); return; }   // SKURTOSAURUS's intro: the fight waits
   if (game.cine) { updateCine(dt); updateEffects(dt); return; }     // MAKORA's black-screen scenes: so does this
@@ -637,7 +638,7 @@ function update(dt) {
 
   updateRocks(dt);
   updateSabers(dt); updateBolts(dt);    // OBI ONE's thrown saber and the shots he knocks back (obi.js)
-  updateDebris(dt);                     // OBI ONE phase 2: the force rains debris down (obi.js)
+  updateDebris(dt); updateBoulders(dt);   // (phase 3's rocks, v0.50)                     // OBI ONE phase 2: the force rains debris down (obi.js)
   updateSprays(dt); updateSoak(dt); updateTrails(dt);   // the Powerwash pack (user)
 
   // Pickups reach: a BULL charge also scoops up anything it passes near. (Co-op: whoever gets there; see reacher.)

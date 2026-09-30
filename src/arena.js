@@ -16,7 +16,8 @@ function resize() {
   // VW × VH is the view; W × H is the world. They're the same, except in co-op, where the world is bigger and
   // the view follows you round it (coop.js).
   VW = Math.max(1, arena.clientWidth); VH = Math.max(1, arena.clientHeight);
-  if (NET.run && NET.world) { W = NET.world.w; H = NET.world.h; } else { W = VW; H = VH; }
+  // (a boss fight zooms the view out, so the world is the view ÷ the zoom: see VIEW below)
+  if (NET.run && NET.world) { W = NET.world.w; H = NET.world.h; } else { W = VW / viewZoom; H = VH / viewZoom; }
   cv.width = Math.max(1, Math.round(VW * dpr)); cv.height = Math.max(1, Math.round(VH * dpr));
   ctx.setTransform(cv.width / VW, 0, 0, cv.height / VH, 0, 0);
   // the text layer stays at full resolution, so numbers read even under the CRT filter
@@ -24,13 +25,56 @@ function resize() {
   tcv.width = Math.round(VW * tdpr); tcv.height = Math.round(VH * tdpr);
   tctx.setTransform(tdpr, 0, 0, tdpr, 0, 0);
   NET.viewSafe = bottomSafeY(r);
-  playH = NET.run ? H : NET.viewSafe;
+  playH = NET.run ? H : NET.viewSafe / viewZoom;
   // Centre the player once the arena has a real size (it can measure 0 before layout settles).
   if (first && W > 100 && H > 100) { game.player.x = W / 2; game.player.y = H / 2; first = false; }
   clampTo(game.player, PLAYER.r);
   for (const e of game.enemies) clampTo(e, e.r);
 }
 new ResizeObserver(resize).observe(arena);
+
+/* ---------- boss arenas (v0.50, user: room to run far away from a boss) ----------
+   While a boss is on (its intro, the fight, MAKORA's scenes) the view eases out to `VIEW.boss`: everything is drawn
+   smaller and the arena grows round its middle to fill the screen (×1/0.7 each way, about twice the room). When the
+   boss is gone it eases back and the walls close in again, pushing anything outside back in. In co-op the arena is
+   already bigger than the screen, so there only the view zooms out (the world stays the same size). */
+const VIEW = { boss: 0.7, rate: 2.4 };                 // rate: how fast it eases (per second)
+let viewZoom = 1;
+const bossArena = () => !game.practice && !game.inMenu && !!(game.intro || game.boss || game.obi || game.makora || game.cine);
+function zoomStep(dt) {
+  const want = bossArena() ? VIEW.boss : 1;
+  if (viewZoom === want) return;
+  let z = viewZoom + (want - viewZoom) * Math.min(1, dt * VIEW.rate);
+  if (Math.abs(want - z) < 0.002) z = want;
+  setZoom(z);
+}
+function setZoom(z) {
+  viewZoom = z;
+  if (NET.run) return;                                  // co-op: only the view (coop.js updateCam)
+  const w0 = W, h0 = H;
+  W = VW / z; H = VH / z; playH = NET.viewSafe / z;
+  shiftWorld((W - w0) / 2, (H - h0) / 2);               // it grows (or shrinks) round its middle
+}
+function resetZoom() { viewZoom = 1; resize(); }
+// Moves everything in the arena by (dx, dy), then keeps what must stay inside inside.
+const WORLD_LISTS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'particles',
+  'beams', 'sprays', 'trails', 'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders'];
+const PAIRS = [['x', 'y'], ['x0', 'y0'], ['x1', 'y1'], ['x2', 'y2'], ['sx', 'sy'], ['px', 'py']];
+function shiftObj(o, dx, dy) {
+  if (!o || typeof o !== 'object') return;
+  for (const [a, b] of PAIRS) if (typeof o[a] === 'number') { o[a] += dx; o[b] += dy; }
+  if (Array.isArray(o.trail)) for (let i = 0; i + 1 < o.trail.length; i += 2) { o.trail[i] += dx; o.trail[i + 1] += dy; }
+  for (const k of ['leap', 'kick']) if (o[k] && typeof o[k] === 'object') shiftObj(o[k], dx, dy);   // the lion's leap, MAKORA's kick
+}
+function shiftWorld(dx, dy) {
+  if (!dx && !dy) return;
+  for (const k of WORLD_LISTS) for (const o of game[k] || []) shiftObj(o, dx, dy);
+  shiftObj(game.player, dx, dy);
+  shiftObj(game.dash, dx, dy);
+  clampTo(game.player, PLAYER.r);
+  for (const e of game.enemies) if (!e.mrock) clampTo(e, e.r);
+  for (const k of ['orbs', 'potions', 'diamonds', 'mines', 'boulders']) for (const o of game[k] || []) clampTo(o, o.r || 8);
+}
 
 // The HP/XP bars and ability deck float fixed over the bottom of the arena. Find the topmost
 // edge of that cluster so play (player, enemies, orbs) stays clear of it instead of sliding

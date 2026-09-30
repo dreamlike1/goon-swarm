@@ -79,6 +79,10 @@ const TRACKS = {
   // MAKORA's fight (user): MAKORA.m4a, 2:00. It comes in on "MAKORA!" at the end of the summoning.
   makora: { opus: 'assets/MAKORA.m4a', aac: 'assets/MAKORA_aac.m4a', vol: 'level', fadeIn: 0.7, fadeOut: 1.8 },
   phase2: { opus: 'assets/KURT_PHASE_2_chorus.m4a', aac: 'assets/KURT_PHASE_2_chorus_aac.m4a', vol: 'level', fadeIn: 0.45, fadeOut: 1.8 },
+  // OBI ONE (v0.50, user): his own song, obi-music.m4a, from about 30 s in. OBI_MUSIC.m4a is it cut from 31.0 s, on
+  // the first big hit after 30 s (measured with ffmpeg; a cut file rather than a seek, as for phase 2). It plays
+  // through all three of his phases, and loops back to that point, not the intro.
+  obi: { opus: 'assets/OBI_MUSIC.m4a', aac: 'assets/OBI_MUSIC_aac.m4a', vol: 'level', fadeIn: 0.6, fadeOut: 1.4 },
 };
 const MUSIC_FADE = { over: 2.5, pause: 0.12, resume: 0.35 };   // seconds: on defeat; into and out of a pause
 const LOOP_LEAD = 4.5, LOOP_XFADE = 3;                          // the loop crossfade (media seconds before the end; its length)
@@ -116,7 +120,7 @@ function freshEl(k, i) {
 const activeEl = k => trackEls(k)[TRACKS[k].cur];
 // Which tracks should be playing, and how loud (0–1 of their slider). `hold`: paused, keep the place.
 function musicWanted() {
-  const none = { lobby: 0, level: 0, boss: 0, phase2: 0, makora: 0 };
+  const none = { lobby: 0, level: 0, boss: 0, phase2: 0, makora: 0, obi: 0 };
   if (document.hidden) return { ...none, hold: true };
   if (!document.getElementById('menu').hidden) return current === 'scr-preview' ? { ...none, level: 1 } : { ...none, lobby: 1 };
   if (game.practice || game.over) return none;
@@ -127,7 +131,7 @@ function musicWanted() {
   if (game.cine) return game.cine.kind === 'summon' ? (game.cine.music ? { ...none, makora: 1 } : none) : { ...none, makora: 0.3 };
   if (game.makora) return { ...none, makora: 1 };
   if (game.boss) return game.boss.phase === 2 ? { ...none, phase2: 1 } : { ...none, boss: 1 };
-  if (game.obi) return game.obi.phase === 2 ? { ...none, phase2: 1 } : { ...none, boss: 1 };   // OBI ONE: SKURTOSAURUS's music (user)
+  if (game.obi) return { ...none, obi: 1 };                  // OBI ONE: his own song (v0.50, user)
   return { ...none, level: 1 };
 }
 const inRun = () => document.getElementById('menu').hidden && !game.practice && !game.over;
@@ -146,7 +150,7 @@ function startMusic() {
 // Called every frame (main.js): fades, crossfades, loops and the phase-2 speed-up.
 function syncMusic(dt) {
   const want = musicWanted();
-  const to = want.lobby ? 'lobby' : want.level ? 'level' : want.boss ? 'boss' : want.phase2 ? 'phase2' : want.makora ? 'makora' : null;
+  const to = want.lobby ? 'lobby' : want.level ? 'level' : want.boss ? 'boss' : want.phase2 ? 'phase2' : want.makora ? 'makora' : want.obi ? 'obi' : null;
   syncFurube(!!want.hold);
   if (music.was === 'lobby' && to === 'level') SFX.whoosh();   // the menus → the fight
   if (to) music.was = to;
@@ -170,7 +174,7 @@ function syncMusic(dt) {
         for (const e of els) if (!e.paused) e.pause();
         T.xf = null; T.held = false;
         // from the top next time: every boss fight; the level track once the run is over; the lobby's after a run
-        if (k === 'boss' || k === 'phase2' || k === 'makora' || (k === 'level' && !inRun()) || (k === 'lobby' && current === 'scr-preview')) T.restart = true;
+        if (k === 'boss' || k === 'phase2' || k === 'makora' || k === 'obi' || (k === 'level' && !inRun()) || (k === 'lobby' && current === 'scr-preview')) T.restart = true;
       }
     }
     // the seamless loop: near the end, the other copy starts from the top and they crossfade

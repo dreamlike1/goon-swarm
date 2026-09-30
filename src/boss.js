@@ -28,8 +28,8 @@ const BOSS = {
   // comes back with a fresh bar of `hp`. It's faster (walk and charge ×), winds up quicker, charges twice in a row
   // (`dashes`) and throws 3 big rocks in a row (`throws`, `throwGap` s apart, a shorter wind-up each). Placeholders
   // apart from the user's "dashes 2 times, throws 3 times".
-  // v0.48 (user: phase 2 should have more HP than phase 1): 200 → 300.
-  phase2: { hp: 300, enrage: 1.6, walk: 1.45, chargeSpeed: 1.2, windup: 0.75, dashes: 2, throws: 3, throwWind: 0.5, throwGap: 0.3, chargeEvery: 0.75, push: 520 },
+  // v0.48 (user: phase 2 should have more HP than phase 1): 200 → 300; v0.50 (user: buff phase 2) → 400.
+  phase2: { hp: 400, enrage: 1.6, walk: 1.45, chargeSpeed: 1.2, windup: 0.75, dashes: 2, throws: 3, throwWind: 0.5, throwGap: 0.3, chargeEvery: 0.75, push: 520 },
   xp: 20,
   // Its hitbox (v0.46, user: it should fit the drawing): in drawing units (30 = BOSS.r px), a capsule of radius `r`
   // from the middle of its body up to its head, on the side it faces. `r` above is now the drawing's size.
@@ -366,7 +366,6 @@ function tryDash(dir = null) {
   game.dash = { t: BULL.time, dx: mx / l, dy: my / l, hit: new Set(), smashed: false, sx: p.x, sy: p.y };
   game.dashCd = BULL.cd;
   if (game.makora && !game.makora.down) game.makora.dashesSeen++;   // MAKORA is watching: dash a lot and it learns to (makora.js)
-  obiSawDash();                                            // … and so is OBI ONE, if his saber is on its way (obi.js)
   p.safe = Math.max(p.safe, BULL.time + 0.1);
   SFX.bullDash();                                          // a swoosh (user)
   // Launch: a shockwave where you start and dust kicked out behind you.

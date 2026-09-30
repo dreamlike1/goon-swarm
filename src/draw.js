@@ -387,8 +387,9 @@ function draw() {
   if (NET.run) {                          // co-op: a bigger arena, and the view follows you (coop.js)
     updateCam();
     ctx.fillStyle = COL.line; ctx.fillRect(0, 0, VW, VH);   // beyond the arena's edge
-    ctx.translate(-cam.x, -cam.y);
   }
+  ctx.scale(viewZoom, viewZoom);          // a boss fight: zoomed out, for a bigger arena (arena.js)
+  if (NET.run) ctx.translate(-cam.x, -cam.y);
   ctx.fillStyle = COL.floor;
   ctx.fillRect(0, 0, W, H);
   if (NET.run) { ctx.strokeStyle = COL.bad; ctx.globalAlpha = 0.35; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, W - 3, H - 3); ctx.globalAlpha = 1; }
@@ -497,6 +498,8 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  drawBoulders(false);                   // OBI ONE phase 3: his rocks lying round the arena (obi.js)
+
   // enemies: squares (normal and big) and triangles that point where they're heading,
   // each with a thin health line above it once it's been hit
   for (const e of game.enemies) {
@@ -529,6 +532,7 @@ function draw() {
   }
   drawSilicaTop();                       // frost on chilled enemies, the ring of ice, falling bombs, the lion's bite
   drawDebris();                          // OBI ONE phase 2: red circles warn where the force will drop debris (obi.js)
+  drawBoulders(true);                    // … and phase 3's rocks in the air: falling, lifted, hurled
   drawObiShots();                        // OBI ONE's thrown saber and the shots he knocked back (obi.js)
 
   // projectiles, by look: streak (a line trail), orb and heavy (fading circles), spin (a turning square)
@@ -754,6 +758,7 @@ function draw() {
   // (user: text was unreadable at its low resolution). It shakes with the arena.
   tctx.save();
   tctx.clearRect(0, 0, VW, VH);
+  tctx.scale(viewZoom, viewZoom);
   if (NET.run) tctx.translate(-cam.x, -cam.y);
   if (game.shake > 0 && !reducedMotion) { const s = game.shake * 28; tctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s); }
   drawCoopFaces();                        // co-op: emojis (coop.js), under the numbers

@@ -535,8 +535,8 @@ function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
-  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts'];
-const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts']);
+  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders'];
+const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts', 'boulders']);
 const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
 function snapReplacer(k, v) {
@@ -723,6 +723,7 @@ function guestScenes(s) {
   } else if (!s.cine && game.cine) endCine();
 }
 function guestFrame(dt) {
+  zoomStep(dt);
   const p = game.player;
   p.px = p.x; p.py = p.y;
   const rooted = NET.holdE && !!reviveNear();              // holding E by a friend who's down: you stand still
@@ -757,7 +758,7 @@ function localInput() {
   let mx = 0, my = 0;
   for (const k of keys) { mx += MOVE[k][0]; my += MOVE[k][1]; }
   if (!mx && !my && pointer) {
-    const p = game.player, dx = pointer.x + cam.x - p.x, dy = pointer.y + cam.y - p.y;
+    const p = game.player, dx = pointer.x / viewZoom + cam.x - p.x, dy = pointer.y / viewZoom + cam.y - p.y;
     if (Math.hypot(dx, dy) > 6) { mx = dx; my = dy; }
   }
   return [mx, my];
@@ -765,8 +766,8 @@ function localInput() {
 // The view follows you round the bigger arena (draw.js).
 function updateCam() {
   if (!NET.run) { cam.x = cam.y = 0; return; }
-  const p = game.player, bottom = NET.viewSafe || VH;
-  cam.x = W <= VW ? (W - VW) / 2 : Math.max(0, Math.min(W - VW, p.x - VW / 2));
+  const p = game.player, z = viewZoom, vw = VW / z, bottom = (NET.viewSafe || VH) / z;   // (zoomed out in a boss fight: arena.js)
+  cam.x = W <= vw ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, p.x - vw / 2));
   cam.y = H <= bottom ? (H - bottom) / 2 : Math.max(0, Math.min(H - bottom, p.y - bottom / 2));
 }
 

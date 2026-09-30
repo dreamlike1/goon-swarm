@@ -54,8 +54,9 @@ const CARDS = {
   // Gun's bubble pops into 2 more on a hit (`pops`); ×3 is 9 rapid bubbles that stun; ×7 one giant bubble that
   // traps enemies before pushing them out. Super Washer's two sprays spin a full turn around you (combat.js
   // reuses the Laser ×7 sweep for this); ×3 is 3 rapid spins; ×7 is a speed boost with an exploding bubble trail.
-  pressurewasher: { name: 'Pressure Washer', rarity: 'common', range: 200, dmg: 6, speed: 0, r: 3, knock: 160, look: 'spray', arc: 0.24,
-                    desc: 'A thin water spray that pushes enemies back and damages them.' },
+  // v0.50 (user): 1 damage but a big shove: its point is knockback, not damage (it was 6 dmg, knock 160).
+  pressurewasher: { name: 'Pressure Washer', rarity: 'common', range: 200, dmg: 1, speed: 0, r: 3, knock: 420, look: 'spray', arc: 0.24,
+                    desc: 'A thin water spray that blasts enemies back. Barely any damage.' },
   // `start`/`ramp` (user's BUBBLE TRAP! only, combos.js's launch()): the giant bubble's launch speed climb.
   soapgun: { name: 'Soap Gun', rarity: 'common', range: 230, dmg: 4, speed: 340, start: 220, ramp: 0.4, r: 6, knock: 40, look: 'bubble', pops: 2,
              desc: 'A slow bubble that pops into 2 more bubbles, each dealing light damage.' },

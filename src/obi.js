@@ -8,12 +8,15 @@
      Every long-range attack shows where it's going first (the throw's lane, the dash's line).
    - Sometimes he blocks: his saber twirls in front of him and every shot that hits him is knocked back at you, so
      dodge (your cards keep firing on their own).
-   - Phase 2 (a fresh, bigger bar): the same, but he can throw again as soon as he catches it, and if you dash away
-     from a throw and you're far enough, he raises his arm and drags you to him with the force. The screen shakes;
-     smash SPACE (or tap) to fill the ring round you and break free before you reach him.
+   - Phase 2 (a fresh, bigger bar; v0.50): faster, and out of his melee reach he always throws, then dashes a long
+     way at you once he has it back. Stay out of his reach for 3–5 s and he drags you in with the force (the screen
+     shakes; smash SPACE, or tap, to fill the ring round you and break free before you reach him). Stay inside it
+     for 3–5 s and the force shoves you off while debris rains down all over the arena.
+   - Phase 3 (v0.50): rocks fall and stay round the arena, and he hurls them at you with the force.
    - Beat him and you get DEFLECT: P raises a shield for 5 s that stops the first hit. Raise it just before a hit
      lands (a perfect deflect) and half its cooldown comes back.
-   His music is SKURTOSAURUS's (user). Numbers are placeholders apart from the user's (level 20, more HP than
+   His music is his own song, obi-music.m4a from about 30 s in (v0.50, user; SKURTOSAURUS's before).
+   Numbers are placeholders apart from the user's (level 20, more HP than
    SKURTOSAURUS's phase 2, phase 2 more than phase 1, the 5 s shield). */
 const OBI = {
   name: 'OBI ONE', level: 20, hp: 360, r: 40,          // hp: SKURTOSAURUS's phase 2 has 300. `r`: the drawing's size
@@ -27,28 +30,38 @@ const OBI = {
   block: { every: [4.5, 7.5], first: 5, time: 1.5, chance: 0.55,
     bolt: { speed: 430, r: 6, dmg: 9, every: 0.12, max: 14, life: 3.2 } },   // what your shots turn into when he blocks
   intro: { hums: [0.15, 0.95, 1.75], spawn: 2.6, arrive: 0.7, tele: 1.1 },
-  // Phase 2 (user): faster, the blade turns red, and his moves become a fixed rotation — small slash, a stabbing
-  // dash, a big slash, then a throw that curves in on you as it flies (dodge it) — round and round. Stand too far
-  // when it's his turn and he pulls you in with the force instead (on top of the old rule: catching his saber
-  // after you dashed away from it still pulls you too, if you're still far). Camp too close for too long
-  // (`tooClose`) and the force shoves you off. Every number but the user's rules is a placeholder.
+  // Phase 2 (user, v0.49): faster, the blade turns red, and up close his moves are a fixed rotation — small slash,
+  // a stabbing dash, a big slash — round and round; his throw curves in on you as it flies (dodge it).
+  // v0.50 (user): more HP (450 before); faster, with longer dashes at you; out of his melee reach he always throws;
+  // stay out of it for 3–5 s (random each time) and he pulls you in; stay inside it for 3–5 s and the force shoves
+  // you off while debris rains over the whole arena (dodge it). (The old pull-on-a-dodged-throw and the steady
+  // debris rain are gone.)
   phase2: {
-    hp: 450, focus: 1.6, push: 520, walk: 1.25, quick: 0.75,
-    rethrow: 0.45,                                     // after a catch, the next throw's warning (s) if you're still far
-    // the force pull: `min` px away when he catches it, after you dashed away from the throw
-    pull: { min: 260, speed: 185, reach: 62, press: 0.12, decay: 0.25, dmg: 26, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
-    pullFar: 360,                                      // stand this far away when he picks his next move and he pulls you in outright
-    rotation: ['smallSlash', 'stabDash', 'bigSlash', 'throw'],
-    smallSlash: { tele: 0.2, anim: 0.14, arc: 1.5, range: 95, dmg: 10, lunge: 70 },
-    bigSlash: { tele: 0.6, anim: 0.34, arc: 3.1, range: 155, dmg: 26, lunge: 100 },
-    stabDash: { tele: 0.3, time: 0.2, speed: 820, stopAt: 55, sliceTele: 0.1,
-      stab: { anim: 0.12, arc: 0.55, range: 75, dmg: 20, lunge: 130 } },
-    throwTurn: 3.2,                                    // the phase-2 throw's homing turn rate (rad/s) while it flies out
-    tooClose: { r: 95, time: 1.6, push: 640 },          // camp this close, this long, and the force shoves you off
+    hp: 600, focus: 1.6, push: 520, walk: 1.35, quick: 0.62,
+    melee: 150,                                        // his melee reach: out of it, he throws
+    pullAfter: [3, 5], pushAfter: [3, 5],              // seconds out of / inside his reach before he pulls / pushes
+    pull: { speed: 185, reach: 62, press: 0.12, decay: 0.25, dmg: 26, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
+    rotation: ['smallSlash', 'stabDash', 'bigSlash'],  // up close, round and round
+    smallSlash: { tele: 0.16, anim: 0.12, arc: 1.5, range: 105, dmg: 10, lunge: 80 },
+    bigSlash: { tele: 0.45, anim: 0.3, arc: 3.1, range: 160, dmg: 26, lunge: 110 },
+    stabDash: { tele: 0.24, time: 0.32, speed: 1050, stopAt: 55, sliceTele: 0.08,
+      stab: { anim: 0.12, arc: 0.55, range: 80, dmg: 20, lunge: 140 } },
+    // after catching his saber with you out of reach: a long dash straight at you (user: longer dashes), then a stab
+    lunge: { tele: 0.3, time: 0.55, speed: 1250, stopAt: 60, sliceTele: 0.08,
+      stab: { anim: 0.12, arc: 0.7, range: 85, dmg: 22, lunge: 140 } },
+    throwTurn: 3.2,                                    // the throw's homing turn rate (rad/s) while it flies out
+    push: 720,                                         // the force push's shove
   },
-  // The force rains debris down throughout phase 2 (user): red circles warn where, then it lands. Independent of
-  // his own attacks, like SKURTOSAURUS's rocks.
-  storm: { every: [2.6, 3.8], warn: 1.0, count: 3, spread: 160, r: 46, dmg: 22 },
+  // The force push's debris (user: over the whole arena, so you dodge through the gaps): the arena is cut into
+  // `cell` px squares and about `fill` of them get a rock, each warned by a red circle for `warn` s (+ up to `stagger`).
+  storm: { cell: 165, fill: 0.5, warn: 1.1, stagger: 0.6, r: 48, dmg: 22 },
+  // Phase 3 (user): rocks fall and stay on the arena (you can walk through them), glowing with the force, and every
+  // few seconds he lifts one and hurls it at you down a lane (dodge it). New ones fall to replace them.
+  phase3: {
+    hp: 750, focus: 2, quick: 0.58,
+    rocks: 7, r: 30, fall: 1.2, fallDmg: 20, gap: 150, refill: [3, 4.5],
+    hurl: { every: [3, 5], lift: 0.9, lock: 0.7, speed: 760, dmg: 24, knock: 480 },
+  },
   xp: 30,
 };
 // DEFLECT (user): P, or tap its icon. `time`: how long the shield lasts; `perfect`: a hit this soon after raising it
@@ -102,7 +115,7 @@ function showObiName() {
 
 function spawnObi() {
   const p = game.player, h = Math.min(playH || H, H);
-  const x = p.x < W / 2 ? W * 0.82 : W * 0.18, y = Math.max(90, Math.min(h - 90, p.y));   // the side furthest from you (clear of the stats)
+  const x = p.x < W / 2 ? W * 0.76 : W * 0.24, y = Math.max(90, Math.min(h - 90, p.y));   // the side furthest from you (clear of the stats)
   const hp = Math.round(OBI.hp * coopBossHp());
   const o = {
     obi: true, type: 'obi', shape: 'obi', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: OBI.r, size: OBI.r,
@@ -125,7 +138,7 @@ function sizeObi(o) {
   o.cap = [c[0] * u, c[1] * u, c[2] * u, c[3] * u];
 }
 const obiUnit = o => (o.size || OBI.r) * (0.5 + 0.5 * o.born) / 30;
-const obiQuick = o => (o.phase === 2 ? OBI.phase2.quick : 1);
+const obiQuick = o => (o.phase === 3 ? OBI.phase3.quick : o.phase === 2 ? OBI.phase2.quick : 1);
 // Where his hands are in the arena (for the saber leaving and coming back, and the force).
 const obiHand = (o, back = false) => {
   const u = obiUnit(o), f = o.face || 1;
@@ -138,12 +151,12 @@ function renderObiBar() {
   bossBar.hidden = false;
   bossBar.classList.remove('is-makora');
   bossBar.classList.add('is-obi');
-  bossBar.classList.toggle('is-phase2', o.phase === 2);
+  bossBar.classList.toggle('is-phase2', o.phase >= 2);
   bossFill.style.transform = `scaleX(${Math.max(0, o.hp) / o.maxHp})`;
   bossBar.setAttribute('aria-label', `${OBI.name} health`);
   bossBar.setAttribute('aria-valuenow', Math.max(0, Math.ceil(o.hp)));
   bossBar.setAttribute('aria-valuemax', o.maxHp);
-  bossBar.querySelector('.boss-name').textContent = o.phase === 2 ? `${OBI.name} · THE FORCE` : OBI.name;
+  bossBar.querySelector('.boss-name').textContent = o.phase === 3 ? `${OBI.name} · UNLEASHED` : o.phase === 2 ? `${OBI.name} · THE FORCE` : OBI.name;
   const sub = bossBar.querySelector('.boss-sub');
   if (sub) sub.hidden = true;
 }
@@ -152,14 +165,23 @@ function renderObiBar() {
 // One frame of OBI ONE (combat.js calls this instead of the normal chase; game.player is whoever is nearest).
 function moveObi(o, dt) {
   const p = game.player, dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy) || 1, toward = Math.atan2(dy, dx);
-  const decay = Math.exp(-6 * dt), P2 = o.phase === 2 ? OBI.phase2 : null, q = obiQuick(o);
+  const decay = Math.exp(-6 * dt), P2 = o.phase >= 2 ? OBI.phase2 : null, q = obiQuick(o);   // (phase 3 keeps phase 2's rules)
   o.kx *= decay; o.ky *= decay;
   o.t -= dt; o.anim += dt; o.cd -= dt; o.blockCd -= dt;
   let aim = toward;
-  // Phase 2 (user): camp inside `tooClose` for too long and the force shoves you off, whatever he's doing.
+  // Phase 2 on (user): stay inside his reach for 3–5 s and the force shoves you off (and debris rains down), whatever
+  // he's doing; stay out of it for 3–5 s and he pulls you in, as soon as his hands are free.
   if (P2 && o.state !== 'pull' && o.state !== 'stun' && o.state !== 'focus' && o.state !== 'arrive') {
-    if (d < P2.tooClose.r) { o.closeT = (o.closeT || 0) + dt; if (o.closeT >= P2.tooClose.time) { obiForcePush(o); o.closeT = 0; } }
-    else o.closeT = 0;
+    if (o.pushAt == null) o.pushAt = between(P2.pushAfter);
+    if (o.pullAt == null) o.pullAt = between(P2.pullAfter);
+    if (d < P2.melee) {
+      o.farT = 0; o.closeT = (o.closeT || 0) + dt;
+      if (o.closeT >= o.pushAt) { obiForcePush(o); o.closeT = 0; o.pushAt = between(P2.pushAfter); }
+    } else {
+      o.closeT = 0; o.farT = (o.farT || 0) + dt;
+      // (it cuts in on a throw's wind-up, or while his saber is in the air: his other hand is free)
+      if (o.farT >= o.pullAt && ['walk', 'rest', 'throwwind', 'thrown'].includes(o.state)) { o.th = null; startPull(o, ownerId()); o.farT = 0; o.pullAt = between(P2.pullAfter); }
+    }
   }
   if (o.state === 'arrive') {                                // walks in, then opens with a throw (user)
     o.vx = o.kx; o.vy = o.ky;
@@ -169,15 +191,14 @@ function moveObi(o, dt) {
     const go = d > OBI.keep ? 1 : 0;
     o.vx = (dx / d) * speed * go + o.kx; o.vy = (dy / d) * speed * go + o.ky;
     o.step += dt * 9 * (go || 0.3);
-    if (P2) {                                                // phase 2: a fixed rotation, with a distance pull carved in (user)
+    if (P2) {                                                // phase 2 on: out of reach he throws; up close, a fixed rotation (user)
       if (o.cd <= 0) {
-        if (d > P2.pullFar) startPull(o, ownerId());
+        if (d > P2.melee) startThrow(o, OBI.throw.tele * q);
         else {
           const move = P2.rotation[(o.rot || 0) % P2.rotation.length]; o.rot = (o.rot || 0) + 1;
           if (move === 'smallSlash') startSlice(o, P2.smallSlash.tele * q, 1, P2.smallSlash);
           else if (move === 'bigSlash') startSlice(o, P2.bigSlash.tele * q, 1, P2.bigSlash);
-          else if (move === 'stabDash') startDash(o, P2.stabDash);
-          else startThrow(o, OBI.throw.tele * q);
+          else startDash(o, P2.stabDash);
         }
       }
     } else if (o.cd <= 0) {
@@ -230,7 +251,7 @@ function moveObi(o, dt) {
       const a = Math.random() * TAU;
       game.particles.push({ x: o.x + Math.cos(a) * 60, y: o.y + Math.sin(a) * 60, vx: -Math.cos(a) * 120, vy: -Math.sin(a) * 120, life: 0.45, color: COL.saber });
     }
-    if (o.t <= 0) { o.state = 'walk'; o.cd = 0.6; o.blockCd = 3; }
+    if (o.t <= 0) { o.state = 'walk'; o.cd = 0.6; o.blockCd = 3; o.closeT = o.farT = 0; }
   } else if (o.state === 'pull') {
     aim = pullStep(o, dt) ?? toward;
   } else if (o.state === 'stun') {                           // you broke free: he staggers
@@ -275,10 +296,11 @@ function startDash(o, spec = OBI.dash) {
   o.dir = Math.atan2(p.y - o.y, p.x - o.x);
   SFX.saberHum();
 }
-// The force shoves you off (phase 2, user): camp inside `tooClose` for too long and this fires, whatever he's doing.
+// The force shoves you off (phase 2 on, user): stay inside his reach for 3–5 s and this fires, whatever he's doing.
 function obiForcePush(o) {
-  const p = game.player, T = OBI.phase2.tooClose, dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy) || 1;
-  p.kx = (p.kx || 0) + (dx / d) * T.push; p.ky = (p.ky || 0) + (dy / d) * T.push;
+  const p = game.player, dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy) || 1, push = OBI.phase2.push;
+  p.kx = (p.kx || 0) + (dx / d) * push; p.ky = (p.ky || 0) + (dy / d) * push;
+  debrisRain();                                              // … and the debris comes down all over the arena (user)
   if (game.shield > 0 || game.dash) game.shieldHit = 0.15; else p.flash = 0.2;
   game.rings.push({ x: p.x, y: p.y, r: PLAYER.r, max: 90, life: 0.4, color: COL.saberBad });
   game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 20, text: 'FORCE PUSH!', color: COL.saberBad, life: 0.9, vy: -34, big: true });
@@ -288,7 +310,7 @@ function obiForcePush(o) {
 
 function startBlock(o) {
   o.state = 'block';
-  o.t = o.phase === 2 ? OBI.phase2.block : OBI.block.time;
+  o.t = OBI.block.time;
   o.blockCd = between(OBI.block.every);
   o.blocked = 0;
   SFX.saberHum();
@@ -335,7 +357,7 @@ function updateSabers(dt) {
     const s = game.sabers[i], T = OBI.throw;
     s.t += dt; s.spin += dt * T.spin;
     if (!s.back) {
-      if (o.phase === 2) {                    // it curves in on you as it flies (user): dodge it
+      if (o.phase >= 2) {                     // it curves in on you as it flies (user): dodge it
         const p = game.player, dx = p.x - s.x, dy = p.y - s.y, sp = Math.hypot(s.vx, s.vy);
         const cur = Math.atan2(s.vy, s.vx), want = Math.atan2(dy, dx), turn = OBI.phase2.throwTurn * dt;
         const diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur)), na = cur + Math.max(-turn, Math.min(turn, diff));
@@ -363,23 +385,20 @@ function updateSabers(dt) {
     });
   }
 }
-// The force rains debris down through phase 2 (user): red circles warn where, then it lands. Runs on its own,
-// independent of his attack rotation, like SKURTOSAURUS's rocks (boss.js updateRocks).
-function updateDebris(dt) {
-  const o = game.obi;
-  if (o && o.phase === 2) {
-    o.stormT = (o.stormT ?? between(OBI.storm.every)) - dt;
-    if (o.stormT <= 0) {
-      o.stormT = between(OBI.storm.every);
-      const p = game.player, S = OBI.storm, h = Math.min(playH || H, H);
-      for (let k = 0; k < S.count; k++) {
-        const a = Math.random() * Math.PI * 2, dd = Math.random() * S.spread;
-        const x = Math.max(30, Math.min(W - 30, p.x + Math.cos(a) * dd)), y = Math.max(30, Math.min(h - 30, p.y + Math.sin(a) * dd));
-        game.debris.push({ x, y, t: 0, warn: S.warn, r: S.r, dmg: S.dmg, hit: false });
-      }
-      SFX.forceHum(1);
-    }
+// The force push's debris (user: all over the arena, so you dodge through the gaps): red circles warn where each
+// rock will land while it falls, glowing with the force, then it hits.
+function debrisRain() {
+  if (game.debris.length > 40) return;                       // (one rain at a time)
+  const S = OBI.storm, h = Math.min(playH || H, H);
+  for (let y = S.cell / 2; y < h; y += S.cell) for (let x = S.cell / 2; x < W; x += S.cell) {
+    if (Math.random() > S.fill) continue;
+    const jx = x + (Math.random() - 0.5) * S.cell * 0.5, jy = y + (Math.random() - 0.5) * S.cell * 0.5;
+    game.debris.push({ x: Math.max(20, Math.min(W - 20, jx)), y: Math.max(20, Math.min(h - 20, jy)), t: 0, warn: S.warn + Math.random() * S.stagger,
+      r: S.r, dmg: S.dmg, hit: false, seed: Math.floor(Math.random() * 1000) });
   }
+  SFX.forceHum(2);
+}
+function updateDebris(dt) {
   for (let i = game.debris.length - 1; i >= 0; i--) {
     const k = game.debris[i];
     k.t += dt;
@@ -406,17 +425,17 @@ function drawDebris() {
       ctx.fillStyle = COL.bad; circle(k.x, k.y, k.r * (0.3 + 0.7 * q));
       ctx.globalAlpha = 0.6; ctx.strokeStyle = COL.bad; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(k.x, k.y, k.r, 0, TAU); ctx.stroke();
+      if (q > 0.35) {                                         // the rock itself, dropping in with the force round it
+        const f = (q - 0.35) / 0.65, y = k.y - (1 - f * f) * 260, rr = k.r * 0.55;
+        ctx.globalAlpha = 1; forceGlow(k.x, y, rr * 1.6, 0.35);
+        drawRockBody(k.x, y, rr, k.t * 3, 0, k.seed || 7);
+      }
     } else {
       const f = Math.max(0, 1 - (k.t - k.warn) / 0.4);
       ctx.globalAlpha = 0.5 * f; ctx.fillStyle = COL.rock; circle(k.x, k.y, k.r * (1 + (1 - f) * 0.3));
     }
   }
   ctx.globalAlpha = 1;
-}
-// BULL just charged (boss.js tryDash): if his saber is on its way, he saw you dodge it (phase 2's force pull).
-function obiSawDash() {
-  const o = game.obi;
-  if (o && (o.state === 'throwwind' || o.state === 'thrown')) o.dodgedBy = ownerId();
 }
 // How far the nearest living player is (without switching whose turn it is).
 function nearestGap(x, y) {
@@ -430,15 +449,10 @@ function obiCatch(o) {
   game.rings.push({ x: h.x, y: h.y, r: 4, max: 34, life: 0.3, color: COL.saber });
   SFX.saberCatch();
   if (o.intro) { o.intro = false; showObiName(); }
-  const P = OBI.phase2.pull, dodger = o.dodgedBy;
+  if (o.state === 'pull') return;                            // he caught it mid-pull: the pull carries on
   o.dodgedBy = null;
-  if (o.phase === 2) {
-    // you dashed away from it and you're far: the force (user)
-    const c = dodger != null && (NET.run ? byId(dodger) : { body: game.player, down: false });
-    if (c && !c.down && Math.hypot(c.body.x - o.x, c.body.y - o.y) > P.min) { startPull(o, dodger); return; }
-    // still far: he can throw again straight away (user)
-    if (nearestGap(o.x, o.y) > OBI.dash.at) { startThrow(o, OBI.phase2.rethrow); return; }
-  }
+  // phase 2 on, and you're still out of his reach: a long dash straight at you (user: longer dashes to you)
+  if (o.phase >= 2 && nearestGap(o.x, o.y) > OBI.phase2.melee) { startDash(o, OBI.phase2.lunge); return; }
   obiRest(o);
 }
 
@@ -463,12 +477,14 @@ function updateBolts(dt) {
   }
 }
 
-/* ---------- phase 2 ---------- */
-// Phase 1's HP has run out (combat.js asks before killing him): he doesn't fall, he calls on the force. True if he did.
+/* ---------- phases 2 and 3 ---------- */
+// A phase's HP has run out (combat.js asks before killing him): he doesn't fall, he calls on the force (phase 2), or
+// brings the arena down round you (phase 3). True if he did.
 function obiNextPhase(o) {
-  if (o.phase !== 1) return false;
-  const P = OBI.phase2, hp = Math.round(P.hp * coopBossHp());
-  Object.assign(o, { phase: 2, hp, maxHp: hp, dead: false, state: 'focus', t: P.focus, sl: null, th: null, pull: null, dodgedBy: null, kx: 0, ky: 0 });
+  if (o.phase >= 3) return false;
+  const next = o.phase + 1, P = next === 3 ? OBI.phase3 : OBI.phase2, hp = Math.round(P.hp * coopBossHp());
+  Object.assign(o, { phase: next, hp, maxHp: hp, dead: false, state: 'focus', t: P.focus, sl: null, th: null, pull: null, dodgedBy: null, kx: 0, ky: 0,
+    closeT: 0, farT: 0, pushAt: null, pullAt: null, hurlT: 2.5, refillT: 3 });
   game.sabers = []; game.bolts = [];                         // (a saber in the air is back in his hand)
   eachLiving(() => {                                         // the force shoves everyone back
     const q = game.player, dx = q.x - o.x, dy = q.y - o.y, d = Math.hypot(dx, dy) || 1;
@@ -478,9 +494,141 @@ function obiNextPhase(o) {
   game.shake = Math.max(game.shake, 0.5);
   game.hitstop = Math.max(game.hitstop || 0, 0.12);
   SFX.forcePush();
-  toast(`PHASE 2 · ${OBI.name} USES THE FORCE`, 'obi');
+  if (next === 3) {                                          // phase 3: the rocks come down (they stay)
+    toast(`PHASE 3 · ${OBI.name} BRINGS THE ARENA DOWN`, 'obi');
+    for (let k = 0; k < OBI.phase3.rocks; k++) dropBoulder(0.4 + k * 0.18);
+  } else toast(`PHASE 2 · ${OBI.name} USES THE FORCE`, 'obi');
   renderObiBar();
   return true;
+}
+
+// Phase 3's rocks (user): they fall (a shadow warns where, and it hurts to be under one), then lie on the arena,
+// held by the force (you can walk through them). Every few seconds he lifts one and hurls it at you down a lane.
+function dropBoulder(delay = 0) {
+  const P = OBI.phase3, h = Math.min(playH || H, H), o = game.obi;
+  let best = null;
+  for (let i = 0; i < 14; i++) {                             // somewhere clear of the others, of him, and of you
+    const x = 50 + Math.random() * (W - 100), y = 50 + Math.random() * (h - 100);
+    let gap = Math.min(Math.hypot(x - game.player.x, y - game.player.y), o ? Math.hypot(x - o.x, y - o.y) : Infinity);
+    for (const b of game.boulders) gap = Math.min(gap, Math.hypot(x - b.x, y - b.y));
+    if (!best || gap > best.gap) best = { x, y, gap };
+    if (gap > P.gap) break;
+  }
+  game.boulders.push({ x: best.x, y: best.y, r: P.r, state: 'fall', t: -delay, seed: Math.floor(Math.random() * 1000), spin: Math.random() * TAU, hitIds: [] });
+}
+function updateBoulders(dt) {
+  const o = game.obi, P = OBI.phase3, H3 = P.hurl;
+  if (!o || o.phase < 3) { if (!o) game.boulders = []; return; }
+  if (o.state !== 'focus') {
+    o.hurlT -= dt; o.refillT -= dt;
+    const resting = game.boulders.filter(b => b.state === 'rest'), standing = game.boulders.filter(b => b.state === 'rest' || b.state === 'fall');
+    if (o.hurlT <= 0 && resting.length && !game.boulders.some(b => b.state === 'lift')) {
+      o.hurlT = between(H3.every);
+      const b = resting[Math.floor(Math.random() * resting.length)];
+      Object.assign(b, { state: 'lift', t: 0, a: Math.atan2(game.player.y - b.y, game.player.x - b.x), locked: false, hitIds: [] });
+      SFX.forceHum(2);
+    }
+    if (o.refillT <= 0 && standing.length < P.rocks) { o.refillT = between(P.refill); dropBoulder(); }
+  }
+  for (let i = game.boulders.length - 1; i >= 0; i--) {
+    const b = game.boulders[i];
+    b.t += dt;
+    if (b.state === 'fall') {
+      if (b.t >= P.fall) {                                     // it lands: a crash, and whoever is under it is hurt
+        b.state = 'rest'; b.t = 0;
+        game.shake = Math.max(game.shake, 0.14);
+        burst(b.x, b.y, COL.rock, 16, 220);
+        groundBreak(b.x, b.y + b.r * 0.4, 20);
+        SFX.stomp(2);
+        eachLiving(() => {
+          const p = game.player;
+          if (Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
+          if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+          p.flash = 0.25; hurtPlayer(P.fallDmg);
+        });
+      }
+    } else if (b.state === 'lift') {                          // raised by the force, shaking, aiming at you
+      if (!b.locked) {
+        b.a = Math.atan2(game.player.y - b.y, game.player.x - b.x);
+        if (b.t >= H3.lift * H3.lock) b.locked = true;
+      }
+      if (b.t >= H3.lift) { b.state = 'fly'; b.t = 0; b.vx = Math.cos(b.a) * H3.speed; b.vy = Math.sin(b.a) * H3.speed; SFX.kick(); game.shake = Math.max(game.shake, 0.12); }
+    } else if (b.state === 'fly') {
+      b.x += b.vx * dt; b.y += b.vy * dt; b.spin += dt * 9;
+      if (!reducedMotion && Math.random() < 0.7) game.particles.push({ x: b.x, y: b.y, vx: -b.vx * 0.1, vy: -b.vy * 0.1, life: 0.3, color: COL.saber });
+      if (b.x < -b.r * 2 || b.y < -b.r * 2 || b.x > W + b.r * 2 || b.y > H + b.r * 2) { game.boulders.splice(i, 1); continue; }
+      let hit = false;
+      eachLiving(() => {
+        const p = game.player, who = ownerId();
+        if (hit || b.hitIds.includes(who) || Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
+        b.hitIds.push(who); hit = true;
+        if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+        p.flash = 0.25;
+        p.kx = (p.kx || 0) + Math.cos(b.a) * H3.knock; p.ky = (p.ky || 0) + Math.sin(b.a) * H3.knock;
+        hurtPlayer(H3.dmg);
+      });
+      if (hit) { burst(b.x, b.y, COL.rock, 26, 280); game.shake = Math.max(game.shake, 0.25); SFX.stomp(2); game.boulders.splice(i, 1); }
+    }
+  }
+}
+// A soft blue glow: the force holding something.
+function forceGlow(x, y, r, a) {
+  const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r);
+  g.addColorStop(0, 'rgba(110, 200, 255, 0)'); g.addColorStop(0.6, `rgba(110, 200, 255, ${a})`); g.addColorStop(1, 'rgba(110, 200, 255, 0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+}
+// Phase 3's rocks (draw.js): lying on the floor (`up` false), or up in the air: falling, lifted, flying (`up` true).
+function drawBoulders(up) {
+  const o = game.obi, now = performance.now() / 1000, still = reducedMotion;
+  for (const b of game.boulders) {
+    if (b.state === 'rest' && !up) {
+      const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now * 3 + b.seed);
+      forceGlow(b.x, b.y, b.r * 1.7, 0.1 + 0.1 * pulse);           // held by the force
+      ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ellipse(b.x, b.y + b.r * 0.75, b.r * 0.95, b.r * 0.3); ctx.globalAlpha = 1;
+      drawRockBody(b.x, b.y, b.r, b.spin, 0, b.seed);
+      ctx.globalAlpha = 0.25 + 0.25 * pulse; ctx.strokeStyle = COL.saber; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, now * 1.5 + b.seed, now * 1.5 + b.seed + 1.2); ctx.stroke(); ctx.globalAlpha = 1;
+    } else if (b.state === 'fall' && !up) {                        // its shadow, growing where it'll land
+      const q = Math.max(0, Math.min(1, b.t / OBI.phase3.fall));
+      ctx.globalAlpha = 0.15 + 0.35 * q; ctx.fillStyle = COL.bad; circle(b.x, b.y, b.r * (0.4 + 0.6 * q));
+      ctx.globalAlpha = 0.6; ctx.strokeStyle = COL.bad; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+    } else if (b.state === 'fall' && up && b.t > 0) {
+      const q = Math.min(1, b.t / OBI.phase3.fall), y = b.y - (1 - q * q) * 320;
+      forceGlow(b.x, y, b.r * 1.8, 0.3);
+      drawRockBody(b.x, y, b.r, b.spin + b.t * 4, 0, b.seed);
+    } else if (b.state === 'lift' && up) {                         // up it comes: shaking, glowing, the lane showing
+      const q = Math.min(1, b.t / OBI.phase3.hurl.lift), jit = still ? 0 : (Math.random() - 0.5) * 3 * q, y = b.y - 22 * q;
+      const L = Math.hypot(W, H), w = b.r * 2 + 6;
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a);
+      ctx.fillStyle = COL.bad; ctx.globalAlpha = 0.08 + 0.14 * q; ctx.fillRect(b.r, -w / 2, L, w);
+      ctx.globalAlpha = 0.35 + 0.45 * q; ctx.fillRect(b.r, -w / 2, L * q, 2); ctx.fillRect(b.r, w / 2 - 2, L * q, 2);
+      ctx.restore(); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ellipse(b.x, b.y + b.r * 0.75, b.r * (0.95 - 0.3 * q), b.r * 0.3); ctx.globalAlpha = 1;
+      forceGlow(b.x + jit, y, b.r * (1.8 + 0.5 * q), 0.25 + 0.25 * q);
+      drawRockBody(b.x + jit, y, b.r, b.spin, 0, b.seed);
+      if (o) {                                                     // the force from his hand to it
+        const h = obiHand(o, true);
+        ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = COL.saber; ctx.lineCap = 'round';
+        for (let j = 0; j < 2; j++) {
+          ctx.globalAlpha = 0.18 + 0.12 * j; ctx.lineWidth = 2.5 - j;
+          ctx.beginPath();
+          for (let i = 0; i <= 16; i++) {
+            const f = i / 16, wv = Math.sin(f * 10 - now * 14 + j * 2) * 6 * Math.sin(f * Math.PI), dx = b.x - h.x, dy = y - h.y, l = Math.hypot(dx, dy) || 1;
+            const x = h.x + dx * f - dy / l * wv, yy = h.y + dy * f + dx / l * wv;
+            if (i) ctx.lineTo(x, yy); else ctx.moveTo(x, yy);
+          }
+          ctx.stroke();
+        }
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      }
+    } else if (b.state === 'fly' && up) {
+      const a = Math.atan2(b.vy, b.vx);
+      ctx.strokeStyle = COL.saber; ctx.globalAlpha = 0.25; ctx.lineWidth = b.r * 1.4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - Math.cos(a) * 70, b.y - Math.sin(a) * 70); ctx.stroke(); ctx.globalAlpha = 1;
+      forceGlow(b.x, b.y, b.r * 2, 0.35);
+      drawRockBody(b.x, b.y, b.r, b.spin, 0, b.seed);
+    }
+  }
 }
 
 // The force pull (phase 2, user): he raises his arm and drags you in while the screen shakes. Smash SPACE to fill the
@@ -557,7 +705,9 @@ function pullTap() { return obiMash(); }
 /* ---------- beaten ---------- */
 function obiDown(o) {
   game.obi = null; game.obiDone = true;
-  game.sabers = []; game.bolts = [];
+  game.sabers = []; game.bolts = []; game.debris = [];
+  for (const b of game.boulders) burst(b.x, b.y, COL.rock, 10, 160);   // his rocks crumble
+  game.boulders = [];
   bonusGold('OBI ONE', GOLD_BONUS.obi);
   bossBar.hidden = true; bossBar.classList.remove('is-obi', 'is-phase2');
   SFX.saberOff();
@@ -580,7 +730,7 @@ function obiDown(o) {
 }
 
 function resetObi() {
-  game.obi = null; game.obiDue = false; game.obiDone = false; game.sabers = []; game.bolts = []; game.debris = [];
+  game.obi = null; game.obiDue = false; game.obiDone = false; game.sabers = []; game.bolts = []; game.debris = []; game.boulders = [];
   game.defl = 0; game.deflCd = 0; game.deflAge = 9;
   bossBar.classList.remove('is-obi');
 }
@@ -692,6 +842,7 @@ function obiPose(o, la) {
   else if (st === 'pull') {                                  // the saber lowered, the other arm raised at you (user)
     const local = o.face < 0 ? Math.PI - la : la;
     ps.hand = [10, 4]; ps.sa = 0.9; ps.back = [-8.5 + Math.cos(local) * 18 + 17, -14 + Math.sin(local) * 18]; ps.open = true; ps.lean = -0.06; ps.jit = still ? 0 : 0.4;
+    ps.saber = !game.sabers.length;                          // (his saber may still be on its way back)
   } else if (st === 'stun') { ps.lean = -0.22; ps.hand = [13, 1]; ps.sa = 1.3; ps.back = [-13, -3]; ps.jit = still ? 0 : 0.8; }
   return ps;
 }
@@ -724,7 +875,7 @@ function drawObi(o) {
   if (st === 'throwwind' && o.th) obiLane(o);
   if (st === 'dashwind') obiDashLine(o);
   if (st === 'slice' && o.sl) obiCut(o);
-  if (o.phase === 2 || st === 'focus') {                    // phase 2: a pale blue glow round him
+  if (o.phase >= 2 || st === 'focus') {                    // phase 2: a pale blue glow round him
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * 5), R = 44 * k * (1 + 0.1 * pulse);
     const g = ctx.createRadialGradient(o.x, o.y - 6 * k, 6 * k, o.x, o.y - 6 * k, R);
     g.addColorStop(0, 'rgba(110, 200, 255, 0)'); g.addColorStop(0.6, `rgba(110, 200, 255, ${0.1 + 0.1 * pulse + (st === 'focus' ? 0.15 : 0)})`); g.addColorStop(1, 'rgba(110, 200, 255, 0)');
@@ -800,13 +951,13 @@ function drawObi(o) {
   ctx.fillStyle = COL.obiEye;
   circle(2.3, hy - 1.2, 0.95); circle(6.3, hy - 1.2, 0.95);                                                     // eyes
   ctx.strokeStyle = hair; ctx.lineWidth = 1;
-  const frown = st === 'focus' || st === 'pull' || o.phase === 2 ? 0.8 : 0;
+  const frown = st === 'focus' || st === 'pull' || o.phase >= 2 ? 0.8 : 0;
   ctx.beginPath(); ctx.moveTo(1, hy - 3 - frown * 0.2); ctx.lineTo(3.6, hy - 3 + frown); ctx.moveTo(5, hy - 3 + frown); ctx.lineTo(7.6, hy - 3.2 - frown * 0.2); ctx.stroke();   // brows
 
   // the near arm and the saber in its hand (the saber is its own piece, so it can swing, twirl or fly)
   if (ps.saber) {
     const glow = st === 'block' && !still ? 0.9 + 0.3 * Math.sin(t * 30) : 1;
-    drawSaber(fr[0], fr[1], ps.sa, 36, glow, o.phase === 2);
+    drawSaber(fr[0], fr[1], ps.sa, 36, glow, o.phase >= 2);
   }
   arm(SH[1][0], SH[1][1], fr[0], fr[1], -1, ps.open && !ps.saber);
   ctx.restore();
@@ -850,7 +1001,7 @@ function obiDashLine(o) {
 }
 // A slice: the red cone as he raises it (makora.js warnCone), then a blue crescent as it cuts.
 function obiCut(o) {
-  const s = o.sl, S = s.spec || OBI.slice, bad = o.phase === 2;
+  const s = o.sl, S = s.spec || OBI.slice, bad = o.phase >= 2;
   ctx.save(); ctx.translate(o.x, o.y - 6 * obiUnit(o)); ctx.rotate(s.a);
   if (!s.struck) warnCone(S.arc, S.range, Math.min(1, s.t / Math.max(0.01, s.tele)));
   else {
@@ -892,7 +1043,7 @@ function pulledBody(id) {
 }
 // The thrown saber (spinning, with a blur) and the shots he knocked back; drawn over the enemies (draw.js).
 function drawObiShots() {
-  const bad = game.obi && game.obi.phase === 2;
+  const bad = game.obi && game.obi.phase >= 2;
   for (const s of game.sabers) {
     ctx.save(); ctx.translate(s.x, s.y);
     ctx.globalAlpha = 0.1; ctx.fillStyle = bad ? COL.saberBad : COL.saber; circle(0, 0, 26);

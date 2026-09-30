@@ -47,6 +47,15 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.50' },
+  { tag: 'Boss', text: 'Boss fights zoom out: the arena grows to about twice the room, so you can get far away. It shrinks back once the boss is down.' },
+  { tag: 'Boss', text: 'OBI ONE phase 2 has more HP (600, was 450), attacks faster and dashes further at you.' },
+  { tag: 'Boss', text: 'Out of his reach he always throws his saber. Stay out of reach for 3–5 s and he pulls you in with the force.' },
+  { tag: 'Boss', text: 'Stay close to him for 3–5 s and the force shoves you off while debris rains down all over the arena. Dodge through the gaps.' },
+  { tag: 'Boss', text: 'OBI ONE has a phase 3 (750 HP): rocks fall and stay round the arena, glowing with the force, and he hurls them at you. You can walk through them.' },
+  { tag: 'Boss', text: 'SKURTOSAURUS’s phase 2 has more HP (400, was 300).' },
+  { tag: 'Cards', text: 'Pressure Washer does 1 damage now, but blasts enemies much further back.' },
+  { tag: 'Music', text: 'OBI ONE has his own music now, through all three phases.' },
   { ver: 'v0.48' },
   { tag: 'Boss', text: 'OBI ONE arrives at level 20. "DO YOU FEEL THAT???" Dodge his spinning lightsaber, then he catches it and the fight is on.' },
   { tag: 'Boss', text: 'He slices up close, dashes in and slices from further off, and throws his saber when you’re far away. Every long-range attack shows its line first.' },
@@ -844,11 +853,12 @@ function resetRun() {
     projectiles: [], particles: [], rings: [], floaters: [], orbs: [], muzzle: null, shake: 0, kills: 0, over: false,
     level: 1, xp: 0, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], upQueue: [], mines: [], potions: [], diamonds: [], won: [], timers: [], shield: 0, shieldHit: 0,
     beams: [], sweeps: [], swooshes: [], practice: null, goldBonus: 0,
-    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [],
+    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [], boulders: [],
   });
   resetStats();
   resetBoss();
   resetMakora();
+  resetZoom();                            // (a boss fight's bigger arena: arena.js)
   resetSilica();
   Object.assign(game.player, { x: W / 2, y: H / 2, flash: 0, hp: PLAYER.hp, safe: 0, kx: 0, ky: 0 });
   $('defeat').hidden = true;

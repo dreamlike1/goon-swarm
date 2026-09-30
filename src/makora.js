@@ -665,7 +665,7 @@ function drawMakora(m) {
   } else { crouch = 1; }
 
   // drawn small on its own canvas and blown up with hard edges: blocks of 2 arena px, like the arena under the CRT filter
-  const bs = cv.width / VW, B = Math.max(1, Math.round(2 * bs)), q = k * bs / B;   // B: canvas pixels per block; q: blocks per unit
+  const bs = cv.width / VW * viewZoom, B = Math.max(1, Math.round(2 * bs)), q = k * bs / B;   // B: canvas pixels per block; q: blocks per unit
   const pw = Math.ceil(MK.w * q), ph = Math.ceil(MK.h * q);
   if (!(pw > 0 && ph > 0 && pw < 4096 && ph < 4096)) return;   // a hidden or zero-size view for a moment: skip this frame
   if (mkCv.width !== pw || mkCv.height !== ph) { mkCv.width = pw; mkCv.height = ph; }
