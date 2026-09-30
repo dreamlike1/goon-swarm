@@ -12,6 +12,17 @@
      (the `cv-text` canvas).
    After the reference the user shared: Lucas Bebber's "CSS CRT screen effect" on CodePen. Off: everything is back
    to the original full resolution. Saved on this computer (not in the game save), on by default. */
+// Canvas roundRect is new (Chrome 99, Firefox 112, Safari 16). Older browsers get this stand-in, for the plain number
+// radius the game uses (v0.44, user: the animations must work in every browser).
+if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r = 0) {
+    r = Math.max(0, Math.min(Array.isArray(r) ? r[0] || 0 : r, Math.abs(w) / 2, Math.abs(h) / 2));
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r); this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+}
 const DISPLAY_KEY = 'rogue.display';
 const CRT = { pixel: 2, onMs: 2400 };                   // pixel: 3 until v0.30 (user: too chunky to read)
 const display = { crt: true };

@@ -36,6 +36,13 @@ const COMBOS = {
   // v0.30 (user): Arcane Missiles ×2 fires 4 right away; ×7 fires 7 super-fast missiles that split in two on a hit.
   missiles:    { 2: { name: 'BARRAGE!',      does: 'Fires 4 missiles at once.' },
                  7: { name: 'MISSILE STORM!', does: '7 super-fast missiles. Each splits into 2 more when it hits.' } },
+  // The Silica pack (v0.42, user). Their attacks are in silica.js.
+  gatling:     { 3: { name: 'BULLET HELL!',  does: '3 bursts of 10 rounds, and every round explodes in a small blast.' },
+                 7: { name: 'TWIN GATLINGS!', does: 'Two gatlings, one each side of you: 10 rounds each, harder, with bigger blasts.' } },
+  cryo:        { 3: { name: 'FROST BOMB!',   does: 'A bigger ice blast whose frost field bursts after a moment.' },
+                 7: { name: 'BLIZZARD!',     does: 'Spinning ice circles you, growing out from you to a large ring. It hits and slows what it touches.' } },
+  shifter:     { 3: { name: 'QUAKE!',        does: 'Summon a turtle whose stomping shakes the ground and damages enemies around it.' },
+                 7: { name: 'CHIMERA!',      does: 'Summon a chimera that screams while bombs rain down on nearby enemies.' } },
 };
 const TUNE = {
   rapidGap: 0.1,                                     // Bullet ×3: seconds between shots
@@ -90,7 +97,7 @@ const aimAngle = e => Math.atan2(e.y - game.player.y, e.x - game.player.x);
 // Plays a combo. `echo`: it's the second play from an augmented slot (no callout).
 function runCombo(cb, echo = false) {
   const p = game.player, { card } = cb, spec = CARDS[card], range = rangeOf(card), e0 = inRange(card) || nearestEnemy();
-  if (!e0 && card !== 'arcane' && card !== 'mine') return;   // nothing to shoot at (the pulse and mines still happen)
+  if (!e0 && card !== 'arcane' && card !== 'mine' && card !== 'shifter' && card !== 'cryo') return;   // nothing to shoot at (the pulse, mines, forms and ice ring still happen)
   const aim = e => aimAt(p.x, p.y, e, spec.speed).a;         // leads a moving target (the Sniper's shots fly straight)
   if (!echo) {
     game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 12, text: cb.name, color: COL[card], life: 0.9, vy: -40, big: true });
@@ -105,6 +112,7 @@ function runCombo(cb, echo = false) {
     if (game.enemies.includes(e0)) { lockAngle = aimAngle(e0); shoot(card, e0, o); }
     else shoot(card, e0, { ...o, angle: lockAngle, noHome: true });
   };
+  if (CARDS[card].silica) { silicaCombo(cb, e0); return; }   // the Silica pack (silica.js)
   switch (key) {
     case 'bullet3':
       for (let k = 0; k < 3; k++) later(k * TUNE.rapidGap, () => atLocked({}));

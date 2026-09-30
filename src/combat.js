@@ -233,6 +233,7 @@ function shoot(card, e, o = {}) {
   const spec = CARDS[card];
   const p = o.from || game.player;
   if (spec.look === 'mine') { dropMine(card); return; }
+  if (spec.silica && !o.raw) { silicaShot(card, e, o); return; }   // the Silica pack's weapons (silica.js)
   if (spec.look === 'laser') { zap(card, e, o); return; }
   if (spec.volley && !o.one && e) {                          // Arcane Missiles: 2, fanned out to the sides, each at its own target
     const ts = targets(spec.volley, rangeOf(card)), a0 = Math.atan2(e.y - p.y, e.x - p.x);
@@ -253,7 +254,7 @@ function shoot(card, e, o = {}) {
     bounces: o.bounces ?? (spec.bounces || 0), bounceRange: o.bounceRange || BOUNCE_RANGE, hits: new Set(o.skip ? [o.skip] : []), spin: 0, target: e,
     aoe: o.aoe ? { radius: o.aoe.radius, dmg: damageOf(o.aoe.dmg) } : null, big: !!o.r,
     // missiles fly out to the side for a moment, then steer in (a turn rate rather than snapping round)
-    homeDelay: o.noHome ? Infinity : (o.homeDelay ?? (steer ? TUNE.missile.curve : 0)), split: o.split || 0,
+    homeDelay: o.noHome ? Infinity : (o.homeDelay ?? (steer ? TUNE.missile.curve : 0)), split: o.split || 0, field: o.field || null,
     turn: steer ? TUNE.missile.turn * speed / spec.speed : 0,   // faster missiles turn faster, so they still curve in the same space
     flown: 0, maxDist: rangeOf(card) * (steer ? 2.2 : 1.35), age: 0,
     x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, trail: [],
@@ -289,6 +290,11 @@ function hitEnemy(pr, e) {
     }
     return;
   }
+  if (Math.random() < critChance()) {                // a crit (v0.41): rolled per hit; a gold spark on the enemy (v0.42)
+    pr = { ...pr, dmg: critHit(pr.dmg), crit: true };
+    game.rings.push({ x: e.x, y: e.y, r: e.r * 0.5, max: e.r + 22, life: 0.25, color: COL.wheelHi });
+    burst(e.x, e.y, COL.wheelHi, 8, 260);
+  }
   e.hp -= pr.dmg;
   if (e.dummy) {                                    // test dummies never die or move; they count the damage instead
     game.practice.dmg += pr.dmg; e.hp = e.maxHp; pr = { ...pr, knock: 0 };
@@ -301,13 +307,14 @@ function hitEnemy(pr, e) {
   if (e.boss) renderBossBar();
   if (e.makora) renderMakoraBar();
   const heavy = pr.look === 'heavy' && !pr.aoe, strong = pr.dmg >= 10;
-  SFX.hit(heavy || pr.dmg >= 15);
+  SFX.hit(heavy || pr.crit || pr.dmg >= 15);
   burst(pr.x, pr.y, COL[pr.card], heavy ? 16 : strong ? 10 : 5, heavy ? 260 : 180);
   if (heavy) {
     game.rings.push({ x: pr.x, y: pr.y, r: 6, max: 70, life: 0.35, color: COL[pr.card] });
     game.shake = Math.max(game.shake, 0.18);
   }
-  game.floaters.push({ x: e.x + (Math.random() - 0.5) * 16, y: e.y - e.r - 8, text: String(pr.dmg), color: COL[pr.card], life: 0.6, vy: -50, big: strong });
+  if (pr.crit) game.floaters.push({ x: e.x + (Math.random() - 0.5) * 16, y: e.y - e.r - 10, text: `${pr.dmg}!`, color: COL.wheelHi, life: 0.9, max: 0.9, vy: -45, big: true, crit: true });   // gold, bigger, with a !
+  else game.floaters.push({ x: e.x + (Math.random() - 0.5) * 16, y: e.y - e.r - 8, text: String(pr.dmg), color: COL[pr.card], life: 0.6, vy: -50, big: strong });
 
   if (e.hp <= 0 && e.boss && bossNextPhase(e)) return;   // SKURTOSAURUS: phase 1's bar is gone, phase 2 begins
   if (e.hp <= 0 && e.makora) { makoraDown(e, pr.card); return; }   // MAKORA never stays down: it adapts and comes back
@@ -359,18 +366,19 @@ function gainXp(n) {
     game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 18, text: `LEVEL ${game.level}`, color: COL.xp, life: 1.1, vy: -30, big: true });
   }
   renderXp(up > 0);
-  if (up && game.level >= 10 && game.level - up < 10) bonusGold('LEVEL 10');   // +1 gold for reaching level 10 (user)
+  if (up && game.level >= 10 && game.level - up < 10) bonusGold('LEVEL 10', GOLD_BONUS.level10);   // +1 gold for reaching level 10 (user)
   if (up) queueLevelUps(game.level - up, game.level);
 }
 
-// Bonus gold (user): +1 for beating the boss and +1 for reaching level 10. Saved straight away; the run's
-// Defeated screen and the title note add it to the gold for kills.
-function bonusGold(why) {
+// Bonus gold (user): +1 for reaching level 10, +10 for beating SKURTOSAURUS and +15 every time MAKORA goes down
+// (v0.43; the boss was +1). Saved straight away; the run's Defeated screen and the title note add it to the gold for kills.
+const GOLD_BONUS = { level10: 1, boss: 10, makora: 15 };
+function bonusGold(why, n = 1) {
   if (game.practice) return;
-  save.gold += 1; writeSave();
-  game.goldBonus = (game.goldBonus || 0) + 1;
+  save.gold += n; writeSave();
+  game.goldBonus = (game.goldBonus || 0) + n;
   const p = game.player;
-  game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 30, text: `+1 GOLD · ${why}`, color: COL['r-legendary'], life: 1.4, vy: -26, big: true });
+  game.floaters.push({ x: p.x, y: p.y - PLAYER.r - 30, text: `+${n} GOLD · ${why}`, color: COL['r-legendary'], life: 1.4, vy: -26, big: true });
   SFX.coin();
 }
 
@@ -466,7 +474,7 @@ function update(dt) {
   for (const e of es) {
     if (e.dummy) { e.hit = Math.max(0, e.hit - dt); continue; }   // the store's test dummies stand still and do no harm
     e.born = Math.min(1, e.born + dt * (e.boss || e.makora ? 1.5 : 4));
-    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, ox = e.x, oy = e.y;
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
     else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
@@ -476,6 +484,10 @@ function update(dt) {
       e.vx = (dx / d) * e.speed + e.kx;
       e.vy = (dy / d) * e.speed + e.ky;
       e.x += e.vx * dt; e.y += e.vy * dt;
+    }
+    if (e.chill > 0) {                     // Cryo Magus: chilled enemies only get part of the way (silica.js)
+      e.chill -= dt;
+      e.x = ox + (e.x - ox) * SILICA.cryo.slow; e.y = oy + (e.y - oy) * SILICA.cryo.slow;
     }
     e.hit = Math.max(0, e.hit - dt);
     const shielded = game.shield > 0;
@@ -554,7 +566,7 @@ function update(dt) {
     m.t += dt;
     if (m.t < spec.arm) continue;
     // In test mode the dummies never walk onto a mine, so mines go off as soon as they're armed.
-    if (game.practice || es.some(e => Math.hypot(e.x - m.x, e.y - m.y) < spec.r + e.r)) { game.mines.splice(i, 1); explode(m); }
+    if (game.practice || es.some(e => Math.hypot(e.x - m.x, e.y - m.y) < (spec.trigger || spec.r) + e.r)) { game.mines.splice(i, 1); explode(m); }
   }
 
   // scheduled combo shots
@@ -575,6 +587,7 @@ function update(dt) {
   }
 
   updateSweeps(dt);
+  updateSilica(dt);
 
   // attacks: the timer only runs out while the next card has an enemy within its range (not in the store's test mode)
   game.cooldown -= dt;
@@ -583,7 +596,7 @@ function update(dt) {
   if (game.practice && !autoTest) game.cooldown = attackInterval();
   else if (game.cooldown <= 0) {
     const next = deck.sequence[deck.seqPos];
-    if (next && inRange(next)) {
+    if (next && (CARDS[next].auto || inRange(next))) {   // the Mine has no range: it drops on its own (v0.40)
       const ev = fire();
       // A shuffle takes a moment: the next card waits for it. Attack speed shortens both.
       game.cdTotal = attackInterval() + (ev.reshuffle ? shuffleTime() : 0);
@@ -662,6 +675,7 @@ function update(dt) {
       pr.hits.add(target);
       if (pr.aoe) blast(target.x, target.y, pr.card, pr.aoe.radius, pr.aoe.dmg, { skip: target, big: pr.big });
       if (pr.split) splitMissile(pr, target);
+      if (pr.field) iceField(target.x, target.y, pr.field, pr.card);   // Cryo Magus: a frost field where it lands
       const next = pr.bounces > 0 && nearestEnemy(pr, pr.hits, pr.bounceRange || BOUNCE_RANGE);
       if (next) {
         pr.bounces--;
@@ -674,6 +688,7 @@ function update(dt) {
     }
     if (pr.flown > pr.maxDist) {           // out of range: fizzle
       burst(pr.x, pr.y, COL[pr.card], 3, 80);
+      if (pr.field) iceField(pr.x, pr.y, pr.field, pr.card);
       game.projectiles.splice(i, 1);
       continue;
     }

@@ -1,4 +1,4 @@
-/* upgrades.js — Level-up upgrades: the 11 player stats, rarity rolls, the pick-one-of-3 screen, slot augments and the stats panel. */
+/* upgrades.js — Level-up upgrades: the 13 player stats, rarity rolls, the pick-one-of-3 screen, slot augments and the stats panel. */
 'use strict';
 
 /* ============================================================
@@ -18,6 +18,10 @@ const STATS = {
   hp:    { name: 'HP',           short: 'HP',  base: 10,   round: true,  show: () => `${maxHp()}`,                       gain: v => `+${v} max HP` },
   regen: { name: 'Health regen', short: 'REG', base: 0.5,                show: () => `${stats.regen.toFixed(1)}/s`,      gain: v => `+${v.toFixed(2).replace(/0$/, '')} HP per second` },
   dmg:   { name: 'Base damage',  short: 'DMG', base: 0.08,               show: () => pct(stats.dmg, true),               gain: v => `+${pct(v)} damage` },
+  // Crits (v0.41, user): every hit has `crit` chance to deal +`critDmg` more. You start at 10% and +30% (BASE_STATS).
+  // Crit rate turns up less often in level ups than the others (`weight`, user: rarer than damage).
+  crit:  { name: 'Crit rate',    short: 'CRT', base: 0.02, cap: 1, weight: 0.4, show: () => pct(stats.crit),       gain: v => `+${pct(v)} chance to crit` },
+  critDmg: { name: 'Crit damage', short: 'CDM', base: 0.1,              show: () => pct(stats.critDmg, true),           gain: v => `+${pct(v)} damage on a crit` },
   speed: { name: 'Speed',        short: 'SPD', base: 0.06, cap: 1,       show: () => pct(stats.speed, true),             gain: v => `+${pct(v)} move speed` },
   dodge: { name: 'Dodge',        short: 'DGE', base: 0.04, cap: 0.6,     show: () => pct(stats.dodge),                   gain: v => `+${pct(v)} dodge chance` },
   armor: { name: 'Armor',        short: 'ARM', base: 1,    round: true,  show: () => `${stats.armor}`,                   gain: v => `−${v} damage per hit` },
@@ -38,7 +42,7 @@ const stats = {};
 const picks = {};
 // Every run starts with these (user, v0.9: +10% base damage and +10% attack speed). Upgrades add on top, and the
 // stats panel shows the total (Base damage +10%, Attack speed 0.63s) without marking them as upgraded.
-const BASE_STATS = { dmg: 0.1, atk: 0.1 };
+const BASE_STATS = { dmg: 0.1, atk: 0.1, crit: 0.1, critDmg: 0.3 };   // crits: v0.41, user
 function resetStats() {
   for (const id of STAT_IDS) { stats[id] = BASE_STATS[id] || 0; picks[id] = { n: 0, best: -1 }; }
   game.choosing = false;
@@ -51,6 +55,8 @@ function resetStats() {
 const maxHp = () => PLAYER.hp + stats.hp;
 const moveSpeed = () => PLAYER.speed * (1 + Math.min(STATS.speed.cap, stats.speed));
 const damageOf = base => Math.max(1, Math.round(base * (1 + stats.dmg)));
+const critChance = () => Math.min(STATS.crit.cap, stats.crit);
+const critHit = dmg => Math.max(dmg + 1, Math.round(dmg * (1 + stats.critDmg)));   // a crit always adds at least 1
 const dodgeChance = () => Math.min(STATS.dodge.cap, stats.dodge);
 const armorCut = dmg => Math.max(1, dmg - stats.armor);                        // a hit always does at least 1
 const attackInterval = () => Math.max(MIN_INTERVAL, ATTACK_INTERVAL * (1 - stats.atk));
@@ -77,7 +83,11 @@ function rollChoices() {
   const pool = STAT_IDS.filter(id => !capped(id));
   const out = [];
   while (out.length < 3 && pool.length) {
-    const id = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    // weighted: most stats are 1, Crit rate less (STATS[id].weight)
+    const w = pool.map(id => STATS[id].weight ?? 1);
+    let x = Math.random() * w.reduce((a, b) => a + b, 0), k = 0;
+    while (k < pool.length - 1 && (x -= w[k]) >= 0) k++;
+    const id = pool.splice(k, 1)[0];
     out.push({ id, rarity: rollRarity() });
   }
   // Sometimes one card is a random weapon instead (user).

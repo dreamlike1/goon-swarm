@@ -16,8 +16,10 @@ const PACK_PRICE = 20;
 const PACKS = {
   artillery: { name: 'Artillery pack', short: 'Artillery', size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['laser', 'mine', 'spaceimpact', 'sniper'] },
   magus:     { name: 'Magus pack',     short: 'Magus',     size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['arcane', 'shuriken', 'missiles', 'firebolt'] },
+  // The Silica pack (v0.42, user): nothing is rolled, you always get 5 of each of its 3 weapons. v0.43 (user): Legendary, 100 gold.
+  silica:    { name: 'Silica pack',    short: 'Silica',    size: 15, price: 100, rarities: ['legendary'], cards: ['gatling', 'cryo', 'shifter'], fixed: { gatling: 5, cryo: 5, shifter: 5 } },
 };
-const STORE_PACKS = ['artillery', 'magus'];
+const STORE_PACKS = ['artillery', 'magus', 'silica'];
 // Every new player (and a reset) opens this first, before anything else (user). Nothing is rolled.
 // v0.30 (user): 5 Bullets and 5 Cannons (it was Bullets and Lasers).
 const STARTER = { name: 'Starter pack', short: 'Starter', cards: { bullet: 5, cannon: 5 } };
@@ -38,7 +40,9 @@ function packProblems(pack) {
   return pack.rarities.filter(r => !cardsOfRarity(r, pack).length).map(r => `${RARITY_NAME[r]} has no cards`);
 }
 
+const fixedCards = pack => Object.entries(pack.fixed).flatMap(([id, n]) => Array(n).fill(id));
 function rollPack(pack, rng) {
+  if (pack.fixed) return fixedCards(pack);            // nothing to roll
   const odds = packOdds(pack);
   const total = odds.reduce((s, o) => s + o.weight, 0);
   return Array.from({ length: pack.size }, () => {

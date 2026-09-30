@@ -245,7 +245,7 @@ function often(key, ms) {
 
 const COMBO_VOICE = { bullet: [440, 'square'], laser: [660, 'sawtooth'], arcane: [392, 'sine'], cannon: [196, 'triangle'],
   shuriken: [523, 'triangle'], spaceimpact: [330, 'square'], mine: [262, 'triangle'], firebolt: [349, 'sawtooth'],
-  sniper: [587, 'square'], missiles: [466, 'sine'] };
+  sniper: [587, 'square'], missiles: [466, 'sine'], gatling: [523, 'square'], cryo: [784, 'sine'], shifter: [220, 'sawtooth'] };
 
 const SFX = {
   // Every weapon has its own sound (user).
@@ -259,6 +259,8 @@ const SFX = {
       case 'shuriken': [1568, 2093, 2637].forEach((f, i) => tone({ type: 'triangle', f, dur: 0.05, vol: 0.06, delay: i * 0.025 })); break;                          // a quick sparkle
       case 'spaceimpact': noise({ dur: 0.35, vol: 0.14, freq: 500, f2: 2600, filter: 'bandpass', q: 1.2 }); tone({ type: 'square', f: 220, f2: 660, dur: 0.3, vol: 0.05 }); break;   // rocket
       case 'mine':     tone({ type: 'triangle', f: 320, f2: 180, dur: 0.08, vol: 0.12 }); tone({ type: 'square', f: 1400, dur: 0.02, vol: 0.05, delay: 0.09 }); break;   // clunk, beep
+      case 'gatling':  noise({ dur: 0.03, vol: 0.16, freq: 2200, filter: 'bandpass', q: 1 }); tone({ type: 'square', f: 180, f2: 90, dur: 0.03, vol: 0.06 }); break;   // brrt
+      case 'cryo':     [1760, 2349, 3136].forEach((f, i) => tone({ type: 'sine', f, dur: 0.12, vol: 0.05, delay: i * 0.03 })); noise({ dur: 0.2, vol: 0.08, freq: 5000, filter: 'highpass' }); break;   // an icy chime
       case 'firebolt': noise({ dur: 0.22, vol: 0.25, freq: 900, f2: 3200, filter: 'bandpass', q: 0.8 }); tone({ type: 'sawtooth', f: 300, f2: 120, dur: 0.2, vol: 0.08 }); break;   // fiery whoosh
       case 'sniper':   noise({ dur: 0.09, vol: 0.4, freq: 2400, filter: 'highpass' }); tone({ type: 'square', f: 1800, f2: 200, dur: 0.12, vol: 0.09 }); tone({ type: 'sine', f: 120, f2: 60, dur: 0.2, vol: 0.25 }); break;   // a sharp crack
       case 'missiles': [0, 0.05].forEach(d => tone({ type: 'sine', f: 520, f2: 1500, dur: 0.14, vol: 0.09, delay: d })); noise({ dur: 0.16, vol: 0.07, freq: 1800, filter: 'bandpass', q: 2 }); break;   // two quick whooshes
@@ -366,6 +368,10 @@ const SFX = {
     noise({ dur: 0.6, vol: 0.5, freq: 1500, f2: 120 });
     noise({ dur: 0.35, vol: 0.2, freq: 3000, f2: 800, filter: 'bandpass', q: 1.2, delay: 0.03 });
   },
+  // The Silica pack (v0.42): frost settling, ice shattering, the lion's bite
+  freeze(big) { noise({ dur: big ? 0.8 : 0.35, vol: big ? 0.22 : 0.12, freq: 3000, f2: 7000, filter: 'highpass' }); tone({ type: 'sine', f: 1568, f2: 2093, dur: 0.25, vol: 0.05 }); },
+  shatter() { noise({ dur: 0.4, vol: 0.35, freq: 4000, f2: 1200, filter: 'bandpass', q: 0.9 }); [2637, 3136, 3951].forEach((f, i) => tone({ type: 'triangle', f, dur: 0.06, vol: 0.06, delay: i * 0.04 })); },
+  bite() { noise({ dur: 0.1, vol: 0.3, freq: 900, f2: 300 }); tone({ type: 'sawtooth', f: 160, f2: 80, dur: 0.12, vol: 0.12 }); },
   // … its three slices …
   slice(kind) {
     const f = { sweep: [2600, 700], cleave: [1800, 400], cross: [3200, 900] }[kind] || [2400, 600];

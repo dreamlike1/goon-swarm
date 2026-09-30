@@ -51,6 +51,18 @@
   --mine: #d9a55b;
   --sniper: #3dffa8;     /* v0.30: a mint-green tracer */
   --missiles: #ff5cf0;   /* v0.30: Arcane Missiles, arcane magenta */
+  /* the Silica pack (v0.42) */
+  --gatling: #ffc94a;    /* hot brass */
+  --cryo: #7fd8ff;       /* ice blue */
+  --shifter: #f0a23a;    /* lion gold */
+  --ice: #c8f1ff;        /* frost fields, the ring of ice, chilled enemies */
+  --lion: #e7a846;
+  --lion-mane: #a8561e;
+  --turtle: #3f9e5a;
+  --turtle-dark: #276b3b;
+  --turtle-skin: #8fd08e;
+  --chimera: #c0603f;
+  --chimera-wing: #6b3fa0;
   /* rarity colours, used for rarity labels and reveal glows */
   --r-common: #8fa3b0;
   --r-uncommon: #6fcf97;
@@ -359,7 +371,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 
 /* Card packs: a foil pack with a crimped top strip (the part that tears off when you open it).
    Every pack uses this look: the starter pack and the store's packs. --pc is the pack's colour. */
-:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); }
+:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); --pack-silica: #9fb8ff; }
 .screen:focus { outline: none; }
 .start:disabled { opacity: .45; cursor: default; filter: none; }
 .pack-art {
@@ -372,6 +384,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .pack-starter { --pc: var(--pack-starter); }
 .pack-artillery { --pc: var(--pack-artillery); }
 .pack-magus { --pc: var(--pack-magus); }
+.pack-silica { --pc: var(--pack-silica); }
 .pack-top, .pack-body {
   display: block;
   background:
@@ -940,8 +953,8 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
    full resolution. Text keeps its normal fonts either way (v0.30, user: the pixel fonts were unreadable). */
 .logo-px { display: none !important; }
 .crt .logo-hd { display: none !important; }
-.crt .logo-px { display: block !important; image-rendering: pixelated; }
-.crt .arena canvas { image-rendering: pixelated; }
+.crt .logo-px { display: block !important; image-rendering: crisp-edges; image-rendering: pixelated; }   /* crisp-edges: older Firefox */
+.crt .arena canvas { image-rendering: crisp-edges; image-rendering: pixelated; }
 .crt { background: #000; }                           /* the dark tube behind the switch-on */
 
 .crt-screen { display: none; position: fixed; inset: 0; z-index: 100; pointer-events: none; }
@@ -1013,7 +1026,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
    user), turned one notch, with a soft gold glow and a pink one behind; it shakes as it lands */
 .cine-wheel {
   grid-area: 1 / 1; width: min(60vmin, 440px); height: auto; aspect-ratio: 1; max-width: 100%;
-  image-rendering: pixelated; image-rendering: crisp-edges;
+  image-rendering: crisp-edges; image-rendering: pixelated;
   filter: drop-shadow(0 0 22px color-mix(in srgb, var(--wheel) 45%, transparent)) drop-shadow(0 0 60px color-mix(in srgb, var(--neon) 30%, transparent));
   opacity: 0; transform: scale(.92); transition: opacity .35s ease, transform .35s ease;
 }

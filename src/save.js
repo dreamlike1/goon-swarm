@@ -12,7 +12,7 @@ const SAVE_KEY = 'rogue.save';
 const SAVE_VERSION = 2;        // v2 (user, v0.6): the starter packs are gone, so older saves start over
 const DECK_LIMIT = 31;
 const COPY_LIMIT = 5;
-const GOLD_PER = 50;           // 1 gold for every 50 enemies defeated in a run, paid when you die or quit (user)
+const GOLD_PER = 15;           // 1 gold for every 15 enemies defeated in a run, paid when you die or quit (user; 50 until v0.43)
 
 function blankSave() {
   return {

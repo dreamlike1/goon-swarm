@@ -322,6 +322,8 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  drawSilicaFloor();                     // the Cryo Magus's frost fields and where the chimera's bombs land (silica.js)
+
   // mines: a disc with a light that blinks once armed, and a faint ring showing the blast radius
   for (const m of game.mines) {
     const spec = CARDS[m.card], armed = m.t >= spec.arm, col = COL[m.card];
@@ -366,10 +368,12 @@ function draw() {
       ctx.fillStyle = enemyCol(e); ctx.fillRect(e.x - e.r, by, bw * Math.max(0, e.hp / e.maxHp), 2);
     }
   }
+  drawSilicaTop();                       // frost on chilled enemies, the ring of ice, falling bombs, the lion's bite
 
   // projectiles, by look: streak (a line trail), orb and heavy (fading circles), spin (a turning square)
   for (const pr of game.projectiles) {
     const color = COL[pr.card], t = pr.trail;
+    if (pr.look === 'ice') { drawIceShot(pr); continue; }   // Cryo Magus (silica.js)
     if (pr.look === 'sniper') {              // Sniper (v0.30): a long, thin tracer with a bright core; the Railgun is a thick one with a glow
       const L = Math.min(pr.flown, pr.big ? 150 : 110), bx = pr.x - Math.cos(pr.a) * L, by = pr.y - Math.sin(pr.a) * L;
       const g = ctx.createLinearGradient(bx, by, pr.x, pr.y);
@@ -419,7 +423,7 @@ function draw() {
     }
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
-    if (pr.look === 'streak' || pr.look === 'spin') {
+    if (pr.look === 'streak' || pr.look === 'spin' || pr.look === 'gat') {
       if (t.length >= 2) {
         ctx.globalAlpha = pr.look === 'spin' ? 0.25 : 0.45;
         ctx.lineWidth = Math.max(2, pr.r * 0.6); ctx.lineCap = 'round';
@@ -493,7 +497,7 @@ function draw() {
   if (!game.inMenu) {
     ctx.globalAlpha = p.safe > 0 && !dsh && Math.floor(p.safe * 20) % 2 ? 0.45 : 1;   // blink while safe after a hit
     if (dsh) ellipse(p.x, p.y, PLAYER.r * 1.25, PLAYER.r * 0.82, da);
-    else circle(p.x, p.y, PLAYER.r);
+    else circle(p.x, p.y, PLAYER.r);    // the Druid summons animals separately now (silica.js)
     ctx.globalAlpha = 1;
   }
   if (dsh && !game.inMenu) {             // BULL charge: speed lines behind, a glowing wedge and a pair of horns in front
@@ -557,11 +561,33 @@ function draw() {
   tctx.textAlign = 'center';
   for (const f of game.floaters) {
     tctx.globalAlpha = Math.min(1, f.life * 3);
+    if (f.crit) { drawCritText(f); continue; }
     tctx.fillStyle = f.color;
     // v0.30 (user): bigger, 11/15 px before, with a dark edge so they read over anything
-    tctx.font = `700 ${f.big ? 22 : 16}px "Chakra Petch", system-ui, sans-serif`;
+    tctx.font = `700 ${f.crit ? 27 : f.big ? 22 : 16}px "Chakra Petch", system-ui, sans-serif`;   // a crit: 27 px (v0.41)
     tctx.lineWidth = 4; tctx.strokeStyle = 'rgba(0, 0, 0, .8)'; tctx.lineJoin = 'round'; tctx.strokeText(f.text, f.x, f.y);
     tctx.fillText(f.text, f.x, f.y);
   }
   tctx.restore();
+}
+// A crit (v0.42, user: a GOOD indicator): the number pops in big and settles, on a spiky orange starburst, with a
+// small CRIT tag over it. Gold with a dark edge, tilted a little.
+function drawCritText(f) {
+  const age = (f.max || 0.9) - f.life, pop = reducedMotion ? 1 : 1 + 1.1 * Math.exp(-age * 14);
+  const c = tctx, fade = Math.min(1, f.life * 3);
+  c.save(); c.translate(f.x, f.y); c.rotate(-0.1); c.scale(pop, pop);
+  c.globalAlpha = fade * 0.9;
+  c.beginPath();                                   // the starburst behind the number
+  for (let i = 0; i < 20; i++) { const a = i / 20 * TAU + age * 1.5, r = i % 2 ? 13 : 24; c.lineTo(Math.cos(a) * r * 1.35, -9 + Math.sin(a) * r); }
+  c.closePath();
+  c.fillStyle = COL.relic; c.fill();
+  c.lineWidth = 2.5; c.strokeStyle = 'rgba(0, 0, 0, .75)'; c.stroke();
+  c.globalAlpha = fade;
+  c.font = '800 26px "Chakra Petch", system-ui, sans-serif';
+  c.lineWidth = 5; c.strokeStyle = 'rgba(40, 10, 0, .95)'; c.lineJoin = 'round'; c.strokeText(f.text, 0, 0);
+  c.fillStyle = COL.wheelHi; c.fillText(f.text, 0, 0);
+  c.font = '800 11px "Chakra Petch", system-ui, sans-serif';   // the tag
+  c.lineWidth = 3; c.strokeStyle = 'rgba(0, 0, 0, .9)'; c.strokeText('CRIT', 0, -24);
+  c.fillStyle = '#fff'; c.fillText('CRIT', 0, -24);
+  c.restore();
 }

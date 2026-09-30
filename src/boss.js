@@ -297,7 +297,7 @@ function updateRocks(dt) {
 function bossDown(b) {
   game.boss = null;
   game.bossDone = true;
-  bonusGold('BOSS');                                       // +1 gold (user)
+  bonusGold('BOSS', GOLD_BONUS.boss);                      // +10 gold (user, v0.43; it was +1)
   renderBossBar();
   SFX.roar();
   game.shake = Math.max(game.shake, 0.5);

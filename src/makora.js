@@ -246,6 +246,7 @@ function makoraReturns(m) {
   const name = m.adaptedTo ? CARDS[m.adaptedTo].name.toUpperCase() : null;
   if (name) game.floaters.push({ x: m.x, y: m.y - m.r - 40, text: `ADAPTED TO ${name}`, color: COL.wheel, life: 2, vy: -14, big: true });
   game.floaters.push({ x: m.x, y: m.y - m.r - 14, text: 'FASTER · STRONGER', color: COL.bad, life: 1.8, vy: -14, big: false });
+  bonusGold('MAKORA', GOLD_BONUS.makora);                    // +15 gold every time it goes down (user, v0.43), shown as it comes back
   if (!m.canDash && m.dashesSeen >= MAKORA.learn) {     // you dashed a lot: now it dashes too
     m.canDash = true; m.dashCd = 1.5;
     game.floaters.push({ x: m.x, y: m.y - m.r - 66, text: 'IT LEARNT YOUR DASH', color: COL.relic, life: 2.2, vy: -12, big: true });
@@ -643,9 +644,13 @@ function drawMakora(m) {
   c.setTransform(q * m.face, 0, 0, q, -MK.x0 * q, -MK.y0 * q);   // MK's box is centred on x, so the flip stays inside it
   drawMakoraBody(c, m, { lean, crouch, dA, dB, knife, fA, fB, fFront, legN, footRot, stride, breathe, t, still });
   c.setTransform(1, 0, 0, 1, 0, 0);
-  const img = c.getImageData(0, 0, pw, ph), d = img.data;     // hard edges: every block is there or it isn't
-  for (let i = 3; i < d.length; i += 4) d[i] = d[i] < 110 ? 0 : 255;
-  c.putImageData(img, 0, 0);
+  if (readbackOK()) {                                        // hard edges: every block is there or it isn't
+    try {
+      const img = c.getImageData(0, 0, pw, ph), d = img.data;
+      for (let i = 3; i < d.length; i += 4) d[i] = d[i] < 110 ? 0 : 255;
+      c.putImageData(img, 0, 0);
+    } catch (err) { readback.ok = false; }                   // a browser that won't let us read it: soft edges instead
+  }
   if (m.hit > 0) {                                           // a hit flashes it pale
     c.globalCompositeOperation = 'source-atop'; c.globalAlpha = 0.6; c.fillStyle = '#fff';
     c.fillRect(0, 0, pw, ph);
@@ -709,7 +714,31 @@ function drawRockBody(x, y, r, spin, flash, seed) {
   ctx.restore();
 }
 
-const MK = { x0: -100, y0: -112, w: 200, h: 170 };          // the box it's drawn in, in its units
+const MK = { x0: -100, y0: -112, w: 200, h: 170 };
+// Can we read the canvas back as drawn? (v0.44, user: every browser.) Brave's fingerprinting protection, Firefox's
+// resistFingerprinting and Safari's private browsing can add noise to a canvas read, or return blank or random pixels.
+// A small noise is harmless here, but a blank or random read would make MAKORA a box of noise, so this draws a known
+// pattern once and checks it comes back close. If not, MAKORA is drawn without the hard-edge pass (slightly soft
+// edges; everything else is the same).
+const readback = { ok: null };
+function readbackOK() {
+  if (readback.ok !== null) return readback.ok;
+  try {
+    const t = document.createElement('canvas'); t.width = 8; t.height = 2;
+    const x = t.getContext('2d', { willReadFrequently: true });
+    const want = [];
+    for (let i = 0; i < 8; i++) { const v = [i * 32, 255 - i * 30, (i * 71) % 256]; want.push(v); x.fillStyle = `rgb(${v})`; x.fillRect(i, 0, 1, 1); }
+    const d = x.getImageData(0, 0, 8, 2).data;
+    let bad = 0;
+    for (let i = 0; i < 8; i++) {
+      const o = i * 4;
+      if (d[o + 3] !== 255 || want[i].some((v, j) => Math.abs(d[o + j] - v) > 6)) bad++;
+      if (d[(8 + i) * 4 + 3] > 6) bad++;                     // the second row was left empty: it must read back clear
+    }
+    readback.ok = bad === 0;
+  } catch (err) { readback.ok = false; }
+  return readback.ok;
+}          // the box it's drawn in, in its units
 const mkCv = document.createElement('canvas');
 const mkx = mkCv.getContext('2d', { willReadFrequently: true });
 function drawMakoraBody(c, m, P) {

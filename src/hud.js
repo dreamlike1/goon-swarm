@@ -7,7 +7,7 @@
 const $ = id => document.getElementById(id);
 const trayEl = $('tray'), logEl = $('log'), checksEl = $('checks');
 const selftest = selfTest(2000);
-const packtests = STORE_PACKS.map(k => ({ k, ...packSelfTest(PACKS[k], 20000) }));
+const packtests = STORE_PACKS.filter(k => !PACKS[k].fixed).map(k => ({ k, ...packSelfTest(PACKS[k], 20000) }));
 const packtest = { ok: packtests.every(t => t.ok), packs: packtests.reduce((n, t) => n + t.packs, 0), rows: packtests.flatMap(t => t.rows) };
 let nextCard = null;
 

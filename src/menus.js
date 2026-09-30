@@ -47,6 +47,22 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.44' },
+  { tag: 'Fix', text: "MAKORA and the rest of the animations now work in every browser, including Brave, Firefox and Safari with their privacy protections on." },
+  { ver: 'v0.43' },
+  { tag: 'Store', text: 'The Silica pack is Legendary now, and costs 100 gold.' },
+  { tag: 'Gold', text: 'More gold: 1 for every 15 enemies (was 50), +10 for beating SKURTOSAURUS (was +1), and +15 every time MAKORA goes down.' },
+  { ver: 'v0.42' },
+  { tag: 'Store', text: 'New: the Silica pack in the store — three new Rare weapons to add to your roster.' },
+  { tag: 'Weapons', text: 'Say hello to the Gatling Gun, Cryo Magus and Druid. Unlock the pack and try them out.' },
+  { tag: 'Balance', text: 'A few tuning passes across weapons and effects.' },
+  { tag: 'Stats', text: 'Crits are easier to spot: the number pops in on an orange starburst with a CRIT tag.' },
+  { ver: 'v0.41' },
+  { tag: 'Stats', text: 'New stats: Crit rate (start at 10%) and Crit damage (start at +30%). Crits show as big gold numbers with a "!".' },
+  { tag: 'Stats', text: 'Crit rate is rarer in level ups than the other stats.' },
+  { ver: 'v0.40' },
+  { tag: 'Weapons', text: "Mine has no range now: it drops on its own when its turn comes, even with no enemy near." },
+  { tag: 'Weapons', text: 'Mines go off from further away: an enemy only has to come close, not touch the disc. The disc is bigger too.' },
   { ver: 'v0.39' },
   { tag: 'Boss', text: "MAKORA's punch shockwave fades out as it reaches the end of its cone, instead of hanging there." },
   { tag: 'Boss', text: 'From its 2nd wheel turn, MAKORA kicks 3 rocks in a row when you keep your distance.' },
@@ -205,6 +221,7 @@ for (const ul of document.querySelectorAll('.news-list')) {
 const PACK_EMBLEM = {
   starter: '<path d="M12 3c2.5 2 3.5 5 3.5 8v8h-7v-8c0-3 1-6 3.5-8z"/><path d="M8.5 15h7"/>',
   artillery: '<path d="M3.5 13.5l13-6 2.2 4.4-13 6z"/><circle cx="8.5" cy="17.5" r="3"/><path d="M8.5 17.5h.01M19.5 8l1.5-.8M19.8 10.6l1.7.2"/>',
+  silica: '<path d="M12 2.5l7.5 4.3v8.6L12 19.8l-7.5-4.4V6.8z"/><path d="M12 2.5v17.3M4.5 6.8l15 8.6M19.5 6.8l-15 8.6"/>',   // a crystal
   magus: '<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M18.5 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
 };
 function packArt(key, { big = false } = {}) {
@@ -276,13 +293,14 @@ $('store-packs').addEventListener('click', e => { const b = e.target.closest('.s
 let viewing = null, buying = false, viewCard = null;
 function openPackView(k) { viewing = k; viewCard = PACKS[k].cards[0]; renderPackView(); showScreen('scr-packview'); }
 function renderPackView() {
-  const k = viewing, pk = PACKS[k], odds = cardOdds(pk), afford = save.gold >= pk.price;
+  const k = viewing, pk = PACKS[k], odds = pk.fixed ? {} : cardOdds(pk), afford = save.gold >= pk.price;
   $('pv').innerHTML = `<div class="pv-head">${packArt(k)}<div class="pv-info">`
     + `<h2 id="pv-title">${pk.name}</h2>`
-    + `<p class="sub small">${pk.size} cards, each rolled on its own (repeats can happen). Drop rate per card:</p>`
+    + (pk.fixed ? `<p class="sub small">${pk.size} cards, nothing rolled: you get ${Object.values(pk.fixed)[0]} of each weapon.</p>`
+      : `<p class="sub small">${pk.size} cards, each rolled on its own (repeats can happen). Drop rate per card:</p>`)
     + `<div class="pv-tabs" role="tablist" aria-label="Weapons in this pack">`
     + pk.cards.map(id => `<button type="button" role="tab" class="pv-tab" data-card="${id}" aria-selected="${id === viewCard}" style="--c: var(--${id}); --rc: var(--r-${CARDS[id].rarity})">`
-      + `<span class="pv-tab-name">${CARDS[id].name}</span><span class="pv-tab-rar">${RARITY_NAME[CARDS[id].rarity]}</span><b>${(odds[id] * 100).toFixed(1)}%</b></button>`).join('')
+      + `<span class="pv-tab-name">${CARDS[id].name}</span><span class="pv-tab-rar">${RARITY_NAME[CARDS[id].rarity]}</span><b>${pk.fixed ? `×${pk.fixed[id]}` : `${(odds[id] * 100).toFixed(1)}%`}</b></button>`).join('')
     + `</div>`
     + `<div class="pv-buy"><button class="start" type="button" id="btn-buy"${afford ? '' : ' disabled'}>Buy <span class="coin" aria-hidden="true"></span>${pk.price}</button>`
     + `<button type="button" class="pv-testpack" id="btn-testpack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${CARD_ICON.sniper}</svg>Test pack</button>`
@@ -293,7 +311,7 @@ function renderPackView() {
 function weaponDetail(id) {
   const k = CARDS[id], t = COMBOS[id] || {}, passive = Object.keys(t).map(Number).sort((a, b) => a - b).find(n => n !== 7);
   return `<div class="pv-detail-head"><p class="type-name" style="color: var(--${id})">${k.name}</p>`
-    + `<p class="type-stats">${k.dmg} dmg · range ${k.range}</p>`
+    + `<p class="type-stats">${k.dmgNote || `${k.dmg} dmg`} · ${k.range ? `range ${k.range}` : 'drops on its own'}</p>`
     + `<button type="button" class="pv-test" data-card="${id}" style="--c: var(--${id})">Test ${k.name}</button></div>`
     + `<p class="type-desc">${k.desc}</p>`
     + (passive ? `<p class="type-combo"><b>Passive ×${passive}</b> <i>${t[passive].name}</i> ${t[passive].does}</p>` : '')
@@ -368,6 +386,7 @@ function placeDummies() {
   for (const e of pr.dummies) clampTo(e, e.r);
   game.enemies = pr.dummies.slice();
   game.mines = []; game.projectiles = []; game.timers = []; game.sweeps = [];
+  resetSilica();
 }
 function practiceAttacks(card) {
   const t = COMBOS[card] || {}, passive = Object.keys(t).map(Number).sort((a, b) => a - b).find(n => n !== 7);
@@ -464,7 +483,7 @@ let revealRun = 0;                                   // bumped to stop a reveal 
 let revealRate = 1;                                  // Space speeds up the rest of a reveal (user)
 let revealAfter = null;                              // where Continue goes
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const done = anim => anim.finished.catch(() => {});  // a cancelled animation just ends the wait
+const done = anim => (anim.finished || Promise.resolve()).catch(() => {});   // a cancelled animation just ends the wait (no `finished`: an older browser)
 // Plays an animation and waits for it, but never longer than it should take: a throttled or hidden page can slow
 // animations right down, and the reveal must still keep its pace (it then jumps the animation to its end).
 function play(el, frames, opts) {
@@ -558,6 +577,9 @@ const CARD_ICON = {                                  // a small picture of each 
   firebolt: '<path d="M12 3c1 4 5 5 5 10a5 5 0 01-10 0c0-3 2-4 2-6 1 1 2 2 3 2 0-2-1-4 0-6z"/>',
   sniper: '<circle cx="12" cy="12" r="7"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="1"/>',
   missiles: '<path d="M4 18c4-1 7-4 9-9M13 9l1-4 3 3z"/><path d="M8 20c4-1 8-3 11-8M19 12l1-4 2 3z"/>',
+  gatling: '<rect x="3" y="8" width="11" height="8" rx="2"/><path d="M14 9.5h7M14 12h7M14 14.5h7M7 16v4"/>',
+  cryo: '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/><path d="M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5"/>',
+  shifter: '<circle cx="12" cy="15" r="4"/><circle cx="6" cy="10" r="2"/><circle cx="10" cy="6" r="2"/><circle cx="14" cy="6" r="2"/><circle cx="18" cy="10" r="2"/>',
 };
 const RARITY_RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
 const freeCopies = id => Math.min(COPY_LIMIT, save.owned[id] || 0) - (save.equipped[id] || 0);
@@ -581,7 +603,7 @@ function renderLoadout() {
       + `<span class="ccard-dmg" title="Damage">${k.dmg}</span><span class="ccard-free" title="Free copies">×${Math.max(0, free)}</span>`
       + `<svg class="ccard-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CARD_ICON[id] || ''}</svg>`
       + `<span class="ccard-name">${k.name}</span><span class="ccard-rar">${RARITY_NAME[k.rarity]}</span>`
-      + `<span class="ccard-stats">range ${k.range}${sizes.length ? ` · combos ${sizes.map(x => `×${x}`).join(' ')}` : ''}</span></button>`;
+      + `<span class="ccard-stats">${k.range ? `range ${k.range}` : 'no range'}${sizes.length ? ` · combos ${sizes.map(x => `×${x}`).join(' ')}` : ''}</span></button>`;
   }).join('');
   $('btn-clear').disabled = !cards.length;
   $('btn-auto').disabled = !CARD_IDS.some(id => save.owned[id]);
@@ -791,6 +813,7 @@ function resetRun() {
   resetStats();
   resetBoss();
   resetMakora();
+  resetSilica();
   Object.assign(game.player, { x: W / 2, y: H / 2, flash: 0, hp: PLAYER.hp, safe: 0, kx: 0, ky: 0 });
   $('defeat').hidden = true;
   renderHp(false);
@@ -825,7 +848,7 @@ function defeat() {
   const turns = game.makora ? game.makora.turns : 0;
   $('d-stats').textContent = `Level ${game.level} · Sequence ${deck.seqNo} · ${game.kills} enem${game.kills === 1 ? 'y' : 'ies'} defeated`
     + (game.makora ? ` · MAKORA's wheel turned ${turns} time${turns === 1 ? '' : 's'}` : '');
-  const g = payGold(game.kills);                   // 1 gold per 50 defeated (user)
+  const g = payGold(game.kills);                   // 1 gold per 15 defeated (user, v0.43; 50 before)
   const bonus = game.goldBonus || 0;
   $('d-gold').innerHTML = `<span class="coin" aria-hidden="true"></span><b>+${g + bonus} gold</b> · ${g} for kills (1 per ${GOLD_PER})${bonus ? ` + ${bonus} bonus` : ''} · you have ${save.gold}`;
   if (g) SFX.coin();

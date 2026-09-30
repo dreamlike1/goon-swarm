@@ -27,7 +27,9 @@ const CARDS = {
                  desc: 'Missile. Flies straight, starts slow then speeds up, and pierces 1 enemy. 3 in a row fire in every direction.' },
   // Mine (user): leaves a landmine where the player stands. When an enemy touches it, it explodes: 30 damage to
   // every enemy within `radius`. It arms `arm` s after it's placed. The rarity, radius, arm time and knockback are placeholders.
-  mine: { name: 'Mine', rarity: 'common', range: 152, dmg: 30, speed: 0, r: 7, knock: 260, look: 'mine', radius: 75, arm: 0.35,
+  // v0.40 (user): no attack range. It drops on its own when its turn comes (`auto`), enemy near or not. An enemy sets it
+  // off from `trigger` px away (it had to touch the 7 px disc before), and the disc is bigger (r 10, was 7).
+  mine: { name: 'Mine', rarity: 'common', auto: true, dmg: 30, speed: 0, r: 10, trigger: 26, knock: 260, look: 'mine', radius: 75, arm: 0.35,
           desc: 'Drops a landmine where you stand. An enemy that touches it sets off an explosion: 30 damage to everything nearby.' },
   firebolt: { name: 'Arcane Fire', rarity: 'uncommon', range: 290, dmg: 20, speed: 760, r: 6,  knock: 90,  look: 'streak', desc: 'A fast, strong bolt of arcane fire.' },
   // Sniper (user, v0.30): a super long shot that deals 50 damage. It flies straight and very fast (`start` = `speed`,
@@ -38,6 +40,15 @@ const CARDS = {
   // missiles per play). Damage, speed, range and rarity are placeholders.
   missiles: { name: 'Arcane Missiles', rarity: 'common', range: 250, dmg: 4, speed: 430, r: 4, knock: 25, look: 'amissile', volley: 2,
               desc: 'Fires 2 homing missiles that curve in on their targets.' },
+  // The Silica pack (v0.42, user): 5 of each when you buy it. Legendary since v0.43 (user). Their attacks live in silica.js (`silica`). Rarity,
+  // range, damage and the rest are placeholders.
+  gatling: { name: 'Gatling Gun', rarity: 'legendary', range: 262, dmg: 2, speed: 820, r: 3, knock: 14, look: 'gat', silica: true, dmgNote: '2 dmg × 10 rounds',
+             desc: 'Fires 10 rounds of bullets in a fast burst.' },
+  cryo: { name: 'Cryo Magus', rarity: 'legendary', range: 250, dmg: 8, speed: 360, r: 7, knock: 30, look: 'ice', silica: true,
+          desc: 'A homing ice blast. Where it lands it leaves a frost field that slows enemies.' },
+  shifter: { name: 'Druid',
+             rarity: 'legendary', range: 230, dmg: 22, speed: 0, r: 0, knock: 220, look: 'lion', silica: true,
+             desc: 'Summon a lion that pounces on the nearest enemy and bites it.' },
 };
 const CARD_IDS = Object.keys(CARDS);   // roster order, used for sorting
 
