@@ -354,6 +354,33 @@ function drawWaterJet(x, y, a, len, seed) {
   waterSpray(len, Math.max(16, len * 0.16), COL.superwasher, seed);
   ctx.restore();
 }
+// A puddle of water on the ground (user's reference: a flat wobbly-edged blob with a couple of small drops beside
+// it), for SOAK TRAIL!'s dropped trail. `q` (0→1, near its pop) swells it a little and brightens its rim.
+function waterPuddle(x, y, r, seed, q, alpha = 1) {
+  const col = COL.superwasher, R = r * (0.85 + 0.3 * q);
+  ctx.save(); ctx.translate(x, y);
+  ctx.beginPath();
+  for (let i = 0; i <= 12; i++) {
+    const a = (i / 12) * TAU, wob = 1 + 0.22 * Math.sin(a * 3 + seed) + 0.12 * Math.sin(a * 5 + seed * 1.7);
+    const px = Math.cos(a) * R * 1.25 * wob, py = Math.sin(a) * R * 0.7 * wob;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.globalAlpha = (0.22 + 0.15 * q) * alpha; ctx.fillStyle = col; ctx.fill();
+  ctx.globalAlpha = (0.55 + 0.2 * q) * alpha; ctx.strokeStyle = COL.player; ctx.lineWidth = 1.3; ctx.stroke();
+  for (let k = 0; k < 2; k++) {                          // a couple of small satellite drops beside it
+    const a2 = seed * 1.3 + k * 2.6, d2 = R * (1.5 + k * 0.4), sx = Math.cos(a2) * d2, sy = Math.sin(a2) * d2 * 0.6;
+    const dr = R * (0.22 - k * 0.06);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(a2);
+    ctx.globalAlpha = (0.2 + 0.12 * q) * alpha; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(0, 0, dr, dr * 0.6, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = (0.5 + 0.15 * q) * alpha; ctx.strokeStyle = COL.player; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0, 0, dr, dr * 0.6, 0, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
 
 function draw() {
   ctx.save();
@@ -636,20 +663,11 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  // SOAK TRAIL!'s bubbles (Super Washer ×7, user): a fading ribbon connecting them, each swelling just before it pops.
-  if (game.trails.length > 1) {
-    ctx.strokeStyle = COL[game.trails[0].card]; ctx.globalAlpha = 0.28; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    game.trails.forEach((tp, i) => (i ? ctx.lineTo(tp.x, tp.y) : ctx.moveTo(tp.x, tp.y)));
-    ctx.stroke();
-  }
+  // SOAK TRAIL!'s puddles (Super Washer ×7, user): little puddles left behind, swelling just before they dry up.
   for (const tp of game.trails) {
-    const q = 1 - Math.max(0, tp.t) / TUNE.soakTrail.trailDelay, col = COL[tp.card], r = 5 + 6 * q;
-    ctx.globalAlpha = 0.16 + 0.2 * q; ctx.fillStyle = col; circle(tp.x, tp.y, r);
-    ctx.globalAlpha = 0.55; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(tp.x, tp.y, r, 0, TAU); ctx.stroke();
+    const q = 1 - Math.max(0, tp.t) / TUNE.soakTrail.trailDelay;
+    waterPuddle(tp.x, tp.y, 7, tp.seed, q);
   }
-  ctx.globalAlpha = 1;
 
   // lasers: zaps, and Laser ×7's sweep (the beam, with the slice it just swept fading behind it)
   for (const b of game.beams) drawBeam(b.x1, b.y1, b.x2, b.y2, reducedMotion ? b.life / b.max : (b.life / b.max) * (0.75 + Math.random() * 0.25), b.w, COL[b.card]);

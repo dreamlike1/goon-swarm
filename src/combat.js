@@ -182,7 +182,7 @@ function updateSoak(dt) {
   const S = TUNE.soakTrail, p = game.player;
   game.soakT = Math.max(0, game.soakT - dt);
   if ((game.soakSweep -= dt) <= 0) { game.soakSweep = S.every; superSweep(game.soakCard, game.soakRange, game.soakDmg); }
-  if ((game.soakDrop -= dt) <= 0) { game.soakDrop = S.dropEvery; game.trails.push({ x: p.x, y: p.y, t: S.trailDelay, card: game.soakCard }); }
+  if ((game.soakDrop -= dt) <= 0) { game.soakDrop = S.dropEvery; game.trails.push({ x: p.x, y: p.y, t: S.trailDelay, card: game.soakCard, seed: Math.random() * 10 }); }
 }
 function updateTrails(dt) {
   for (let i = game.trails.length - 1; i >= 0; i--) {

@@ -44,8 +44,8 @@ const COMBOS = {
   shifter:     { 3: { name: 'QUAKE!',        does: 'Summon a turtle whose stomping shakes the ground and damages enemies around it.' },
                  7: { name: 'CHIMERA!',      does: 'Summon a chimera that screams while bombs rain down on nearby enemies.' } },
   // The Powerwash pack (user). Their attacks are in combat.js (spray, popBubble, superSweep).
-  pressurewasher: { 3: { name: 'WASH CONE!', does: 'One wide cone of spray, like a slash.' },
-                    7: { name: 'DELUGE!',    does: '7 long sprays, each in a random direction.' } },
+  pressurewasher: { 3: { name: 'WASH CONE!', does: 'A jet of spray, swept left to right.' },
+                    7: { name: 'DELUGE!',    does: '7 wide cones of spray, each in a random direction.' } },
   soapgun:        { 3: { name: 'BUBBLE RUSH!', does: '9 rapid bubbles that stun on a hit.' },
                     7: { name: 'BUBBLE TRAP!', does: 'One giant bubble in a single direction that traps enemies inside, then pops, pushing them out.' } },
   superwasher:    { 3: { name: 'TRIPLE SPIN!', does: '3 rapid full spins around you.' },
@@ -71,8 +71,9 @@ const TUNE = {
   barrage: { count: 4, spread: 1.25 },                // Arcane Missiles ×2
   storm: { count: 7, speedMul: 2.2, split: 2 },       // Arcane Missiles ×7: each splits into `split` on a hit
   // The Powerwash pack (user).
-  washCone: { arc: 1.7 },                                       // Pressure Washer ×3: the cone's width (radians)
-  deluge: { count: 7, gap: 0.12 },                              // Pressure Washer ×7
+  // Pressure Washer ×3 (user): a toned-down jet swept left to right across `span` radians, in `steps` quick flashes.
+  washCone: { arc: 0.3, span: 1.1, steps: 6, gap: 0.035 },
+  deluge: { count: 7, gap: 0.12, arc: 1.7 },                     // Pressure Washer ×7 (user): the old wide cone look
   bubbleRush: { count: 9, gap: 0.09, stun: 0.6 },                // Soap Gun ×3
   bubbleTrap: { r: 18, stun: 1.1, radius: 110, knock: 520 },   // Soap Gun ×7
   tripleSpin: { count: 3, gap: 0.5 },                            // Super Washer ×3
@@ -225,12 +226,14 @@ function runCombo(cb, echo = false) {
       break;
     }
     // The Powerwash pack (user).
-    case 'pressurewasher3':                            // WASH CONE!: one wide cone of spray, wiping across as it lands
-      spray(card, e0 ? aimAngle(e0) : 0, TUNE.washCone.arc, range, { dmg: spec.dmg, wipe: true });
+    case 'pressurewasher3': {                          // WASH CONE!: a narrow jet, swept left to right
+      const W = TUNE.washCone, a0 = (e0 ? aimAngle(e0) : 0) - W.span / 2;
+      for (let k = 0; k < W.steps; k++) later(k * W.gap, () => spray(card, a0 + (k / (W.steps - 1)) * W.span, W.arc, range, { dmg: spec.dmg, quiet: k > 0 }));
       break;
-    case 'pressurewasher7': {                          // DELUGE!: 7 long sprays, each a random direction
+    }
+    case 'pressurewasher7': {                          // DELUGE!: 7 wide cones of spray, each a random direction
       const D = TUNE.deluge;
-      for (let k = 0; k < D.count; k++) later(k * D.gap, () => spray(card, Math.random() * Math.PI * 2, spec.arc, range * 1.3, { dmg: spec.dmg, quiet: k > 0 }));
+      for (let k = 0; k < D.count; k++) later(k * D.gap, () => spray(card, Math.random() * Math.PI * 2, D.arc, range * 1.3, { dmg: spec.dmg, wipe: true, quiet: k > 0 }));
       game.shake = Math.max(game.shake, 0.1);
       break;
     }
