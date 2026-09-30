@@ -310,6 +310,21 @@ function drawBeam(x1, y1, x2, y2, k, w, color) {
   ctx.globalAlpha = 1;
 }
 
+// Super Washer's spinning jet (user): a wavy, foamy stream instead of a laser's crisp line.
+function drawWaterJet(x, y, a, len) {
+  const t = performance.now() / 80;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  const path = () => {
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    for (let i = 1; i <= 8; i++) { const f = i / 8, wob = Math.sin(f * 10 + t) * 5 * f; ctx.lineTo(len * f, wob); }
+  };
+  ctx.strokeStyle = COL.superwasher; ctx.globalAlpha = 0.35; ctx.lineWidth = 9; path(); ctx.stroke();
+  ctx.strokeStyle = COL.player; ctx.globalAlpha = 0.8; ctx.lineWidth = 2.5; path(); ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 function draw() {
   ctx.save();
   if (NET.run) {                          // co-op: a bigger arena, and the view follows you (coop.js)
@@ -463,6 +478,15 @@ function draw() {
   for (const pr of game.projectiles) {
     const color = COL[pr.card], t = pr.trail;
     if (pr.look === 'ice') { drawIceShot(pr); continue; }   // Cryo Magus (silica.js)
+    if (pr.look === 'bubble') {                              // Soap Gun (user): a transparent, soapy bubble
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = color; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 0.14; ctx.fillStyle = color; circle(pr.x, pr.y, pr.r);
+      ctx.globalAlpha = 0.6; ctx.fillStyle = COL.player;
+      ctx.beginPath(); ctx.ellipse(pr.x - pr.r * 0.35, pr.y - pr.r * 0.35, Math.max(1, pr.r * 0.3), Math.max(1, pr.r * 0.18), -0.6, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     if (pr.look === 'sniper') {              // Sniper (v0.30): a long, thin tracer with a bright core; the Railgun is a thick one with a glow
       const L = Math.min(pr.flown, pr.big ? 150 : 110), bx = pr.x - Math.cos(pr.a) * L, by = pr.y - Math.sin(pr.a) * L;
       const g = ctx.createLinearGradient(bx, by, pr.x, pr.y);
@@ -568,29 +592,60 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  // Pressure Washer / Super Washer (user): a fanned wedge of spray, fading out.
+  // Pressure Washer (user): a misty cone with a few wavy jet streaks, more water than energy weapon. WASH CONE!
+  // wipes across as it appears (`wipe`) instead of popping in all at once.
   for (const s of game.sprays) {
-    const k = Math.max(0, s.life / s.max), col = COL[s.card];
+    const col = COL[s.card], fade = Math.max(0, s.life / s.max), q = 1 - fade;
+    const reveal = s.wipe ? Math.min(1, q / 0.45) : 1, half = (s.arc / 2) * reveal, rng = s.range * (0.7 + 0.3 * reveal);
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
-    ctx.fillStyle = col; ctx.globalAlpha = 0.3 * k;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, s.range, -s.arc / 2, s.arc / 2); ctx.closePath(); ctx.fill();
-    ctx.globalAlpha = 0.65 * k; ctx.strokeStyle = COL.player; ctx.lineWidth = 2; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(-s.arc / 2) * s.range, Math.sin(-s.arc / 2) * s.range); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(s.arc / 2) * s.range, Math.sin(s.arc / 2) * s.range); ctx.stroke();
+    ctx.fillStyle = col; ctx.globalAlpha = 0.22 * fade;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, rng, -half, half); ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    const jets = 5, t = performance.now() / 60;
+    for (let j = 0; j < jets; j++) {
+      const ja = jets > 1 ? -half + (j / (jets - 1)) * half * 2 : 0, nx = Math.cos(ja + Math.PI / 2), ny = Math.sin(ja + Math.PI / 2);
+      ctx.strokeStyle = col; ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.4 * fade; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      for (let i = 1; i <= 5; i++) {
+        const f = i / 5, wob = Math.sin(f * 9 + j * 2 + t) * 4 * f;
+        ctx.lineTo(Math.cos(ja) * rng * f + nx * wob, Math.sin(ja) * rng * f + ny * wob);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 0.75 * fade; ctx.strokeStyle = COL.player; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(ja) * rng * 0.4, Math.sin(ja) * rng * 0.4); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  // SOAK TRAIL!'s bubbles (Super Washer ×7, user): a fading ribbon connecting them, each swelling just before it pops.
+  if (game.trails.length > 1) {
+    ctx.strokeStyle = COL[game.trails[0].card]; ctx.globalAlpha = 0.28; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    game.trails.forEach((tp, i) => (i ? ctx.lineTo(tp.x, tp.y) : ctx.moveTo(tp.x, tp.y)));
+    ctx.stroke();
+  }
+  for (const tp of game.trails) {
+    const q = 1 - Math.max(0, tp.t) / TUNE.soakTrail.trailDelay, col = COL[tp.card], r = 5 + 6 * q;
+    ctx.globalAlpha = 0.16 + 0.2 * q; ctx.fillStyle = col; circle(tp.x, tp.y, r);
+    ctx.globalAlpha = 0.55; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(tp.x, tp.y, r, 0, TAU); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 
   // lasers: zaps, and Laser ×7's sweep (the beam, with the slice it just swept fading behind it)
   for (const b of game.beams) drawBeam(b.x1, b.y1, b.x2, b.y2, reducedMotion ? b.life / b.max : (b.life / b.max) * (0.75 + Math.random() * 0.25), b.w, COL[b.card]);
   for (const sw of game.sweeps) {
-    const pp = game.player, a = sw.a ?? sw.a0, trail = Math.min(1.2, a - sw.a0);
+    const pp = game.player, a = sw.a ?? sw.a0, trail = Math.min(1.2, a - sw.a0), water = sw.card === 'superwasher';
     if (trail > 0.02) {
-      ctx.fillStyle = COL[sw.card]; ctx.globalAlpha = 0.16;
+      ctx.fillStyle = COL[sw.card]; ctx.globalAlpha = water ? 0.22 : 0.16;
       ctx.beginPath(); ctx.moveTo(pp.x, pp.y); ctx.arc(pp.x, pp.y, sw.len, a - trail, a); ctx.closePath(); ctx.fill();
       ctx.globalAlpha = 1;
     }
-    drawBeam(pp.x, pp.y, pp.x + Math.cos(a) * sw.len, pp.y + Math.sin(a) * sw.len, 1, 5, COL[sw.card]);
+    if (water) drawWaterJet(pp.x, pp.y, a, sw.len);
+    else drawBeam(pp.x, pp.y, pp.x + Math.cos(a) * sw.len, pp.y + Math.sin(a) * sw.len, 1, 5, COL[sw.card]);
   }
 
   // player: a circle (hidden behind the start menu), stretched along a BULL charge

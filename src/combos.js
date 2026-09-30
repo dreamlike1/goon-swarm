@@ -49,7 +49,7 @@ const COMBOS = {
   soapgun:        { 3: { name: 'BUBBLE RUSH!', does: '9 rapid bubbles that stun on a hit.' },
                     7: { name: 'BUBBLE TRAP!', does: 'One giant bubble in a single direction that traps enemies inside, then pops, pushing them out.' } },
   superwasher:    { 3: { name: 'TRIPLE SPIN!', does: '3 rapid full spins around you.' },
-                    7: { name: 'SOAK TRAIL!', does: '7 seconds of extra speed with an exploding bubble trail, both sprays spinning the whole time.' } },
+                    7: { name: 'SOAK TRAIL!', does: 'A burst of extra speed with an exploding bubble trail, both sprays spinning the whole time.' } },
 };
 const TUNE = {
   rapidGap: 0.1,                                     // Bullet ×3: seconds between shots
@@ -76,7 +76,7 @@ const TUNE = {
   bubbleRush: { count: 9, gap: 0.09, stun: 0.6 },                // Soap Gun ×3
   bubbleTrap: { r: 18, stun: 1.1, radius: 110, knock: 520 },   // Soap Gun ×7
   tripleSpin: { count: 3, gap: 0.5 },                            // Super Washer ×3
-  soakTrail: { time: 7, speedMul: 1.6, every: 1.1, dropEvery: 0.18, trailDelay: 0.5, trailRadius: 55 },   // Super Washer ×7
+  soakTrail: { time: 4, speedMul: 1.6, every: 1.1, dropEvery: 0.18, trailDelay: 0.5, trailRadius: 55 },   // Super Washer ×7 (user: nerfed from 7s)
 };
 
 // The combo that starts at `pos` in this sequence, if any: { card, n, name }.
@@ -225,8 +225,8 @@ function runCombo(cb, echo = false) {
       break;
     }
     // The Powerwash pack (user).
-    case 'pressurewasher3':                            // WASH CONE!: one wide cone of spray
-      spray(card, e0 ? aimAngle(e0) : 0, TUNE.washCone.arc, range, { dmg: spec.dmg });
+    case 'pressurewasher3':                            // WASH CONE!: one wide cone of spray, wiping across as it lands
+      spray(card, e0 ? aimAngle(e0) : 0, TUNE.washCone.arc, range, { dmg: spec.dmg, wipe: true });
       break;
     case 'pressurewasher7': {                          // DELUGE!: 7 long sprays, each a random direction
       const D = TUNE.deluge;
@@ -234,11 +234,11 @@ function runCombo(cb, echo = false) {
       game.shake = Math.max(game.shake, 0.1);
       break;
     }
-    case 'soapgun3': {                                 // BUBBLE RUSH!: 9 rapid bubbles that stun on a hit
+    case 'soapgun3': {                                 // BUBBLE RUSH!: 9 rapid bubbles that stun, and still pop into 2 more
       const R = TUNE.bubbleRush;
       for (let k = 0; k < R.count; k++) later(k * R.gap, () => {
         const e = (e0 && game.enemies.includes(e0)) ? e0 : inRange(card);
-        if (e) shoot(card, e, { r: spec.r - 1, dmg: Math.round(spec.dmg * 0.6), split: 0, stun: R.stun, quiet: k > 0 });
+        if (e) shoot(card, e, { r: spec.r - 1, dmg: Math.round(spec.dmg * 0.6), split: spec.pops, stun: R.stun, quiet: k > 0 });
       });
       break;
     }

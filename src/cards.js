@@ -57,7 +57,7 @@ const CARDS = {
   pressurewasher: { name: 'Pressure Washer', rarity: 'common', range: 200, dmg: 6, speed: 0, r: 3, knock: 160, look: 'spray', arc: 0.5,
                     desc: 'A thin water spray that pushes enemies back and damages them.' },
   // `start`/`ramp` (user's BUBBLE TRAP! only, combos.js's launch()): the giant bubble's launch speed climb.
-  soapgun: { name: 'Soap Gun', rarity: 'common', range: 230, dmg: 4, speed: 340, start: 220, ramp: 0.4, r: 6, knock: 40, look: 'orb', pops: 2,
+  soapgun: { name: 'Soap Gun', rarity: 'common', range: 230, dmg: 4, speed: 340, start: 220, ramp: 0.4, r: 6, knock: 40, look: 'bubble', pops: 2,
              desc: 'A slow bubble that pops into 2 more bubbles, each dealing light damage.' },
   superwasher: { name: 'Super Washer', rarity: 'uncommon', range: 150, dmg: 5, speed: 0, r: 0, knock: 90, look: 'orbit',
                  desc: 'Two water sprays spin all the way round you.' },

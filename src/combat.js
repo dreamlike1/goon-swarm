@@ -141,6 +141,7 @@ function dropMine(card, a = 0, dist = 0, quiet = false) {
 }
 
 // Pressure Washer (user): an instant cone of spray from the player, hitting and pushing back everything inside.
+// `wipe` (WASH CONE!, user): the cone wipes across as it appears instead of popping in all at once (draw.js).
 function spray(card, angle, arc, range, o = {}) {
   const p = game.player, dmg = damageOf(o.dmg ?? CARDS[card].dmg), knock = knockOf(o.knock ?? CARDS[card].knock);
   for (const e of game.enemies.slice()) {
@@ -151,7 +152,13 @@ function spray(card, angle, arc, range, o = {}) {
     if (Math.abs(diff) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
     hitEnemy({ card, look: 'spray', dmg, knock, vx: dx / (d || 1), vy: dy / (d || 1), x: e.x, y: e.y }, e);
   }
-  game.sprays.push({ x: p.x, y: p.y, a: angle, arc, range, card, life: 0.22, max: 0.22 });
+  const life = o.wipe ? 0.36 : 0.22;
+  game.sprays.push({ x: p.x, y: p.y, a: angle, arc, range, card, life, max: life, wipe: !!o.wipe });
+  const col = COL[card];   // droplets flicked out along the cone
+  for (let k = 0, n = o.wipe ? 14 : 7; k < n; k++) {
+    const da = angle + (Math.random() - 0.5) * arc, s = 90 + Math.random() * 140;
+    game.particles.push({ x: p.x, y: p.y, vx: Math.cos(da) * s, vy: Math.sin(da) * s, life: 0.2 + Math.random() * 0.2, color: col });
+  }
   if (!o.quiet) SFX.fire(card);
 }
 function updateSprays(dt) {
