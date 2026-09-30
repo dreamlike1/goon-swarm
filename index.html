@@ -1,0 +1,264 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Goon Swarm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Pixelify+Sans:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="preload" as="image" href="assets/GS_title.webp" type="image/webp">
+<!-- The game is split across style.css and src/*.js: classic scripts, loaded in order, sharing globals.
+     They are plain scripts rather than ES modules so the page still works when opened straight from disk. -->
+
+<div class="arena" id="arena"><canvas id="cv" aria-label="Arena"></canvas><canvas id="cv-text" aria-hidden="true"></canvas></div>
+
+<div class="menu" id="menu">
+  <section class="screen" id="scr-title" aria-labelledby="t-title">
+    <!-- The logo (user's art, assets/GS_title.png; the .webp is a trimmed, lighter copy of it) -->
+    <h1 class="title-logo" id="t-title">
+      <picture class="logo-hd">
+        <source srcset="assets/GS_title.webp" type="image/webp">
+        <img src="assets/GS_title.png" alt="Goon Swarm" width="1652" height="850" decoding="async" fetchpriority="high">
+      </picture>
+      <img class="logo-px" src="assets/GS_title_px.png" alt="Goon Swarm" width="240" height="123">
+    </h1>
+    <button class="start" id="btn-title" type="button">Start</button>
+    <p class="gold" id="title-note" hidden></p>
+  </section>
+
+  <section class="screen" id="scr-pack" aria-labelledby="k-title" hidden>
+    <p class="eyebrow">New player</p>
+    <h2 id="k-title">Your starter pack</h2>
+    <p class="sub">5 Bullets and 5 Lasers: your first deck.</p>
+    <button class="pack-open" id="btn-starter" type="button" aria-label="Open the starter pack"></button>
+    <p class="sub small hint-keys">Click the pack, or press Space, to rip it open</p>
+    <p class="sub small hint-touch">Tap the pack to rip it open</p>
+  </section>
+
+  <section class="screen" id="scr-reveal" aria-labelledby="r-title" hidden>
+    <p class="eyebrow" id="r-eyebrow">Starter pack</p>
+    <h2 id="r-title">Your first cards</h2>
+    <ol class="preview reveal" id="reveal" aria-label="Cards from the pack"></ol>
+    <p class="sub" id="reveal-tip">Opening… <span class="hint-keys">press Space to speed it up</span></p>
+    <p class="sub small" id="reveal-note" hidden></p>
+    <div class="row">
+      <button id="btn-reveal-all" type="button">Skip</button>
+      <button class="start" id="btn-reveal-done" type="button" hidden>Continue</button>
+    </div>
+    <p class="sub small warn" id="save-warn" hidden>This browser isn't letting the game save, so these cards will be gone after a reload.</p>
+  </section>
+
+  <section class="screen" id="scr-main" aria-label="Main menu" hidden>
+    <div class="menu-logo">
+      <picture class="logo-hd">
+        <source srcset="assets/GS_title.webp" type="image/webp">
+        <img src="assets/GS_title.png" alt="Goon Swarm" width="1652" height="850" decoding="async">
+      </picture>
+      <img class="logo-px" src="assets/GS_title_px.png" alt="Goon Swarm" width="240" height="123">
+    </div>
+    <p class="gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b class="gold-n">0</b> gold</p>
+    <div class="nav">
+      <button id="btn-loadout" type="button">Loadout</button>
+      <button id="btn-store" type="button">Store</button>
+      <button class="start" id="btn-play" type="button">Start</button>
+    </div>
+    <p class="sub small">Earn 1 gold for every 50 enemies you defeat in a run.</p>
+    <button class="back" id="btn-main-back" type="button">Back</button>
+    <div class="reset">
+      <button class="back" id="btn-reset" type="button">Reset data</button>
+      <div class="reset-confirm" id="reset-confirm" hidden>
+        <p class="sub small"><b>Really reset?</b> This deletes your cards, deck and gold on this computer, and can't be undone. You'll start again with the starter pack.</p>
+        <div class="row">
+          <button class="danger" id="btn-reset-yes" type="button">Reset</button>
+          <button id="btn-reset-no" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="scr-loadout" aria-labelledby="l-title" hidden>
+    <h2 id="l-title">Loadout</h2>
+    <p class="sub" id="loadout-sub"></p>
+    <p class="sub small" id="loadout-hint" hidden></p>
+    <div class="types" id="types"></div>
+    <div class="row">
+      <button class="back" id="btn-loadout-back" type="button">Back</button>
+      <button id="btn-loadout-test" type="button">Test loadout</button>
+    </div>
+    <p class="sub small">Test loadout plays your deck at practice targets, combos and all.</p>
+  </section>
+
+  <section class="screen" id="scr-store" aria-labelledby="s-title" hidden>
+    <p class="eyebrow">Store</p>
+    <h2 id="s-title">Card packs</h2>
+    <p class="gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b class="gold-n">0</b> gold</p>
+    <div class="store-packs" id="store-packs"></div>
+    <p class="sub small">Each pack has 5 cards, rolled one by one. Pick a pack to see what's inside, its drop rates, and to test its weapons.</p>
+    <button class="back" id="btn-store-back" type="button">Back</button>
+  </section>
+
+  <section class="screen" id="scr-packview" aria-labelledby="pv-title" hidden>
+    <p class="eyebrow">Store</p>
+    <div class="pv" id="pv"></div>
+    <button class="back" id="btn-pv-back" type="button">Back to store</button>
+  </section>
+
+  <section class="screen" id="scr-preview" aria-labelledby="p-title" hidden>
+    <p class="eyebrow fade">First sequence</p>
+    <h2 class="fade" id="p-title">Your deck</h2>
+    <ol class="preview" id="preview" aria-label="Deck order for the first cycle"></ol>
+    <div class="go fade" aria-hidden="true"><span id="go-bar"></span></div>
+    <p class="sub fade" id="p-sub">
+      <span class="hint-keys">Entering the arena · WASD or arrows to move · Esc to pause</span>
+      <span class="hint-touch">Entering the arena · hold and drag to move</span>
+    </p>
+  </section>
+
+  <!-- Changelog: on the side of the title screen and main menu (below them on narrow screens) -->
+  <aside class="news" id="news" aria-labelledby="news-t"><h3 id="news-t">What's new</h3><ul class="news-list"></ul></aside>
+</div>
+
+<div class="hud">
+  <div class="stats">
+    <span>Sequence <b id="cycle">1</b></span>
+    <span>On field <b id="alive">0</b></span>
+    <span>Defeated <b id="kills">0</b></span>
+    <button id="pause" type="button">Pause</button>
+  </div>
+  <div class="side">
+    <ol class="log" id="log" aria-label="Attack log, newest first"></ol>
+    <p class="check" id="checks"></p>
+  </div>
+</div>
+
+<ol class="statpanel" id="statpanel" aria-label="Your stats"></ol>
+<div class="relics" id="relics" hidden></div>
+<div class="bossbar" id="bossbar" role="meter" aria-label="SKURTOSAURUS health" aria-valuemin="0" aria-valuemax="280" aria-valuenow="280" hidden>
+  <span class="boss-name">SKURTOSAURUS</span>
+  <div class="boss-hp"><span id="boss-fill"></span></div>
+  <span class="boss-sub" hidden></span>
+</div>
+<!-- MAKORA's black-screen scenes (makora.js): the summoning lines, and its wheel turning -->
+<div class="cine" id="cine" aria-live="assertive" hidden>
+  <p class="cine-line" id="cine-line"></p>
+  <img class="cine-wheel" id="cine-wheel" src="assets/makora_wheel.png" alt="" hidden>
+</div>
+<p class="toast" id="toast" role="status" hidden></p>
+<div class="intro" id="intro" role="status" aria-live="assertive" hidden></div>
+
+<div class="deck-status" id="deckStatus">
+  <span id="deckLeft"></span>
+  <span class="shuffle-icon" id="shuffleIcon" hidden aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+    Shuffling
+  </span>
+</div>
+<ol class="deck" id="tray" aria-label="Deck order"></ol>
+<div class="rapid" id="rapid" aria-hidden="true"></div>
+
+<div class="hp" id="hp" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+  <div class="hp-bar"><span id="hp-fill"></span></div>
+  <span class="hp-num" id="hp-num">100</span>
+</div>
+
+<div class="xp" id="xp" role="meter" aria-label="Experience" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0">
+  <span class="xp-lv">Lv <b id="xp-lv">1</b></span>
+  <div class="xp-bar"><span id="xp-fill"></span></div>
+  <span class="xp-num" id="xp-num">0/5</span>
+</div>
+
+<p class="hint" id="hint">
+  <span class="hint-keys">WASD or arrows to move · Esc to pause · M to mute</span>
+  <span class="hint-touch">Hold and drag to move</span>
+</p>
+
+<!-- The store's test mode: fire a pack's weapons at still targets -->
+<!-- The CRT filter's screen (display.js): scanlines, colour stripes and flicker over everything -->
+<div class="crt-screen" aria-hidden="true"></div>
+
+<div class="practice" id="practice" role="region" aria-label="Test weapons" hidden>
+  <p class="eyebrow" id="pr-eyebrow">Test</p>
+  <div class="pr-tabs" id="pr-tabs" role="group" aria-label="Weapon"></div>
+  <div class="pr-fire" id="pr-fire" role="group" aria-label="Attack"></div>
+  <p class="pr-dmg">Damage dealt <b id="pr-dmg">0</b><span id="pr-dps" hidden> · per second <b id="pr-dps-n">–</b></span></p>
+  <p class="pr-keys hint-keys" id="pr-keys"><kbd>1</kbd>–<kbd>3</kbd> choose · <kbd>Space</kbd> fire · <kbd>Q</kbd> <kbd>E</kbd> weapon · <kbd>Esc</kbd> back</p>
+  <p class="pr-keys hint-keys" id="pr-keys-lo" hidden>Your deck fires on its own · <kbd>WASD</kbd> move · <kbd>R</kbd> restart count · <kbd>Esc</kbd> back</p>
+  <button class="back" id="btn-pr-back" type="button">Back to pack</button>
+</div>
+
+<div class="pause" id="defeat" role="dialog" aria-labelledby="d-title" hidden>
+  <section class="screen">
+    <h2 id="d-title">Defeated</h2>
+    <p class="sub" id="d-stats"></p>
+    <p class="gold" id="d-gold"></p>
+    <div class="nav">
+      <button class="start" id="btn-retry" type="button">Try again</button>
+      <button id="btn-defeat-menu" type="button">Main menu</button>
+    </div>
+  </section>
+</div>
+
+<div class="pause levelup" id="levelup" role="dialog" aria-labelledby="up-title" tabindex="-1" hidden>
+  <section class="screen">
+    <p class="eyebrow" id="up-eyebrow">Level 2</p>
+    <h2 id="up-title">Choose an upgrade</h2>
+    <p class="sub" id="up-sub" hidden></p>
+    <ol class="up-cards" id="up-cards"></ol>
+    <p class="sub small" id="up-more" hidden></p>
+    <p class="sub small hint-keys" id="up-keys">Press 1, 2 or 3</p>
+  </section>
+</div>
+
+<div class="pause" id="pause-menu" role="dialog" aria-labelledby="pause-title" hidden>
+  <section class="screen">
+    <h2 id="pause-title">Paused</h2>
+    <div class="nav">
+      <button class="start" id="btn-resume" type="button">Resume</button>
+      <button id="btn-exit" type="button">Exit to title</button>
+    </div>
+    <p class="sub">Exiting ends this run.</p>
+  </section>
+</div>
+
+<!-- Sound: a gear (user) that opens the three volumes and Mute -->
+<div class="audio" id="audio">
+  <button id="gear" type="button" aria-label="Settings" aria-expanded="false" aria-controls="sound-panel" title="Settings">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    <span class="gear-mute" aria-hidden="true"></span>
+  </button>
+  <div class="sound-panel" id="sound-panel" role="group" aria-label="Settings" hidden>
+    <p class="eyebrow">Sound</p>
+    <label class="vol-row" for="vol-master"><span>Master</span><input id="vol-master" type="range" min="0" max="100" step="1"><b id="vol-master-n"></b></label>
+    <label class="vol-row" for="vol-music"><span>Menu music</span><input id="vol-music" type="range" min="0" max="100" step="1"><b id="vol-music-n"></b></label>
+    <label class="vol-row" for="vol-level"><span>Level music</span><input id="vol-level" type="range" min="0" max="100" step="1"><b id="vol-level-n"></b></label>
+    <label class="vol-row" for="vol-sfx"><span>Sound effects</span><input id="vol-sfx" type="range" min="0" max="100" step="1"><b id="vol-sfx-n"></b></label>
+    <button class="mute-all" id="mute" type="button" aria-pressed="false"><span>Mute all</span> <kbd>M</kbd></button>
+    <p class="eyebrow panel-sec">Display</p>
+    <div class="set-row">
+      <span id="crt-label">CRT filter</span>
+      <button class="crt-switch" id="crt-switch" type="button" role="switch" aria-checked="true" aria-labelledby="crt-label"><span class="switch-led" aria-hidden="true"></span><span class="switch-state">On</span></button>
+    </div>
+    <p class="set-note">Low-res pixels and an old TV screen. Off shows the game at full resolution.</p>
+  </div>
+</div>
+
+<script src="src/deck.js"></script>
+<script src="src/cards.js"></script>
+<script src="src/packs.js"></script>
+<script src="src/save.js"></script>
+<script src="src/config.js"></script>
+<script src="src/sound.js"></script>
+<script src="src/display.js"></script>
+<script src="src/state.js"></script>
+<script src="src/arena.js"></script>
+<script src="src/combat.js"></script>
+<script src="src/combos.js"></script>
+<script src="src/boss.js"></script>
+<script src="src/makora.js"></script>
+<script src="src/draw.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/upgrades.js"></script>
+<script src="src/menus.js"></script>
+<script src="src/main.js"></script>
