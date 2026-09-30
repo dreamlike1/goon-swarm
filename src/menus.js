@@ -47,6 +47,8 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.28' },
+  { tag: 'Loadout', text: 'Test loadout works like the store test now: pick any weapon in your deck and fire its Single, Passive ×3 or Ult ×7 yourself. Whole deck still plays your deck on its own, with damage per second.' },
   { ver: 'v0.27' },
   { tag: 'Boss', text: 'MAKORA is bigger and redrawn: outlined line art, a deep, wide lunging stance, feathered wings, a huge horn and a gold wheel. Its slices reach further to match.' },
   { tag: 'Look', text: 'HUD numbers use a clearer pixel font with the CRT filter on.' },
@@ -285,7 +287,6 @@ async function buyViewed() {
 function startPractice(k, card, extra) {
   resetRun();
   game.practice = { pack: k, card, dummies: [], dmg: 0, ...extra };
-  document.body.classList.toggle('is-loadout-test', !!game.practice.loadout);
   game.started = true;
   const p = game.player;
   p.x = W * 0.28; p.y = (playH || H) * 0.5;
@@ -298,16 +299,23 @@ function startPractice(k, card, extra) {
   last = performance.now();
   document.activeElement?.blur();
 }
-// Test loadout (user): your equipped deck auto-fires at the dummies exactly as it would in a run, sequences, shuffles
-// and combos included, with your starting stats. Nothing attacks you, and it counts damage and damage per second.
+// Test loadout (user): works like the store's test, one tab per weapon in your deck, so you can fire each one's
+// Single, Passive (×3) and Ult (×7) yourself. The last tab, Whole deck, lets your deck fire on its own exactly as in
+// a run (sequences, shuffles and combos, your starting stats) and counts damage per second.
 function startLoadoutTest() {
   if (deckProblems().length) return;
-  startPractice(null, null, { loadout: true, t: 0 });
+  startPractice(null, prCards(true)[0], { loadout: true, t: 0 });
 }
+const DECK_TAB = 'deck';                              // the Whole deck tab in Test loadout
+// The weapons you can pick in test mode: the pack's, or the ones in your deck.
+function prCards(loadout = game.practice?.loadout) {
+  return loadout ? CARD_IDS.filter(id => save.equipped[id] > 0) : PACKS[game.practice.pack].cards;
+}
+const prAuto = () => game.practice?.card === DECK_TAB;
 function placeDummies() {
   const pr = game.practice, p = game.player;
   // the loadout test puts them inside every card's range, so no card in the deck ever waits
-  const reach = pr.loadout ? Math.min(...Object.keys(save.equipped).map(rangeOf)) : rangeOf(pr.card);
+  const reach = pr.card === DECK_TAB ? Math.min(...prCards().map(rangeOf)) : rangeOf(pr.card);
   const d = Math.min(reach * 0.75, W * 0.45);
   const mk = (x, y, r) => ({ dummy: true, type: 'dummy', shape: 'dummy', x, y, r, hp: 1e9, maxHp: 1e9, vx: 0, vy: 0, kx: 0, ky: 0, speed: 0, dmg: 0, hit: 0, born: 1 });
   pr.dummies = [mk(p.x + d, p.y, 18), mk(p.x + d + 60, p.y - 70, 13), mk(p.x + d + 60, p.y + 70, 13)];
@@ -323,44 +331,46 @@ function practiceAttacks(card) {
 function renderPrDmg() {
   const pr = game.practice;
   $('pr-dmg').textContent = Math.round(pr.dmg);
-  $('pr-dps').hidden = !pr.loadout;
-  if (pr.loadout) $('pr-dps-n').textContent = pr.t > 1 ? (pr.dmg / pr.t).toFixed(1) : '–';
+  $('pr-dps').hidden = !prAuto();
+  if (prAuto()) $('pr-dps-n').textContent = pr.t > 1 ? (pr.dmg / pr.t).toFixed(1) : '–';
 }
 function renderPractice() {
-  const pr = game.practice;
+  const pr = game.practice, auto = prAuto();
+  document.body.classList.toggle('is-loadout-test', auto);   // shows your deck along the bottom
+  $('pr-fire').hidden = auto;
+  $('pr-keys').hidden = auto; $('pr-keys-lo').hidden = !auto;
+  $('btn-pr-back').textContent = pr.loadout ? 'Back to loadout' : 'Back to pack';
   if (pr.loadout) {
     const n = equippedCards().length;
     $('pr-eyebrow').textContent = `Test · Your loadout · ${n} card${n === 1 ? '' : 's'}`;
-    $('pr-tabs').innerHTML = ''; $('pr-fire').innerHTML = '';
-    $('pr-tabs').hidden = $('pr-fire').hidden = true;
-    $('pr-keys').hidden = true; $('pr-keys-lo').hidden = false;
-    $('btn-pr-back').textContent = 'Back to loadout';
-    renderPrDmg();
-    return;
-  }
-  $('pr-tabs').hidden = $('pr-fire').hidden = false;
-  $('pr-keys').hidden = false; $('pr-keys-lo').hidden = true;
-  $('btn-pr-back').textContent = 'Back to pack';
-  const pk = PACKS[pr.pack], atk = practiceAttacks(pr.card);
+  } else $('pr-eyebrow').textContent = `Test · ${PACKS[pr.pack].name}`;
+  $('pr-tabs').innerHTML = prCards().map(id => `<button type="button" data-card="${id}" aria-pressed="${id === pr.card}" style="--c: var(--${id})">${CARDS[id].name}</button>`).join('')
+    + (pr.loadout ? `<button type="button" data-card="${DECK_TAB}" aria-pressed="${auto}" style="--c: var(--text)">Whole deck</button>` : '');
+  if (auto) { $('pr-fire').innerHTML = ''; renderPrDmg(); return; }
+  const atk = practiceAttacks(pr.card);
   pr.sel = Math.min(pr.sel || 0, atk.length - 1);
-  $('pr-eyebrow').textContent = `Test · ${pk.name}`;
-  $('pr-tabs').innerHTML = pk.cards.map(id => `<button type="button" data-card="${id}" aria-pressed="${id === pr.card}" style="--c: var(--${id})">${CARDS[id].name}</button>`).join('');
   $('pr-fire').innerHTML = atk.map((a, i) =>
     `<button type="button" data-i="${i}" aria-pressed="${i === pr.sel}" style="--c: var(--${pr.card})"><span class="up-key" aria-hidden="true">${i + 1}</span><b>${a.label}</b>${a.name ? `<small>${a.name}</small>` : ''}</button>`).join('');
   renderPrDmg();
 }
 function testFire(n) {
   const pr = game.practice;
-  if (!pr) return;
+  if (!pr || prAuto()) return;
   const card = pr.card;
   if (n === 1) shoot(card, inRange(card) || pr.dummies[0]);
   else if (COMBOS[card]?.[n]) runCombo({ card, n, ...COMBOS[card][n] });
 }
-function practiceSelect(i) { const pr = game.practice; if (i < practiceAttacks(pr.card).length) { pr.sel = i; renderPractice(); } }
-function practiceFire() { const pr = game.practice, a = practiceAttacks(pr.card)[pr.sel || 0]; if (a) testFire(a.n); }
+function practiceSelect(i) { const pr = game.practice; if (!prAuto() && i < practiceAttacks(pr.card).length) { pr.sel = i; renderPractice(); } }
+function practiceFire() { const pr = game.practice; if (prAuto()) return; const a = practiceAttacks(pr.card)[pr.sel || 0]; if (a) testFire(a.n); }
 function practiceWeapon(d) {
-  const pr = game.practice, ids = PACKS[pr.pack].cards, i = (ids.indexOf(pr.card) + d + ids.length) % ids.length;
-  pr.card = ids[i]; pr.dmg = 0; placeDummies(); renderPractice();
+  const pr = game.practice, ids = prCards().concat(pr.loadout ? [DECK_TAB] : []), i = (ids.indexOf(pr.card) + d + ids.length) % ids.length;
+  practiceCard(ids[i]);
+}
+// Switch weapon (or to Whole deck): the damage count starts again.
+function practiceCard(id) {
+  const pr = game.practice;
+  pr.card = id; pr.dmg = 0; pr.t = 0;
+  placeDummies(); renderPractice();
 }
 function exitPractice() {
   if (!game.practice) return;
@@ -374,12 +384,11 @@ function exitPractice() {
   renderPackView();
   showScreen('scr-packview');
 }
-// Keys in test mode: 1–3 choose, Space fires, Q / E change weapon, Esc goes back. Returns true if it used the key
-// (movement keys still move you).
+// Keys in test mode: 1–3 choose, Space fires, Q / E change weapon, Esc goes back; on Whole deck, R restarts the
+// count. Returns true if it used the key (movement keys still move you).
 function onPracticeKey(e) {
   if (e.code === 'Escape') { exitPractice(); e.preventDefault(); return true; }
-  if (game.practice.loadout) {                       // Test loadout: R restarts the count; everything else plays as normal
-    if (e.code !== 'KeyR') return false;
+  if (prAuto() && e.code === 'KeyR') {
     if (!e.repeat) { game.practice.dmg = 0; game.practice.t = 0; renderPrDmg(); }
     e.preventDefault();
     return true;
@@ -396,7 +405,7 @@ $('practice').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || !game.practice) return;
   if (b.id === 'btn-pr-back') exitPractice();
-  else if (b.dataset.card) { game.practice.card = b.dataset.card; game.practice.dmg = 0; placeDummies(); renderPractice(); }
+  else if (b.dataset.card) practiceCard(b.dataset.card);
   else if (b.dataset.i) { practiceSelect(Number(b.dataset.i)); practiceFire(); }
   b.blur();
 });
