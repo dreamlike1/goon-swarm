@@ -28,7 +28,8 @@ const BOSS = {
   // comes back with a fresh bar of `hp`. It's faster (walk and charge ×), winds up quicker, charges twice in a row
   // (`dashes`) and throws 3 big rocks in a row (`throws`, `throwGap` s apart, a shorter wind-up each). Placeholders
   // apart from the user's "dashes 2 times, throws 3 times".
-  phase2: { hp: 200, enrage: 1.6, walk: 1.45, chargeSpeed: 1.2, windup: 0.75, dashes: 2, throws: 3, throwWind: 0.5, throwGap: 0.3, chargeEvery: 0.75, push: 520 },
+  // v0.48 (user: phase 2 should have more HP than phase 1): 200 → 300.
+  phase2: { hp: 300, enrage: 1.6, walk: 1.45, chargeSpeed: 1.2, windup: 0.75, dashes: 2, throws: 3, throwWind: 0.5, throwGap: 0.3, chargeEvery: 0.75, push: 520 },
   xp: 20,
   // Its hitbox (v0.46, user: it should fit the drawing): in drawing units (30 = BOSS.r px), a capsule of radius `r`
   // from the middle of its body up to its head, on the side it faces. `r` above is now the drawing's size.
@@ -52,9 +53,10 @@ const toastEl = document.getElementById('toast');
 const introEl = document.getElementById('intro');
 let introTimer = 0;
 // The intro's words, on its own (a co-op guest plays just this, the host clears the arena).
-function startIntroScene() {
+// `kind`: 'obi' for OBI ONE's (obi.js).
+function startIntroScene(kind) {
   clearTimeout(introTimer);
-  introEl.innerHTML = `<p class="intro-line">DO YOU HEAR THOSE FOOTSTEPS?</p>`;
+  introEl.innerHTML = kind === 'obi' ? `<p class="intro-line is-obi">DO YOU FEEL THAT???</p>` : `<p class="intro-line">DO YOU HEAR THOSE FOOTSTEPS?</p>`;
   introEl.hidden = false;
 }
 function startIntro() {
@@ -72,6 +74,7 @@ function startIntro() {
   introEl.hidden = false;
 }
 function updateIntro(dt) {
+  if (game.intro.kind === 'obi') { updateObiIntro(dt); return; }
   const it = game.intro, { stomps, spawn } = BOSS.intro;
   it.t += dt;
   if (it.stomp < stomps.length && it.t >= stomps[it.stomp]) {
@@ -133,6 +136,8 @@ function renderBossBar() {
   bossBar.setAttribute('aria-valuenow', Math.max(0, Math.ceil(b.hp)));
   bossBar.setAttribute('aria-valuemax', b.maxHp);
   bossBar.classList.toggle('is-phase2', b.phase === 2);
+  bossBar.classList.remove('is-obi');
+  bossBar.setAttribute('aria-label', `${BOSS.name} health`);
   bossBar.querySelector('.boss-name').textContent = b.phase === 2 ? `${BOSS.name} · ENRAGED` : BOSS.name;
 }
 
@@ -350,6 +355,7 @@ function bossDown(b) {
 
 /* ---------- BULL: Space to charge ---------- */
 function tryDash(dir = null) {
+  if (obiMash()) return;                                   // OBI ONE's force pull: Space fights it instead (obi.js)
   if (NET.guest && NET.run) { if (!NET.me.down) NET.wantDash = true; return; }   // co-op: the host charges us
   if (!game.relics.includes('bull') || game.dash || game.dashCd > 0 || game.inMenu || game.over || (game.paused && !NET.run) || game.choosing || game.intro || game.cine) return;
   if (NET.run && ACTIVE?.down) return;
@@ -360,6 +366,7 @@ function tryDash(dir = null) {
   game.dash = { t: BULL.time, dx: mx / l, dy: my / l, hit: new Set(), smashed: false, sx: p.x, sy: p.y };
   game.dashCd = BULL.cd;
   if (game.makora && !game.makora.down) game.makora.dashesSeen++;   // MAKORA is watching: dash a lot and it learns to (makora.js)
+  obiSawDash();                                            // … and so is OBI ONE, if his saber is on its way (obi.js)
   p.safe = Math.max(p.safe, BULL.time + 0.1);
   SFX.bullDash();                                          // a swoosh (user)
   // Launch: a shockwave where you start and dust kicked out behind you.
@@ -376,7 +383,7 @@ function tryDash(dir = null) {
 function updateDash(dt) {
   if (game.dashCd > 0) {
     game.dashCd = Math.max(0, game.dashCd - dt);
-    const icon = isLocal() && relicsEl.querySelector('.relic');
+    const icon = isLocal() && relicsEl.querySelector('#relic-bull');
     if (icon) icon.style.setProperty('--k', 1 - game.dashCd / BULL.cd);
     if (game.dashCd === 0) {                              // ready again: the chip lights up, and so do you
       renderRelics();
@@ -418,17 +425,22 @@ function updateDash(dt) {
   return true;
 }
 
-// The BULL icon beside the HP bar: a bull's head in a ring that fills while it cools down, and glows when ready.
+// The relic icons beside the HP bar: BULL's head, and DEFLECT's shield next to it (v0.48), each in a ring that fills
+// while it cools down and glows when ready, with its key in the corner. Tap one to use it on touch screens.
 function renderRelics() {
   if (!isLocal()) return;
-  const has = game.relics.includes('bull');
-  relicsEl.hidden = !has;
-  if (!has) return;
-  const k = game.dashCd > 0 ? 1 - game.dashCd / BULL.cd : 1;
-  relicsEl.innerHTML = `<button type="button" class="relic${k >= 1 ? ' is-ready' : ''}" id="relic-bull" style="--k: ${k}" title="${BULL.name}: ${BULL.key} to charge" aria-label="${BULL.name}: charge (${BULL.key})${k >= 1 ? ', ready' : ', recharging'}">`
-    + `<span class="relic-icon" aria-hidden="true">${BULL_ICON}</span></button>`;
+  const chip = (id, icon, name, key, what, k, on) => `<button type="button" class="relic is-${id}${k >= 1 ? ' is-ready' : ''}${on ? ' is-on' : ''}" id="relic-${id}" style="--k: ${k}" title="${name}: ${key === 'SPC' ? 'Space' : key} to ${what}" aria-label="${name}: ${what} (${key === 'SPC' ? 'Space' : key})${on ? ', up' : k >= 1 ? ', ready' : ', recharging'}">`
+    + `<span class="relic-icon" aria-hidden="true">${icon}</span><span class="relic-key" aria-hidden="true">${key}</span></button>`;
+  const out = [];
+  if (game.relics.includes('deflect')) out.push(chip('deflect', DEFLECT_ICON, DEFLECT.name, DEFLECT.key, 'deflect', game.deflCd > 0 ? 1 - game.deflCd / DEFLECT.cd : 1, game.defl > 0));
+  if (game.relics.includes('bull')) out.push(chip('bull', BULL_ICON, BULL.name, 'SPC', 'charge', game.dashCd > 0 ? 1 - game.dashCd / BULL.cd : 1, false));
+  relicsEl.hidden = !out.length;
+  relicsEl.innerHTML = out.join('');
 }
-relicsEl.addEventListener('click', e => { if (e.target.closest('#relic-bull')) tryDash(); });   // tap to charge on touch screens
+relicsEl.addEventListener('click', e => {
+  if (e.target.closest('#relic-bull')) tryDash();   // tap to charge on touch screens (or to fight OBI ONE's pull)
+  else if (e.target.closest('#relic-deflect')) tryDeflect();
+});
 
 let toastTimer = 0;
 function toast(text, kind) {
@@ -440,6 +452,7 @@ function toast(text, kind) {
 }
 
 function resetBoss() {
+  resetObi();
   game.boss = null; game.bossDue = false; game.bossDone = false;
   game.rocks = []; game.relics = []; game.dash = null; game.dashCd = 0; game.ghosts = []; game.hitstop = 0; game.intro = null; game.cracks = [];
   clearTimeout(introTimer);

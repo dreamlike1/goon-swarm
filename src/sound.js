@@ -127,6 +127,7 @@ function musicWanted() {
   if (game.cine) return game.cine.kind === 'summon' ? (game.cine.music ? { ...none, makora: 1 } : none) : { ...none, makora: 0.3 };
   if (game.makora) return { ...none, makora: 1 };
   if (game.boss) return game.boss.phase === 2 ? { ...none, phase2: 1 } : { ...none, boss: 1 };
+  if (game.obi) return game.obi.phase === 2 ? { ...none, phase2: 1 } : { ...none, boss: 1 };   // OBI ONE: SKURTOSAURUS's music (user)
   return { ...none, level: 1 };
 }
 const inRun = () => document.getElementById('menu').hidden && !game.practice && !game.over;
@@ -382,6 +383,36 @@ const SFX = {
   // … and a dull ring when a weapon it has adapted to bounces off
   adapted() { tone({ type: 'triangle', f: 520, f2: 480, dur: 0.16, vol: 0.08 }); tone({ type: 'sine', f: 1040, dur: 0.1, vol: 0.03 }); },
   growl() { tone({ type: 'sawtooth', f: 80, f2: 65, dur: 0.5, vol: 0.12 }); },
+  // OBI ONE (v0.48): the force humming in the air (louder each time) …
+  forceHum(n = 1) {
+    tone({ type: 'sine', f: 55 + n * 8, f2: 90 + n * 12, dur: 1.1, vol: 0.2 + n * 0.05, attack: 0.25 });
+    tone({ type: 'triangle', f: 110 + n * 16, f2: 175 + n * 20, dur: 0.9, vol: 0.05, attack: 0.3 });
+    noise({ dur: 0.9, vol: 0.06 + n * 0.02, freq: 300, f2: 900, filter: 'bandpass', q: 3, attack: 0.3 });
+  },
+  // … a force push (phase 2, breaking free): a deep whoomp with air rushing out …
+  forcePush() {
+    tone({ type: 'sine', f: 140, f2: 40, dur: 0.6, vol: 0.45 });
+    noise({ dur: 0.6, vol: 0.3, freq: 2400, f2: 300, filter: 'bandpass', q: 0.8 });
+  },
+  // … his lightsaber: igniting, going out, the hum when he gets ready, a swing, the spinning throw, the catch …
+  saberOn() {
+    tone({ type: 'sawtooth', f: 70, f2: 140, dur: 0.35, vol: 0.12, attack: 0.02 });
+    noise({ dur: 0.3, vol: 0.12, freq: 900, f2: 3000, filter: 'bandpass', q: 2 });
+    tone({ type: 'sine', f: 180, f2: 150, dur: 0.6, vol: 0.08, delay: 0.25, attack: 0.05 });
+  },
+  saberOff() { tone({ type: 'sawtooth', f: 150, f2: 50, dur: 0.4, vol: 0.12 }); noise({ dur: 0.3, vol: 0.1, freq: 2500, f2: 500, filter: 'bandpass', q: 2 }); },
+  saberHum() { if (often('shum', 250)) { tone({ type: 'sawtooth', f: 92, f2: 104, dur: 0.45, vol: 0.07, attack: 0.05 }); tone({ type: 'sine', f: 184, f2: 208, dur: 0.45, vol: 0.05, attack: 0.05 }); } },
+  saberSwing() {
+    tone({ type: 'sawtooth', f: 110, f2: 240, dur: 0.22, vol: 0.12, attack: 0.02 });
+    noise({ dur: 0.2, vol: 0.2, freq: 700, f2: 2600, filter: 'bandpass', q: 1.8, attack: 0.02 });
+  },
+  saberThrow() { for (let i = 0; i < 4; i++) { tone({ type: 'sawtooth', f: 120, f2: 210, dur: 0.12, vol: 0.07, delay: i * 0.1 }); noise({ dur: 0.1, vol: 0.08, freq: 1400, filter: 'bandpass', q: 2, delay: i * 0.1 }); } },
+  saberCatch() { tone({ type: 'sine', f: 240, f2: 170, dur: 0.18, vol: 0.12 }); noise({ dur: 0.08, vol: 0.12, freq: 2000, filter: 'bandpass', q: 2 }); },
+  // … and a shot knocked back off it (also DEFLECT turning a hit aside): a sharp electric crack
+  saberClash() { if (!often('clash', 70)) return; noise({ dur: 0.1, vol: 0.28, freq: 4200, f2: 1600, filter: 'bandpass', q: 1.4 }); tone({ type: 'square', f: 1400, f2: 700, dur: 0.07, vol: 0.06 }); },
+  // Fighting the pull: a short rising blip each press. DEFLECT going up: a bright shimmer.
+  pullPress() { tone({ type: 'triangle', f: 520, f2: 780, dur: 0.07, vol: 0.1 }); },
+  deflectOn() { [880, 1320].forEach((f, i) => tone({ type: 'sine', f, f2: f * 1.2, dur: 0.16, vol: 0.1, delay: i * 0.05 })); noise({ dur: 0.25, vol: 0.08, freq: 3500, filter: 'highpass' }); },
   rocks() { if (often('rocks', 200)) noise({ dur: 0.25, vol: 0.15, freq: 500, f2: 200 }); },
   // BULL (user: a swoosh, and an impact sound): a fast rising rush of air with a low push under it …
   bullDash() {

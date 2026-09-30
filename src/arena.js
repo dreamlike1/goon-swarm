@@ -69,6 +69,7 @@ addEventListener('keydown', e => {
   if (game.cine?.kind === 'summon' && !game.paused && (e.code === 'Space' || e.code === 'Enter')) { if (!e.repeat) skipIntro(); e.preventDefault(); return; }   // skip MAKORA's intro (user)
   if (MOVE[e.code]) { keys.add(e.code); e.preventDefault(); }
   if (e.code === 'Space') { if (!e.repeat) tryDash(); e.preventDefault(); }   // BULL relic (user: Space)
+  if (e.code === 'KeyP') { if (!e.repeat) tryDeflect(); e.preventDefault(); }   // DEFLECT relic (user, v0.48: P)
   if (e.code === 'Escape') { togglePause(); e.preventDefault(); }             // pause (user: Esc)
 });
 addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyE') NET.holdE = false; });
@@ -92,6 +93,7 @@ function releaseHold() {
 
 let pointer = null;
 arena.addEventListener('pointerdown', e => {
+  if (!game.inMenu && pullTap()) return;              // OBI ONE's force pull: every tap fights it (obi.js)
   arena.setPointerCapture(e.pointerId);
   pointer = localPoint(e);
 });

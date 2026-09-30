@@ -47,6 +47,20 @@
   --crab-hi: #ff8a70;
   --crab-eye: #fbf0b2;
   --crab-pupil: #2b2429;
+  /* OBI ONE (v0.48, user: a Jedi like their sample): a pale tan tunic over a darker under-tunic, a brown belt and boots,
+     auburn hair and beard, and a blue lightsaber (its colour is also the DEFLECT relic's) */
+  --obi-robe: #e6d6b6;
+  --obi-robe-dark: #b49b74;
+  --obi-under: #c9b18a;
+  --obi-belt: #6e4a2e;
+  --obi-boot: #8a4128;
+  --obi-skin: #f1c6a0;
+  --obi-hair: #b8672f;
+  --obi-eye: #2b2429;
+  --obi-hilt: #c9ced6;
+  --obi-hilt-dark: #3a3e46;
+  --saber: #4fc3ff;
+  --saber-core: #effbff;
   /* card colours, one per card id (placeholders until card visuals are designed) */
   --laser: #3ee6ff;
   --arcane: #b28cff;
@@ -759,11 +773,16 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .bossbar.is-phase2 .boss-name { color: var(--bad); }
 .bossbar.is-phase2 .boss-hp { box-shadow: 0 0 14px -2px var(--bad); }
 .bossbar.is-phase2 .boss-hp span { background: var(--bad); transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+/* OBI ONE: saber blue (phase 2 turns it red, as above) */
+.bossbar.is-obi:not(.is-phase2) .boss-name { color: var(--saber); }
+.bossbar.is-obi:not(.is-phase2) .boss-hp { box-shadow: 0 0 14px -2px var(--saber); }
+.bossbar.is-obi:not(.is-phase2) .boss-hp span { background: var(--saber); }
 
 /* Relics: a chip under the top stats. BULL: its key, and a bar that refills while it cools down. Tap it on touch screens. */
 /* BULL icon: just left of the HP bar (above its left end on narrow screens), so it's in view while you fight */
 .relics {
   position: fixed; z-index: 2;
+  display: flex; gap: 8px;   /* v0.48: DEFLECT sits beside BULL */
   right: calc(50% + min(130px, 50% - 16px) + 10px);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 43px);
 }
@@ -778,10 +797,14 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
   /* a thick ring (user) that fills clockwise while it recharges */
   background:
     radial-gradient(circle, var(--floor) 0 11px, transparent 11.5px),
-    conic-gradient(var(--relic) calc(var(--k) * 360deg), var(--line) 0);
+    conic-gradient(var(--rc, var(--relic)) calc(var(--k) * 360deg), var(--line) 0);
 }
-.relic.is-ready { color: var(--relic); box-shadow: 0 0 12px -2px var(--relic); animation: relic-ready .45s ease-out; }
-@keyframes relic-ready { 0% { transform: scale(1); } 40% { transform: scale(1.18); box-shadow: 0 0 18px 2px var(--relic); } 100% { transform: scale(1); } }
+.relic.is-deflect { --rc: var(--saber); }
+.relic.is-ready { color: var(--rc, var(--relic)); box-shadow: 0 0 12px -2px var(--rc, var(--relic)); animation: relic-ready .45s ease-out; }
+.relic.is-on { color: var(--saber-core); box-shadow: 0 0 16px 1px var(--saber); }   /* DEFLECT's shield is up */
+.relic-key { position: absolute; right: -3px; bottom: -3px; min-width: 14px; height: 14px; padding: 0 2px; box-sizing: border-box; border-radius: 4px;
+  font: 700 9px/14px var(--f-num); text-align: center; color: var(--text); background: var(--card); border: 1px solid var(--line); }
+@keyframes relic-ready { 0% { transform: scale(1); } 40% { transform: scale(1.18); box-shadow: 0 0 18px 2px var(--rc, var(--relic)); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .relic.is-ready { animation: none; } }
 
 /* Announcements (boss, relic): a short banner under the boss bar */
@@ -797,6 +820,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .toast.is-boss { border-color: var(--boss); color: var(--boss); }
 .toast.is-enrage { border-color: var(--bad); color: var(--bad); }
 .toast.is-relic { border-color: var(--relic); color: var(--relic); }
+.toast.is-obi { border-color: var(--saber); color: var(--saber); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } }
 .menu:not([hidden]) ~ .bossbar, .menu:not([hidden]) ~ .relics, .menu:not([hidden]) ~ .toast { visibility: hidden; }
 
@@ -828,6 +852,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 /* Relic message after the boss: the icon, what it does, and a button to carry on */
 .levelup.is-relic .up-cards { flex-direction: column; }
 .relic-box { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 420px; }
+.relic-art.is-deflect { color: var(--saber); background: color-mix(in srgb, var(--saber) 14%, var(--floor)); box-shadow: 0 0 28px -6px var(--saber); }
 .relic-art { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; color: var(--relic); background: color-mix(in srgb, var(--relic) 14%, var(--floor)); box-shadow: 0 0 28px -6px var(--relic); }
 .relic-art svg { width: 40px; height: 40px; display: block; }
 .relic-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; text-align: left; font-size: 13px; line-height: 1.45; color: var(--text); }
@@ -846,6 +871,9 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .intro-line { font: 900 clamp(20px, 4.4vw, 40px)/1.15 var(--f-ui); letter-spacing: .08em; color: var(--text); text-shadow: 0 2px 18px var(--floor); animation: intro-in .6s ease-out both, intro-shake .7s 0s 4 ease-in-out; }
 .intro-vs { display: block; margin-bottom: .3em; font-size: .38em; letter-spacing: .5em; color: var(--text); }
 .intro-name { font: 900 clamp(30px, 7vw, 64px)/1 var(--f-ui); letter-spacing: .2em; color: var(--boss); text-shadow: 0 0 28px color-mix(in srgb, var(--boss) 60%, transparent); animation: intro-name 1.4s ease-out both; }
+.intro-line.is-obi { color: var(--saber-core); text-shadow: 0 0 22px var(--saber), 0 2px 18px var(--floor); animation: intro-in .6s ease-out both, force-waver 1.6s ease-in-out infinite; }
+@keyframes force-waver { 0%, 100% { transform: none; filter: none; } 50% { transform: scale(1.03); filter: brightness(1.25); } }
+.intro-name.is-obi { color: var(--saber); text-shadow: 0 0 28px color-mix(in srgb, var(--saber) 60%, transparent); }
 @keyframes intro-in { from { opacity: 0; letter-spacing: .3em; } }
 @keyframes intro-shake { 0%, 100% { transform: none; } 12% { transform: translateY(4px); } 24% { transform: translateY(-2px); } 36% { transform: none; } }
 @keyframes intro-name { 0% { opacity: 0; transform: scale(1.6); } 20% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -1283,3 +1311,6 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
   border: 2px solid var(--hp); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .rv-btn b { color: var(--hp); }
+/* DEFLECT's message (v0.48): its points in saber blue */
+.relic-art.is-deflect ~ .relic-facts b, .relic-art.is-deflect ~ .relic-facts kbd { color: var(--saber); }
+.relic-art.is-deflect ~ .relic-facts li::before { background: var(--saber); }

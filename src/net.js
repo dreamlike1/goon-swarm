@@ -33,7 +33,7 @@ const cam = { x: 0, y: 0 };
 
 /* ---------- players ---------- */
 // What each player has of their own; the game keeps the active player's copy in `game`.
-const PKEYS = ['cooldown', 'cdTotal', 'aug', 'echoes', 'shield', 'shieldHit', 'dash', 'dashCd', 'muzzle', 'relics', 'frost'];
+const PKEYS = ['cooldown', 'cdTotal', 'aug', 'echoes', 'shield', 'shieldHit', 'dash', 'dashCd', 'muzzle', 'relics', 'frost', 'defl', 'deflCd', 'deflAge'];
 function usePlayer(c) {
   if (!c || c === ACTIVE) return;
   if (ACTIVE) for (const k of PKEYS) ACTIVE[k] = game[k];
@@ -79,7 +79,7 @@ function reacher(x, y, r) {
 const coopN = () => (!NET.run ? 1 : NET.guest ? Math.max(1, (NET.pings || NET.roster || []).length) : NET.players.length);
 const coopCount = () => 1 + COOP.count * (coopN() - 1);   // enemy count and spawn rate
 const coopHp = () => 1 + COOP.hp * (coopN() - 1);         // enemy HP
-const coopBossHp = () => 1 + COOP.boss * (coopN() - 1);   // SKURTOSAURUS and MAKORA
+const coopBossHp = () => 1 + COOP.boss * (coopN() - 1);   // SKURTOSAURUS, OBI ONE and MAKORA
 
 function freshStats() { const s = {}; for (const id of STAT_IDS) s[id] = BASE_STATS[id] || 0; return s; }
 function freshPicks() { const s = {}; for (const id of STAT_IDS) s[id] = { n: 0, best: -1 }; return s; }
@@ -87,7 +87,7 @@ function newCtx(id, name, color, local, cards, seedN) {
   return { id, name, color, local, body: { x: W / 2, y: H / 2, flash: 0, hp: PLAYER.hp, safe: 0, kx: 0, ky: 0 },
     deck: createDeck(cards, mulberry32(seedN)), stats: freshStats(), picks: freshPicks(),
     cooldown: ATTACK_INTERVAL, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], shield: 0, shieldHit: 0, dash: null, dashCd: 0,
-    muzzle: null, relics: [], frost: null,
+    muzzle: null, relics: [], frost: null, defl: 0, deflCd: 0, deflAge: 9,
     down: false, rev: 0, reviving: false, ping: 0, fired: 0, outbox: [], pickQ: [], pick: null,
-    net: { mx: 0, my: 0, x: null, y: null, dash: false, rv: false, at: 0, seq: 0 } };
+    net: { mx: 0, my: 0, x: null, y: null, dash: false, rv: false, at: 0, seq: 0, mash: 0, mashQ: 0, dfl: 0, dflQ: 0 } };
 }

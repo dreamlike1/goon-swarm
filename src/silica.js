@@ -241,7 +241,7 @@ function drawSilicaFloor() {
 // and pincers in slow motion if it's a crab), with little ice sparkles drifting slowly up off it. The bosses also get
 // frost at their feet.
 function frostSparkles(e) {
-  const big = e.boss || e.makora, n = big ? 6 : 3, now = performance.now() / 1000, seed = e.fs ?? (e.fs = e._id ? (e._id * 7.31) % 100 : Math.random() * 100);
+  const big = e.boss || e.makora || e.obi, n = big ? 6 : 3, now = performance.now() / 1000, seed = e.fs ?? (e.fs = e._id ? (e._id * 7.31) % 100 : Math.random() * 100);
   for (let i = 0; i < n; i++) {
     const ph = reducedMotion ? (i + 0.5) / n : (now * 0.3 + i / n + seed) % 1;          // slow: a whole rise takes over 3 s
     const x = e.x + Math.sin(seed * 7 + i * 2.4) * e.r * 0.9, y = e.y + e.r * 0.5 - ph * e.r * 1.9, z = (big ? 5.5 : 4) * (0.6 + 0.4 * Math.sin(ph * Math.PI));
@@ -253,7 +253,7 @@ function frostSparkles(e) {
 }
 function drawSilicaTop() {
   for (const e of game.enemies) if (e.chill > 0 && !e.down && !e.dummy) frostSparkles(e);
-  for (const e of [game.boss, game.makora]) if (e && e.chill > 0 && !e.down) {   // the big ones: frost at their feet
+  for (const e of [game.boss, game.obi, game.makora]) if (e && e.chill > 0 && !e.down) {   // the big ones: frost at their feet
     ctx.globalAlpha = 0.4; ctx.fillStyle = COL.ice; ellipse(e.x, e.y + e.r * 0.6, e.r * 0.9, e.r * 0.25); ctx.globalAlpha = 1;
   }
   if (game.frost) drawFrostAt(game.frost, game.player);

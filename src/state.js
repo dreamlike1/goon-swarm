@@ -38,7 +38,14 @@ const game = {
   bossDone: false,    // beaten (once per run)
   rocks: [],          // its thrown rocks
   cracks: [],         // broken ground where it lands after a charge (fades out)
-  relics: [],         // relics earned this run ('bull')
+  relics: [],         // relics earned this run ('bull', 'deflect')
+  obi: null,          // OBI ONE while he's on the field (also in `enemies`), level 20
+  obiDue: false, obiDone: false,
+  sabers: [],         // his lightsaber while it's thrown
+  bolts: [],          // your shots, knocked back at you while he blocks
+  defl: 0,            // DEFLECT: seconds of shield left …
+  deflCd: 0,          // … seconds until it can go up again …
+  deflAge: 9,         // … and seconds since it went up (a hit this soon is a perfect deflect)
   dash: null,         // BULL charge in progress
   dashCd: 0,          // seconds until BULL can charge again
   ghosts: [],         // BULL afterimages: { x, y, a, life }

@@ -297,6 +297,7 @@ function splitMissile(pr, hit) {
 function hitEnemy(pr, e) {
   if (e.dead) return;                   // already killed this frame by another hit (a blast, a pierce): count it once
   if (e.boss && e.state === 'enrage') return;   // roaring into phase 2: can't be hurt
+  if (e.obi && obiGuard(e, pr)) return;          // OBI ONE: blocking (your shot comes back at you), or arriving (obi.js)
   if (e.makora && (e.down || game.makoraAdapted.has(pr.card))) {   // MAKORA has adapted to this weapon: no effect
     if (!e.down && performance.now() - (e.tink || 0) > 350) {
       e.tink = performance.now();
@@ -316,11 +317,12 @@ function hitEnemy(pr, e) {
     renderPrDmg();
   }
   e.hit = 0.1;
-  const len = Math.hypot(pr.vx, pr.vy) || 1, kr = e.boss ? BOSS.knockResist : e.makora ? MAKORA.knockResist : e.mrock ? 0 : 1;
+  const len = Math.hypot(pr.vx, pr.vy) || 1, kr = e.boss ? BOSS.knockResist : e.makora ? MAKORA.knockResist : e.obi ? OBI.knockResist : e.mrock ? 0 : 1;
   e.kx += (pr.vx / len) * pr.knock * kr;
   e.ky += (pr.vy / len) * pr.knock * kr;
   if (e.boss) renderBossBar();
   if (e.makora) renderMakoraBar();
+  if (e.obi) renderObiBar();
   const heavy = pr.look === 'heavy' && !pr.aoe, strong = pr.dmg >= 10;
   SFX.hit(heavy || pr.crit || pr.dmg >= 15);
   burst(pr.x, pr.y, COL[pr.card], heavy ? 16 : strong ? 10 : 5, heavy ? 260 : 180);
@@ -332,6 +334,7 @@ function hitEnemy(pr, e) {
   else game.floaters.push({ x: e.x + (Math.random() - 0.5) * 16, y: e.y - e.r - 8, text: String(pr.dmg), color: COL[pr.card], life: 0.6, vy: -50, big: strong });
 
   if (e.hp <= 0 && e.boss && bossNextPhase(e)) return;   // SKURTOSAURUS: phase 1's bar is gone, phase 2 begins
+  if (e.hp <= 0 && e.obi && obiNextPhase(e)) return;     // … and OBI ONE's
   if (e.hp <= 0 && e.makora) { makoraDown(e, pr.card); return; }   // MAKORA never stays down: it adapts and comes back
   if (e.hp <= 0 && e.mrock) { rockBlast(e); return; }                // MAKORA's kicked rock: shot apart, it explodes (makora.js)
   if (e.hp <= 0) {
@@ -342,6 +345,7 @@ function hitEnemy(pr, e) {
     game.enemies.splice(game.enemies.indexOf(e), 1);
     if (e.split) splitEnemy(e);
     if (e.boss) bossDown(e);
+    else if (e.obi) obiDown(e);
     else if (Math.random() < orbDropChance()) dropOrb(e);
     if (Math.random() < POTION.drop && game.potions.length < POTION.max) game.potions.push({ x: e.x, y: e.y, t: 0 });
     else if (Math.random() < DIAMOND.drop && game.diamonds.length < DIAMOND.max) game.diamonds.push({ x: e.x, y: e.y, t: 0 });
@@ -366,7 +370,7 @@ function dropOrb(e) {
 
 // Adds XP, levelling up as many times as it covers. Leftover XP carries into the next level.
 function gainXp(n) {
-  if (game.level >= MAKORA.level) return;   // level 15 is the last level (user)
+  if (game.level >= MAKORA.level) return;   // MAKORA's level (30 since v0.48) is the last level (user)
   game.xp += n;
   let up = 0;
   while (game.xp >= xpNeeded(game.level) && game.level < MAKORA.level) {
@@ -387,7 +391,7 @@ function gainXp(n) {
 
 // Bonus gold (user): +1 for reaching level 10, +10 for beating SKURTOSAURUS and +15 every time MAKORA goes down
 // (v0.43; the boss was +1). Saved straight away; the run's Defeated screen and the title note add it to the gold for kills.
-const GOLD_BONUS = { level10: 1, boss: 10, makora: 15 };
+const GOLD_BONUS = { level10: 1, boss: 10, obi: 12, makora: 15 };   // obi: OBI ONE (v0.48, a placeholder)
 function bonusGold(why, n = 1) {
   if (game.practice) return;
   if (NET.host && NET.run) coopEvent({ e: 'gold', why, n });   // each friend earns it on their own computer
@@ -413,6 +417,7 @@ function playerReach(x, y) {
 function hurtPlayer(raw) {
   const p = game.player;
   if (p.safe > 0 || game.over || (NET.run && ACTIVE?.down)) return;
+  if (deflectHit()) return;                        // DEFLECT's shield takes it (obi.js)
   if (Math.random() < dodgeChance()) {
     p.safe = PLAYER.safe;
     SFX.dodge();
@@ -462,7 +467,7 @@ function playerStep(dt, mx, my) {
   p.px = p.x; p.py = p.y;               // where this frame started, so pickups can check the whole path (see playerReach)
   const ml = Math.hypot(mx, my);
   if (updateDash(dt)) { /* BULL charge: it moves the player itself */ }
-  else if (ml) {
+  else if (ml && !pulledNow()) {           // (OBI ONE's force pull holds you: obi.js drags you instead)
     p.x += (mx / ml) * moveSpeed() * dt; p.y += (my / ml) * moveSpeed() * dt;
     if (isLocal()) hintEl.classList.add('gone');
   }
@@ -477,6 +482,7 @@ function playerStep(dt, mx, my) {
   // Mini shield: a moment of safety right after a level-up choice closes.
   game.shield = Math.max(0, game.shield - dt);
   game.shieldHit = Math.max(0, game.shieldHit - dt);
+  deflectStep(dt);                      // DEFLECT's shield and cooldown (obi.js)
   // health regen
   if (stats.regen > 0 && p.hp < maxHp()) {
     const before = Math.ceil(p.hp);
@@ -501,9 +507,10 @@ function update(dt) {
     for (let i = 0; i < 3; i++) spawnEnemy();
   }
   if (game.bossDue && !game.boss) { startIntro(); return; }   // nothing else happens once the footsteps start
-  if (game.makoraDue && !game.boss && !game.makora) { startMakora(); return; }   // level 15: the last fight
+  if (game.obiDue && !game.boss && !game.obi && !game.makora) { startObi(); return; }   // level 20: OBI ONE (obi.js)
+  if (game.makoraDue && !game.boss && !game.obi && !game.makora) { startMakora(); return; }   // level 30: the last fight
   game.spawnTimer -= dt;
-  if (game.spawnTimer <= 0 && !game.boss && !game.makora && !game.practice) {   // no swarm at all while a boss is up (user)
+  if (game.spawnTimer <= 0 && !game.boss && !game.obi && !game.makora && !game.practice) {   // no swarm at all while a boss is up (user)
     const n = game.enemies.length, low = n < swarmMin(game.level) * coopCount();   // co-op: many more of them
     if (n < swarmMax(game.level) * coopCount()) spawnEnemy();
     game.spawnTimer = (low ? SWARM.refill : spawnEvery(game.level)) / coopCount();
@@ -514,8 +521,8 @@ function update(dt) {
   const decay = Math.exp(-6 * dt);
   for (const e of es) {
     if (e.dummy) { e.hit = Math.max(0, e.hit - dt); continue; }   // the store's test dummies stand still and do no harm
-    e.born = Math.min(1, e.born + dt * (e.boss || e.makora ? 1.5 : 4));
-    if (e.boss) sizeBoss(e); else if (e.makora) sizeMakora(e);   // their hitbox follows their size
+    e.born = Math.min(1, e.born + dt * (e.boss || e.makora || e.obi ? 1.5 : 4));
+    if (e.boss) sizeBoss(e); else if (e.makora) sizeMakora(e); else if (e.obi) sizeObi(e);   // their hitbox follows their size
     if (NET.run) {                          // co-op: each goes after whoever is nearest (and standing)
       if (!e.mrock && !nearestLiving(e.x, e.y)) { e.hit = Math.max(0, e.hit - dt); continue; }
       p = game.player;
@@ -524,6 +531,7 @@ function update(dt) {
     const ox = e.x, oy = e.y;
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
+    else if (e.obi) moveObi(e, dt);
     else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
     else if (e.shape === 'crab') moveRaptor(e, dt);
     else {
@@ -541,7 +549,7 @@ function update(dt) {
     const reach = e.r + PLAYER.r + (shielded ? SHIELD.r : 0);
     if (e.cap) { const q = hitPoint(e, p.x, p.y); dx = p.x - q.x; dy = p.y - q.y; d = Math.hypot(dx, dy) || 1; }   // a boss: its nearest part
     if (d < reach && e.state !== 'jump') {   // contact: push out, shove back, and hurt the player (unless shielded; not while the boss is in the air)
-      if (e.boss || e.makora) { p.x += (dx / d) * (reach - d); p.y += (dy / d) * (reach - d); clampTo(p, PLAYER.r); }   // a boss shoves you, not the other way round
+      if (e.boss || e.makora || e.obi) { p.x += (dx / d) * (reach - d); p.y += (dy / d) * (reach - d); clampTo(p, PLAYER.r); }   // a boss shoves you, not the other way round
       else {
         e.x -= (dx / d) * (reach - d); e.y -= (dy / d) * (reach - d); e.kx -= (dx / d) * 260; e.ky -= (dy / d) * 260;
         if (e.state === 'charge') { e.state = 'rest'; e.t = RAPTOR.rest; }   // a crab's dash stops when it hits you
@@ -559,8 +567,8 @@ function update(dt) {
       const overlap = (a.r + b.r) * 1.1 - d;
       if (overlap > 0) {
         const ox = (dx / d) * overlap / 2, oy = (dy / d) * overlap / 2;
-        if (a.boss || a.makora) { b.x += ox * 2; b.y += oy * 2; }
-        else if (b.boss || b.makora) { a.x -= ox * 2; a.y -= oy * 2; }
+        if (a.boss || a.makora || a.obi) { b.x += ox * 2; b.y += oy * 2; }
+        else if (b.boss || b.makora || b.obi) { a.x -= ox * 2; a.y -= oy * 2; }
         else { a.x -= ox; a.y -= oy; b.x += ox; b.y += oy; }
       }
     }
@@ -568,6 +576,7 @@ function update(dt) {
   for (const e of es) if (!e.mrock) clampTo(e, e.r);
 
   updateRocks(dt);
+  updateSabers(dt); updateBolts(dt);    // OBI ONE's thrown saber and the shots he knocks back (obi.js)
 
   // Pickups reach: a BULL charge also scoops up anything it passes near. (Co-op: whoever gets there; see reacher.)
 

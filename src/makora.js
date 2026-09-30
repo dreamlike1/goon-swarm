@@ -1,4 +1,4 @@
-/* makora.js — MAKORA, the last level (user): summoned at level 15, it adapts to whatever kills it. */
+/* makora.js — MAKORA, the last level (user): summoned at level 30 (15 until v0.48), it adapts to whatever kills it. */
 'use strict';
 
 /* The fight (user):
@@ -23,7 +23,8 @@
    (The user's context for it is Mahoraga, but the name must be MAKORA.) Numbers are placeholders apart from the
    user's 150 HP, level 15 and ×2. */
 const MAKORA = {
-  name: 'MAKORA', level: 15, hp: 150, mult: 2, r: 56,  // hp 20 and ×3 until v0.37 (user: 150, ×2). `r`: the drawing's size
+  // level: 30 since v0.48 (user: OBI ONE takes level 20, MAKORA moves to 30)
+  name: 'MAKORA', level: 30, hp: 150, mult: 2, r: 56,  // hp 20 and ×3 until v0.37 (user: 150, ×2). `r`: the drawing's size
   // v0.46 (user: its hitbox should fit it and grow with it): each wheel turn it grows `grow` bigger (up to `growMax`),
   // and its hitbox is a capsule of radius `hit.r` from its legs up to its head (drawing units: 30 = r px)
   grow: 0.08, growMax: 1.4, hit: { r: 30, cap: [0, 12, 0, -62] },
@@ -119,7 +120,7 @@ function spinMakoraWheel(c, m) {
   drawWheel(a, c.landed ? Math.max(0, 0.7 - (c.t - c.landed) * 3) : 0);
 }
 
-// Level 15 (upgrades.js) sets game.makoraDue; combat.js starts this once the level-up picks are done and the boss is gone.
+// Level 30 (upgrades.js) sets game.makoraDue; combat.js starts this once the level-up picks are done and the boss is gone.
 function startMakora() {
   game.makoraDue = false;
   for (const e of game.enemies) burst(e.x, e.y, enemyCol(e), 6, 140);   // the swarm scatters
@@ -512,7 +513,7 @@ function renderMakoraBar() {
   const m = game.makora;
   if (!m) return;
   bossBar.hidden = false;
-  bossBar.classList.remove('is-phase2');
+  bossBar.classList.remove('is-phase2', 'is-obi');
   bossBar.classList.add('is-makora');
   bossFill.style.transform = `scaleX(${Math.max(0, m.hp) / m.maxHp})`;
   bossBar.setAttribute('aria-label', `${MAKORA.name} health`);

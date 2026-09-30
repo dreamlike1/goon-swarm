@@ -142,6 +142,9 @@ function onHostMsg(conn, m) {
   if (!c) return;
   if (m.t === 'in') {
     if (m.dash) c.net.dash = true;                         // a dash always counts, even in a late message
+    // presses that must never go missing (v0.48): running counts, so a lost or late message still adds up
+    if ((m.mash | 0) > c.net.mash) { c.net.mashQ += (m.mash | 0) - c.net.mash; c.net.mash = m.mash | 0; }   // fighting OBI ONE's pull
+    if ((m.dfl | 0) > c.net.dfl) { c.net.dflQ += (m.dfl | 0) - c.net.dfl; c.net.dfl = m.dfl | 0; }       // DEFLECT
     const q = m.q | 0;
     if (q && q < c.net.seq) return;                        // an older one that arrived after a newer one: skip it
     c.net.seq = q;
@@ -349,7 +352,7 @@ function guestStart(m) {
   NET.me = { id: m.you, name: NET.name, local: true, body: game.player, down: false, rev: 0, color: r.color, emoji: r.emoji || '' };
   NET.players = [NET.me];
   Object.assign(game.player, { x: m.x, y: m.y });
-  Object.assign(NET, { view: [], pings: null, hist: new Map(), off: null, jit: 0, delay: 100, lastQ: 0, seqIn: 0, snapAt: performance.now() });
+  Object.assign(NET, { view: [], pings: null, hist: new Map(), off: null, jit: 0, delay: 100, lastQ: 0, seqIn: 0, mashN: 0, deflN: 0, snapAt: performance.now() });
   coopEnter();
 }
 function coopEnter() {
@@ -393,11 +396,13 @@ function coopPlayersStep(dt) {
       playerStep(dt, mx, my);
     } else {
       if (c.net.dash) { c.net.dash = false; tryDash([c.net.mx, c.net.my]); }
+      for (; c.net.mashQ > 0; c.net.mashQ--) obiMash();
+      for (; c.net.dflQ > 0; c.net.dflQ--) tryDeflect();
       const px = p.x, py = p.y, mx = c.reviving ? 0 : c.net.mx, my = c.reviving ? 0 : c.net.my;
       playerStep(dt, mx, my);
       // the guest's own position wins, unless the host is moving them (a charge or a shove); carried on along their
       // movement by half their ping plus the time since it came, so it's where they are on their own screen by now
-      const forced = game.dash || Math.hypot(p.kx || 0, p.ky || 0) > 5;
+      const forced = game.dash || Math.hypot(p.kx || 0, p.ky || 0) > 5 || pulledNow();   // (OBI ONE's pull drags them)
       if (!forced && Number.isFinite(c.net.x)) {
         const ml = Math.hypot(mx, my), lead = ml ? Math.min(COOP.lead, (c.ping || 0) / 2000 + (now - c.net.at) / 1000) * moveSpeed() / ml : 0;
         p.x = c.net.x + mx * lead; p.y = c.net.y + my * lead; clampTo(p, PLAYER.r);
@@ -428,6 +433,7 @@ function coopAttacks(dt) {
 function coopLevelUps(from, to) {
   for (let l = from + 1; l <= to; l++) {
     if (l === BOSS.level && !game.bossDone && !game.boss) game.bossDue = true;
+    if (l === OBI.level && !game.obiDone && !game.obi) game.obiDue = true;
     if (l === MAKORA.level && !game.makora) game.makoraDue = true;
   }
   eachPlayer(c => {
@@ -529,9 +535,9 @@ function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
-  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes'];
-const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons']);
-const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby']);
+  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts'];
+const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts']);
+const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
 function snapReplacer(k, v) {
   if (SNAP_DROP.has(k)) return undefined;
@@ -544,7 +550,7 @@ function playerView(c) {
   const d = g('dash'), f = g('frost');
   return { id: c.id, name: c.name, color: c.color, emoji: c.emoji || '', x: c.body.x, y: c.body.y, hp: c.body.hp, mh: PLAYER.hp + c.stats.hp, down: c.down,
     dash: d ? { dx: d.dx, dy: d.dy, sx: d.sx, sy: d.sy } : null, frost: f ? { t: f.t, card: f.card } : null, safe: c.body.safe, flash: c.body.flash,
-    shield: g('shield'), ping: c.local ? 0 : c.ping, forced: !!c.forced, rev: c.rev || 0, rv: !!c.reviving,
+    shield: g('shield'), defl: g('defl'), ping: c.local ? 0 : c.ping, forced: !!c.forced, rev: c.rev || 0, rv: !!c.reviving,
     lag: !c.local && performance.now() - (c.net.at || 0) > 600 };
 }
 function flushSnaps(force = false) {
@@ -556,7 +562,7 @@ function flushSnaps(force = false) {
   const world = { t: 's', q: NET.seqOut, ht: Math.round(now), lv: game.level, xp: game.xp, kills: game.kills, shake: game.shake, over: game.over,
     adapted: game.makoraAdapted ? [...game.makoraAdapted] : [],
     cine: game.cine ? { kind: game.cine.kind, t: game.cine.t, step: game.cine.step } : null,
-    intro: game.intro ? { t: game.intro.t, stomp: game.intro.stomp } : null,
+    intro: game.intro ? { kind: game.intro.kind || '', t: game.intro.t, stomp: game.intro.stomp } : null,
     pl: NET.players.map(playerView) };
   for (const k of WORLD_KEYS) world[k] = game[k];
   // the heavy ones, trimmed: orbs only what's drawn, fewer particles, and the ground cracks (which don't move) only
@@ -572,7 +578,8 @@ function flushSnaps(force = false) {
   for (const c of NET.players) {
     if (c.local || !c.conn) continue;
     const g = k => (c === ACTIVE ? game[k] : c[k]);
-    const me = { cd: g('cooldown'), cdt: g('cdTotal'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd') };
+    const me = { cd: g('cooldown'), cdt: g('cdTotal'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd'),
+      defl: g('defl'), dfc: g('deflCd'), dfa: g('deflAge') };
     // … plus their own part. A friend whose connection is still busy with earlier pictures skips this one, so they
     // don't fall further and further behind.
     const ch = fastOf(c);
@@ -645,8 +652,10 @@ function applySnap(s) {
   aliveEl.textContent = game.enemies.length;
   game.boss = game.enemies.find(e => e.boss) || null;
   game.makora = game.enemies.find(e => e.makora) || (s.cine && game.makora) || null;
+  game.obi = game.enemies.find(e => e.obi) || null;
   game.makoraAdapted = new Set(s.adapted || []);
-  if (game.makora) renderMakoraBar(); else if (game.boss) renderBossBar(); else { bossBar.hidden = true; bossBar.classList.remove('is-makora'); }
+  if (game.makora) renderMakoraBar(); else if (game.obi) renderObiBar(); else if (game.boss) renderBossBar(); else { bossBar.hidden = true; bossBar.classList.remove('is-makora', 'is-obi'); }
+  if (game.obi?.pull && game.obi.pull.id === NET.me.id) game.shake = Math.max(game.shake, OBI.phase2.pull.shake);   // OBI ONE's pull shakes your screen
   // the others, smoothed too
   NET.view = (s.pl || []).filter(v => v.id !== NET.me.id).map(v => { track('p' + v.id, s.ht, v.x, v.y); seen.add('p' + v.id); return v; });
   for (const k of NET.hist.keys()) if (!seen.has(k)) NET.hist.delete(k);
@@ -674,10 +683,12 @@ function applySnap(s) {
     for (const id in me.pk || {}) picks[id] = me.pk[id];
     const statKey = JSON.stringify(me.pk);
     if (statKey !== NET.statKey) { NET.statKey = statKey; renderStats(); renderHp(false); }
-    const hadBull = game.relics.includes('bull');
+    const had = game.relics.join(), wasOn = game.defl > 0;
     game.relics = me.relics || []; game.dashCd = me.dashCd || 0;
-    if (hadBull !== game.relics.includes('bull') || game.dashCd > 0 || NET.wasCd) renderRelics();
-    NET.wasCd = game.dashCd > 0;
+    game.defl = me.defl || 0; game.deflCd = me.dfc || 0; game.deflAge = me.dfa ?? 9;
+    const cooling = game.dashCd > 0 || game.deflCd > 0;
+    if (had !== game.relics.join() || cooling || NET.wasCd || wasOn !== game.defl > 0) renderRelics();
+    NET.wasCd = cooling;
     if (augChanged) renderTray(false);
   }
   guestScenes(s);
@@ -698,11 +709,12 @@ function guestEvent(ev) {
   else if (ev.e === 'down' && ev.id === NET.me.id) { NET.me.down = true; closeRevive(); }
   else if (ev.e === 'revived' && (ev.id === NET.me.id || (ev.by || []).includes(NET.me.id))) SFX_RAW.levelUp();
   else if (ev.e === 'skip') skipIntro(true);
+  else if (ev.e === 'obiName') showObiName();
 }
 // SKURTOSAURUS's intro and MAKORA's scenes: the guest plays its own copy (the words, the wheel, the sounds), started
 // and ended by the host's.
 function guestScenes(s) {
-  if (s.intro && !game.intro && !NET.introSeen) { NET.introSeen = true; startIntroScene(); game.intro = { t: s.intro.t, stomp: s.intro.stomp }; }
+  if (s.intro && !game.intro && !NET.introSeen) { NET.introSeen = true; startIntroScene(s.intro.kind); game.intro = { kind: s.intro.kind || '', t: s.intro.t, stomp: s.intro.stomp }; }
   if (!s.intro) NET.introSeen = false;
   if (s.cine && !game.cine) {
     if (s.cine.kind === 'summon') startMakora();
@@ -724,7 +736,7 @@ function guestFrame(dt) {
     NET.lastIn = now;
     const [mx, my] = rooted || NET.me.down ? [0, 0] : localInput();
     NET.seqIn = (NET.seqIn || 0) + 1;
-    toHostFast({ t: 'in', q: NET.seqIn, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, mx, my, rv: NET.holdE ? 1 : 0, dash: NET.wantDash ? 1 : 0 });
+    toHostFast({ t: 'in', q: NET.seqIn, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, mx, my, rv: NET.holdE ? 1 : 0, dash: NET.wantDash ? 1 : 0, mash: NET.mashN || 0, dfl: NET.deflN || 0 });
     NET.wantDash = false;
   }
   // everything else, a little in the past (see clockSample)
@@ -761,7 +773,7 @@ function updateCam() {
 /* ---------- sounds and callouts go to the guests too ---------- */
 const SFX_RAW = { ...SFX };
 const toastRaw = toast;
-const QUIET = new Set(['click', 'confirm', 'back', 'whoosh', 'start', 'rip', 'coin', 'upgrade', 'hurt', 'dodge', 'defeat', 'shuffle', 'deal', 'pickup', 'levelUp']);
+const QUIET = new Set(['click', 'confirm', 'back', 'whoosh', 'start', 'rip', 'coin', 'upgrade', 'hurt', 'dodge', 'defeat', 'shuffle', 'deal', 'pickup', 'levelUp', 'pullPress', 'deflectOn']);
 for (const k of Object.keys(SFX)) {
   if (typeof SFX[k] !== 'function') continue;
   SFX[k] = (...a) => {
@@ -825,6 +837,7 @@ function drawCoopPlayers() {
       ctx.beginPath(); ctx.arc(v.x, v.y, PLAYER.r + 5, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
     }
     if (v.shield > 0) bubble(v.x, v.y, v.shield);
+    if (v.defl > 0) drawDeflect(v.x, v.y, v.defl);
     hpBar(v.x, v.y, v.hp, v.mh);
   }
   if (NET.me.down) downed(p.x, p.y, NET.me.rev || 0, false);    // you: down

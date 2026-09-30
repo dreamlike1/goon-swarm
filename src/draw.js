@@ -430,6 +430,7 @@ function draw() {
   for (const e of game.enemies) {
     if (e.boss) { drawBoss(e); continue; }
     if (e.makora) { if (!e.down) drawMakora(e); continue; }
+    if (e.obi) { drawObi(e); continue; }
     if (e.mrock) { drawKickRock(e); continue; }
     if (e.dummy) { drawDummy(e); continue; }
     const s = e.r * (0.4 + 0.6 * e.born);
@@ -455,6 +456,7 @@ function draw() {
     }
   }
   drawSilicaTop();                       // frost on chilled enemies, the ring of ice, falling bombs, the lion's bite
+  drawObiShots();                        // OBI ONE's thrown saber and the shots he knocked back (obi.js)
 
   // projectiles, by look: streak (a line trail), orb and heavy (fading circles), spin (a turning square)
   for (const pr of game.projectiles) {
@@ -617,6 +619,9 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  if (!game.inMenu) drawDeflect(p.x, p.y, game.defl, game.deflAge);   // DEFLECT's shield (obi.js)
+  drawPullMeter();                       // the ring you fill to break OBI ONE's pull
+
   if (p.flash > 0) {                    // contact: a ring, so the player never blends into the swarm
     ctx.globalAlpha = p.flash / 0.2;
     ctx.strokeStyle = COL.bad;
@@ -660,6 +665,7 @@ function draw() {
     tctx.fillText(f.text, f.x, f.y);
   }
   drawCoopNames();
+  drawPullText();
   tctx.restore();
 }
 // A crit (v0.42, user: a GOOD indicator): the number pops in big and settles, on a spiky orange starburst, with a

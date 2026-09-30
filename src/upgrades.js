@@ -108,7 +108,8 @@ function queueLevelUps(from, to) {
     if (isWheelLevel(l)) game.upQueue.push({ kind: 'wheel', level: l });
     if (l % AUG_EVERY === 0) game.upQueue.push({ kind: 'aug', level: l });
     if (l === BOSS.level && !game.bossDone && !game.boss) game.bossDue = true;   // SKURTOSAURUS arrives once these picks are done
-    if (l === MAKORA.level && !game.makora) game.makoraDue = true;             // … and MAKORA at 15, the last level
+    if (l === OBI.level && !game.obiDone && !game.obi) game.obiDue = true;      // … OBI ONE at 20 (v0.48)
+    if (l === MAKORA.level && !game.makora) game.makoraDue = true;             // … and MAKORA at 30, the last level
   }
   if (!game.choosing) openNext();
   else renderMore();
@@ -334,19 +335,26 @@ function takeRandomWeapon() {
 
 /* ---------- relic message (after the boss) ---------- */
 function renderRelic() {
-  document.getElementById('up-title').textContent = `Relic earned: ${BULL.name}`;
+  const deflect = step.relic === 'deflect';                // OBI ONE's (v0.48); otherwise SKURTOSAURUS's BULL
+  document.getElementById('up-title').textContent = `Relic earned: ${deflect ? DEFLECT.name : BULL.name}`;
   const sub = document.getElementById('up-sub');
   sub.hidden = false;
-  sub.textContent = `${BOSS.name} dropped it. It's yours for the rest of this run.`;
+  sub.textContent = `${deflect ? OBI.name : BOSS.name} dropped it. It's yours for the rest of this run.`;
   document.getElementById('up-keys').textContent = 'Press Enter to continue';
+  const facts = deflect ? [
+    `Press <kbd>${DEFLECT.key}</kbd>, or tap the shield icon by your HP bar, to raise a <b>deflect shield</b> for ${DEFLECT.time} seconds.`,
+    `It <b>stops the first hit</b> that would land on you, and shoves back whatever is close.`,
+    `<b>Perfect deflect:</b> raise it just before a hit lands (within ${DEFLECT.perfect} s) and <b>half its cooldown</b> comes back.`,
+    `It recharges in ${DEFLECT.cd} seconds: the ring around the icon fills, then glows when it's ready.`,
+  ] : [
+    `Press <kbd>Space</kbd>, or tap the bull icon by your HP bar, to <b>charge</b> a short way forward.`,
+    `You can't be hurt while charging, and every enemy you hit is <b>thrown aside</b>.`,
+    `The charge <b>scoops up</b> potions, diamonds and XP orbs on the way.`,
+    `It recharges in ${BULL.cd} seconds: the ring around the icon fills, then glows when it's ready.`,
+  ];
   choiceCards.innerHTML = `<li class="relic-box">`
-    + `<span class="relic-art" aria-hidden="true">${BULL_ICON}</span>`
-    + `<ul class="relic-facts">`
-    + `<li>Press <kbd>Space</kbd>, or tap the bull icon by your HP bar, to <b>charge</b> a short way forward.</li>`
-    + `<li>You can't be hurt while charging, and every enemy you hit is <b>thrown aside</b>.</li>`
-    + `<li>The charge <b>scoops up</b> potions, diamonds and XP orbs on the way.</li>`
-    + `<li>It recharges in ${BULL.cd} seconds: the ring around the icon fills, then glows when it's ready.</li>`
-    + `</ul>`
+    + `<span class="relic-art${deflect ? ' is-deflect' : ''}" aria-hidden="true">${deflect ? DEFLECT_ICON : BULL_ICON}</span>`
+    + `<ul class="relic-facts">${facts.map(f => `<li>${f}</li>`).join('')}</ul>`
     + `<button class="start" type="button" id="btn-relic-ok">Got it</button>`
     + `</li>`;
   SFX.flip('legendary');

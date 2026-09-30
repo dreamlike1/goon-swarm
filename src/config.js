@@ -33,9 +33,11 @@ const splitChance = level => level < SPLIT.from ? 0 : Math.min(SPLIT.max, SPLIT.
 const HP_KNEE = 10;          // the level where enemy HP growth speeds up
 // Enemies also hit harder and move faster with the player's level (user: they get harder as you level).
 // After level 10 each level adds `dmgPerLevelLate` more on top (user, v0.7: less HP, more damage).
-const ENEMY_SCALE = { dmgPerLevel: 0.05, dmgPerLevelLate: 0.15, speedPerLevel: 0.012, speedMax: 1.5 };
-const enemyDmg = (type, level) => Math.round(ENEMY_TYPES[type].dmg
-  * (1 + ENEMY_SCALE.dmgPerLevel * (level - 1) + ENEMY_SCALE.dmgPerLevelLate * Math.max(0, level - HP_KNEE)));
+// v0.48 (levels now go to 30): after level 15 each level adds only `dmgPerLevelLater` on top, so a square hits for 39
+// at level 29 rather than 52.
+const ENEMY_SCALE = { dmgPerLevel: 0.05, dmgPerLevelLate: 0.15, dmgKnee2: 15, dmgPerLevelLater: 0.05, speedPerLevel: 0.012, speedMax: 1.5 };
+const enemyDmg = (type, level) => { const S = ENEMY_SCALE; return Math.round(ENEMY_TYPES[type].dmg
+  * (1 + S.dmgPerLevel * (level - 1) + S.dmgPerLevelLate * Math.max(0, Math.min(level, S.dmgKnee2) - HP_KNEE) + S.dmgPerLevelLater * Math.max(0, level - S.dmgKnee2))); };
 const enemySpeedMul = level => Math.min(ENEMY_SCALE.speedMax, 1 + ENEMY_SCALE.speedPerLevel * (level - 1));
 const enemyHp = (type, level) => {
   const T = ENEMY_TYPES[type];
@@ -99,11 +101,14 @@ const XP_BOOST = { on: true, drop: 1, value: 1.3, flat: 14 };
 // level, it starts at 12 and creeps up, then climbs faster after level 9, when the swarm grows quickly:
 // 12, 13, 14, 14, 15, 16, 17, 18, 18, then 20, 23, 27, 33, 40 (levels 10–14). In co-op every level needs `coop` more
 // per extra player (+25%), since there are more enemies to kill. Set `on: false` to go back to the flat 14.
-const XP_CURVE = { on: true, base: 12, per: 0.8, knee: 9, late: 0.7, coop: 0.25 };
+// v0.48 (the last level is now 30, with OBI ONE at 20): after level 14 the climb stops speeding up and adds `step` a
+// level instead (14 → 40, 20 → 75, 29 → 127), or the levels up to 30 would take far too long.
+const XP_CURVE = { on: true, base: 12, per: 0.8, knee: 9, late: 0.7, coop: 0.25, flatFrom: 14, step: 5 };
 const xpNeeded = level => {
   if (XP_CURVE.on) {
-    const C = XP_CURVE, n = typeof coopN === 'function' ? coopN() : 1;
-    return Math.round((C.base + C.per * (level - 1) + C.late * Math.max(0, level - C.knee) ** 2) * (1 + C.coop * (n - 1)));
+    const C = XP_CURVE, n = typeof coopN === 'function' ? coopN() : 1, l = Math.min(level, C.flatFrom);
+    const need = C.base + C.per * (level - 1) + C.late * Math.max(0, l - C.knee) ** 2 + C.step * Math.max(0, level - C.flatFrom);
+    return Math.round(need * (1 + C.coop * (n - 1)));
   }
   return XP_BOOST.on ? XP_BOOST.flat : Math.round(XP.first * XP.grow ** (level - 1) + XP.step * (level - 1));
 };
@@ -113,6 +118,7 @@ const tok = n => css.getPropertyValue(n).trim();
 const COL = {
   floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), frozen: tok('--frozen'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
+  obiRobe: tok('--obi-robe'), obiRobeDark: tok('--obi-robe-dark'), obiUnder: tok('--obi-under'), obiBelt: tok('--obi-belt'), obiBoot: tok('--obi-boot'), obiSkin: tok('--obi-skin'), obiHair: tok('--obi-hair'), obiEye: tok('--obi-eye'), obiHilt: tok('--obi-hilt'), obiHiltDark: tok('--obi-hilt-dark'), saber: tok('--saber'), saberCore: tok('--saber-core'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),
   ...Object.fromEntries(RARITIES.map(r => [`r-${r}`, tok(`--r-${r}`)])),

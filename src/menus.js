@@ -47,8 +47,16 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.48' },
+  { tag: 'Boss', text: 'OBI ONE arrives at level 20. "DO YOU FEEL THAT???" Dodge his spinning lightsaber, then he catches it and the fight is on.' },
+  { tag: 'Boss', text: 'He slices up close, dashes in and slices from further off, and throws his saber when you’re far away. Every long-range attack shows its line first.' },
+  { tag: 'Boss', text: 'When he blocks, your shots bounce off his saber and fly back at you: dodge them.' },
+  { tag: 'Boss', text: 'Phase 2: he can throw again the moment he catches it. Dash away from a throw while you’re far off and he drags you in with the force: smash Space to break free.' },
+  { tag: 'Relic', text: 'Beat him for DEFLECT: press P for a 5 s shield that stops the first hit. Raise it just before a hit for a perfect deflect and half the cooldown comes back.' },
+  { tag: 'Boss', text: 'MAKORA moves to level 30, which is now the last level. Levels after 14 need a steady amount more XP, and enemy damage grows more slowly after 15.' },
+  { tag: 'Boss', text: 'SKURTOSAURUS’s phase 2 has more HP than phase 1 now (300, was 200).' },
   { ver: 'v0.47' },
-  { tag: 'Store', text: 'Packs always add to your collection now: you can own up to 999 of each card Extra copies you already had are back.' },
+  { tag: 'Store', text: 'Packs always add to your collection now: you can own up to 999 of each card. Extra copies you already had are back.' },
   { tag: 'Deck', text: 'A deck can hold up to 7 of one card (it was 5), so a whole sequence of it can fire its ×7 ult.' },
   { tag: 'Bosses', text: 'SKURTOSAURUS and MAKORA can be hit anywhere on their body, head included, not only in the middle.' },
   { tag: 'Bosses', text: 'MAKORA grows a little bigger every time its wheel turns, and so does where you can hit it.' },
