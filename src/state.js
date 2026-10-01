@@ -4,6 +4,7 @@
 // Each run gets a new seed and a deck built from the equipped cards (see newDeck).
 let seed = 0;
 let deck = null;
+let mdeck = null;     // the melee deck (v0.53, user): plays at the same time as `deck`, the ranged one (melee.js)
 
 const game = {
   player: { x: 0, y: 0, flash: 0, hp: PLAYER.hp, safe: 0 },
@@ -48,7 +49,10 @@ const game = {
   sabers: [],         // his lightsaber while it's thrown
   bolts: [],          // your shots, knocked back at you while he blocks
   eshots: [],         // the shooters' slow red orbs (v0.51)
-  mrocks: [],         // MAKORA's kicked rocks (v0.52: their own list, so nothing aims at them)
+  mrocks: [],
+  melees: [],         // melee swings, stabs and black lightning, as they show (melee.js)
+  zones: [], kicks: [], sinfx: [], sguard: null,   // the SINS pack's slowing ground, astral kicks, effects and shield (sins.js)
+  mcool: 0, mcdTotal: 1, bflash: 0,   // the melee deck's timer, and BLACK FLASH!'s time left         // MAKORA's kicked rocks (v0.52: their own list, so nothing aims at them)
   boulders: [],       // OBI ONE phase 3: rocks lying round the arena, which he hurls at you (v0.50)
   debris: [],         // phase 2: the force rains debris down; red circle telegraphs, then a hit (user)
   defl: 0,            // DEFLECT: seconds of shield left …
@@ -80,9 +84,15 @@ const record = {
   logOk: true,
 };
 
+// The ranged and the melee deck from a list of cards (either may be null: no cards of that kind). The melee one gets
+// its own shuffle from the same seed, so a co-op guest's copy of it matches the host's.
+function splitDecks(cards, s) {
+  const r = cards.filter(id => !isMelee(id)), m = cards.filter(isMelee);
+  return [r.length ? createDeck(r, mulberry32(s), SEQUENCE_SIZE, deckLuck) : null,
+          m.length ? createDeck(m, mulberry32((s ^ 0x9E3779B9) >>> 0), SEQUENCE_SIZE, deckLuck) : null];
+}
 function newDeck() {
   seed = (Math.random() * 2 ** 32) >>> 0;
-  const cards = equippedCards();
-  deck = cards.length ? createDeck(cards, mulberry32(seed), SEQUENCE_SIZE, deckLuck) : null;
+  [deck, mdeck] = splitDecks(runCards(), seed);   // (a deck switched off in Loadout sits out)
   Object.assign(record, { current: [], seqs: [], passFired: [], passes: 0, passesOk: 0, trayOk: true, logOk: true });
 }

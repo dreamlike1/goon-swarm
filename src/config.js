@@ -138,6 +138,7 @@ const COL = {
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
   obiRobe: tok('--obi-robe'), obiRobeDark: tok('--obi-robe-dark'), obiUnder: tok('--obi-under'), obiBelt: tok('--obi-belt'), obiBoot: tok('--obi-boot'), obiSkin: tok('--obi-skin'), obiHair: tok('--obi-hair'), obiEye: tok('--obi-eye'), obiHilt: tok('--obi-hilt'), obiHiltDark: tok('--obi-hilt-dark'), saber: tok('--saber'), saberCore: tok('--saber-core'), saberBad: tok('--saber-2'), saberBadCore: tok('--saber-2-core'),
   shooter: tok('--enemy-shooter'), lunger: tok('--enemy-lunger'), lungerHi: tok('--enemy-lunger-hi'), boom: tok('--enemy-fast-split'), deflect: tok('--saber'),
+  knifeDark: tok('--knife-dark'), punchDark: tok('--punch-dark'), flash: tok('--black-flash'), flashHi: tok('--black-flash-hi'), flashAura: tok('--black-flash-aura'), knifeGuard: tok('--knife-guard'), fist: tok('--fist'), fistLine: tok('--fist-line'), sinGold: tok('--sin-gold'), tempestHi: tok('--tempest-hi'), tempestDark: tok('--tempest-dark'), sinTealHi: tok('--sin-teal-hi'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),
   ...Object.fromEntries(RARITIES.map(r => [`r-${r}`, tok(`--r-${r}`)])),

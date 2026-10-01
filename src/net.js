@@ -33,13 +33,13 @@ const cam = { x: 0, y: 0 };
 
 /* ---------- players ---------- */
 // What each player has of their own; the game keeps the active player's copy in `game`.
-const PKEYS = ['cooldown', 'cdTotal', 'aug', 'echoes', 'shield', 'shieldHit', 'dash', 'dashCd', 'muzzle', 'relics', 'frost', 'defl', 'deflCd', 'deflAge'];
+const PKEYS = ['cooldown', 'cdTotal', 'mcool', 'mcdTotal', 'mprimed', 'bflash', 'sguard', 'aug', 'echoes', 'shield', 'shieldHit', 'dash', 'dashCd', 'muzzle', 'relics', 'frost', 'defl', 'deflCd', 'deflAge'];
 function usePlayer(c) {
   if (!c || c === ACTIVE) return;
   if (ACTIVE) for (const k of PKEYS) ACTIVE[k] = game[k];
   ACTIVE = c;
   for (const k of PKEYS) game[k] = c[k];
-  game.player = c.body; deck = c.deck; stats = c.stats; picks = c.picks;
+  game.player = c.body; deck = c.deck; mdeck = c.mdeck; stats = c.stats; picks = c.picks;
 }
 const byId = id => NET.players.find(c => c.id === id) || null;
 const usePlayerId = id => { if (NET.run) usePlayer(byId(id) || NET.me); };
@@ -85,9 +85,9 @@ function freshStats() { const s = {}; for (const id of STAT_IDS) s[id] = BASE_ST
 function freshPicks() { const s = {}; for (const id of STAT_IDS) s[id] = { n: 0, best: -1 }; return s; }
 function newCtx(id, name, color, local, cards, seedN) {
   return { id, name, color, local, body: { x: W / 2, y: H / 2, flash: 0, hp: PLAYER.hp, safe: 0, kx: 0, ky: 0 },
-    deck: createDeck(cards, mulberry32(seedN), SEQUENCE_SIZE, deckLuck), stats: freshStats(), picks: freshPicks(),
-    cooldown: ATTACK_INTERVAL, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], shield: 0, shieldHit: 0, dash: null, dashCd: 0,
+    ...(([deck, mdeck]) => ({ deck, mdeck }))(splitDecks(cards, seedN)), stats: freshStats(), picks: freshPicks(),
+    cooldown: ATTACK_INTERVAL, cdTotal: ATTACK_INTERVAL, mcool: ATTACK_INTERVAL, mcdTotal: ATTACK_INTERVAL, mprimed: true, bflash: 0, sguard: null, aug: new Set(), echoes: [], shield: 0, shieldHit: 0, dash: null, dashCd: 0,
     muzzle: null, relics: [], frost: null, defl: 0, deflCd: 0, deflAge: 9,
-    down: false, rev: 0, reviving: false, ping: 0, fired: 0, outbox: [], pickQ: [], pick: null,
+    down: false, rev: 0, reviving: false, ping: 0, fired: 0, mfired: 0, outbox: [], pickQ: [], pick: null,
     net: { mx: 0, my: 0, x: null, y: null, dash: false, rv: false, at: 0, seq: 0, mash: 0, mashQ: 0, dfl: 0, dflQ: 0 } };
 }

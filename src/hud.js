@@ -6,10 +6,15 @@
    ============================================================ */
 const $ = id => document.getElementById(id);
 const trayEl = $('tray'), logEl = $('log'), checksEl = $('checks');
+// The two decks' trays (v0.53): each with its own tray, combo bars, counter and shuffle icon. `next`: its next card,
+// whose bar fills as its timer runs (main.js).
+const DECK_VIEWS = {
+  ranged: { kind: 'ranged', get deck() { return deck; }, box: $('rbox'), tray: trayEl, rapid: $('rapid'), left: $('deckLeft'), status: $('deckStatus'), shuffle: $('shuffleIcon'), next: null, timer: 0 },
+  melee:  { kind: 'melee', get deck() { return mdeck; }, box: $('mbox'), tray: $('mtray'), rapid: $('mrapid'), left: $('mdeckLeft'), status: $('mdeckStatus'), shuffle: $('mshuffleIcon'), next: null, timer: 0 },
+};
 const selftest = selfTest(2000);
 const packtests = STORE_PACKS.filter(k => !PACKS[k].fixed).map(k => ({ k, ...packSelfTest(PACKS[k], 20000) }));
 const packtest = { ok: packtests.every(t => t.ok), packs: packtests.reduce((n, t) => n + t.packs, 0), rows: packtests.flatMap(t => t.rows) };
-let nextCard = null;
 
 function onAttack(ev) {
   if (NET.host && NET.run && ACTIVE && !ACTIVE.local) { ACTIVE.fired++; return; }   // a friend's card: their screen shows it (coop.js)
@@ -30,12 +35,18 @@ function onAttack(ev) {
     // After the shuffle, every card of the deck is in exactly one pile: nothing lost or doubled.
     if (deck.intact()) record.passesOk++;
     record.passFired = [];
-    flashShuffle();
+    flashShuffle(DECK_VIEWS.ranged);
     SFX.shuffle();
   }
-  renderTray(fresh, fresh ? null : ev.filled);
+  renderTrayOf(DECK_VIEWS.ranged, fresh, fresh ? null : ev.filled, true);
   renderLog();
   renderChecks();
+}
+// The melee deck's card (combat.js fireMelee): only its tray changes (the log and checks follow the ranged deck).
+function onMeleeAttack(ev) {
+  if (NET.host && NET.run && ACTIVE && !ACTIVE.local) { ACTIVE.mfired++; return; }   // a friend's: their screen shows it
+  if (ev.reshuffle) { flashShuffle(DECK_VIEWS.melee); SFX.shuffle(); }
+  renderTrayOf(DECK_VIEWS.melee, !!ev.sequence, ev.sequence ? null : ev.filled, true);
 }
 
 // Player HP bar. `hit` flashes it red for a moment.
@@ -70,7 +81,7 @@ function slotPx() {
   const cs = getComputedStyle(trayEl);
   return parseFloat(cs.getPropertyValue('--cw')) + parseFloat(cs.getPropertyValue('--gap'));
 }
-const NEXT_LIFT = -8;           // matches .card.is-next
+const NEXT_LIFT = -3;           // matches .decks .card.is-next (v0.53: slim bars)
 const animOk = !reducedMotion && !!trayEl.animate;
 
 // Shrinks any card name or rarity label that is too wide for its card (SHURIKEN, UNCOMMON on a phone).
@@ -83,14 +94,13 @@ function fitNames(root) {
 }
 
 // Rapid-fire runs (3+ Bullets in a row): a glowing bar under those cards. It dims once the run has fired.
-const rapidEl = $('rapid');
-function renderRapid(seq, pos) {
-  rapidEl.style.setProperty('--n', seq.length);
+function renderRapid(V, seq, pos) {
+  V.rapid.style.setProperty('--n', seq.length);
   const cbs = combosIn(seq, pos);
-  rapidEl.innerHTML = cbs.map(c =>
+  V.rapid.innerHTML = cbs.map(c =>
     `<span class="rapid-bar${c.n >= 7 ? ' is-max' : ''}" style="--from:${c.start}; --len:${c.n}; --bc: var(--${c.card})"></span>`).join('');
-  for (const li of trayEl.children) li.classList.remove('is-combo');
-  for (const c of cbs) for (let i = c.start; i < c.start + c.n; i++) trayEl.children[i]?.classList.add('is-combo');
+  for (const li of V.tray.children) li.classList.remove('is-combo');
+  for (const c of cbs) for (let i = c.start; i < c.start + c.n; i++) V.tray.children[i]?.classList.add('is-combo');
 }
 
 // One deck card. `c` null is a face-down slot, waiting on the shuffle.
@@ -108,44 +118,57 @@ function trayFace(c, i, isNew) {
     + `<span class="cd"></span>`;
 }
 
-// A new sequence rebuilds the cards in its order; later attacks only update their state.
-// `filled`: slots the shuffle just dealt into, which flip face up where they are.
+// Both trays (a new run, an augment): which decks show, then each one's cards.
 function renderTray(fresh, filled = null) {
-  if (!deck) { trayEl.innerHTML = ''; nextCard = null; return; }
-  const seq = deck.sequence, pos = deck.seqPos, breaks = deck.passBreaks;
+  renderTrayOf(DECK_VIEWS.ranged, fresh, filled);
+  renderTrayOf(DECK_VIEWS.melee, fresh, null);
+}
+// One deck's tray. A new sequence rebuilds the cards in its order; later attacks only update their state.
+// `filled`: slots the shuffle just dealt into, which flip face up where they are. `played`: a card just fired.
+function renderTrayOf(V, fresh, filled = null, played = false) {
+  const d = V.deck, tray = V.tray;
+  const two = !!(deck && mdeck);
+  if (V.box.hidden !== !d || document.body.classList.contains('two-decks') !== two) {
+    V.box.hidden = !d;
+    document.body.classList.toggle('two-decks', two);
+    resize();                                // the HUD moved: how far down you can go changes with it (arena.js)
+  }
+  if (!d) { tray.innerHTML = ''; V.next = null; return; }
+  const seq = d.sequence, pos = d.seqPos, breaks = d.passBreaks;
   if (filled && !fresh) {
     filled.forEach((i, k) => {
-      const li = trayEl.children[i];
+      const li = tray.children[i];
       if (li) revealCard(li, seq[i], i, breaks.includes(i), k);
     });
   }
-  const same = trayEl.children.length === seq.length && [...trayEl.children].every((li, i) => li.dataset.card === (seq[i] || ''));
+  const same = tray.children.length === seq.length && [...tray.children].every((li, i) => li.dataset.card === (seq[i] || ''));
   if (fresh || !same) {
-    trayEl.style.setProperty('--n', seq.length);
-    trayEl.innerHTML = seq.map((c, i) => trayCard(c, i, breaks.includes(i))).join('');
-    fitNames(trayEl);
-    if (fresh && animOk) animateReset();
-  } else if (pos > 0 && animOk) {
-    animatePlay(trayEl.children[pos - 1]);   // the card that just fired
+    tray.style.setProperty('--n', seq.length);
+    tray.innerHTML = seq.map((c, i) => trayCard(c, i, breaks.includes(i))).join('');
+    fitNames(tray);
+    if (fresh && animOk) animateReset(tray);
+  } else if (played && pos > 0 && animOk) {
+    animatePlay(tray.children[pos - 1]);   // the card that just fired
   }
-  [...trayEl.children].forEach((li, i) => {
+  [...tray.children].forEach((li, i) => {
     li.classList.toggle('is-fired', i < pos);
     li.classList.toggle('is-next', i === pos);
     li.classList.toggle('is-aug', game.aug.has(i));   // augmented slot: its card fires twice
     li.setAttribute('aria-label', seq[i] === null ? `${i + 1}: face down, dealt at the next shuffle`
       : `${i + 1}: ${CARDS[seq[i]].name}${game.aug.has(i) ? ', fires twice' : ''}${li.classList.contains('is-combo') ? ', part of a combo' : ''}${i < pos ? ', fired' : i === pos ? ', next' : ''}`);
   });
-  nextCard = trayEl.querySelector('.is-next');
-  renderRapid(seq, pos);
-  $('cycle').textContent = deck.seqNo;
+  V.next = tray.querySelector('.is-next');
+  renderRapid(V, seq, pos);
+  $('cycle').textContent = (deck || mdeck).seqNo;
 
   // Deck counter: cards left to fire before the next shuffle, out of the whole deck.
-  $('deckLeft').innerHTML = `Deck <b>${deck.left}</b>/${deck.size}`;
-  $('deckStatus').setAttribute('aria-label', `${deck.left} of ${deck.size} cards left before the next shuffle`);
+  V.left.innerHTML = `<b>${d.left}</b>/${d.size}`;
+  V.status.setAttribute('aria-label', `${V.kind === 'melee' ? 'Melee' : 'Ranged'} deck: ${d.left} of ${d.size} cards left before the next shuffle`);
+  if (V.kind !== 'ranged') return;
 
   // The tray must show exactly the deck's current sequence, with fired cards matching what combat fired.
-  const shown = [...trayEl.children].map(li => li.dataset.card);
-  const firedShown = trayEl.querySelectorAll('.is-fired').length;
+  const shown = [...tray.children].map(li => li.dataset.card);
+  const firedShown = tray.querySelectorAll('.is-fired').length;
   const ok = shown.join() === seq.join() && firedShown === record.current.length
     && record.current.every((c, i) => c === shown[i]) && shown.length === SEQUENCE_SIZE;
   if (!ok) record.trayOk = false;
@@ -153,14 +176,13 @@ function renderTray(fresh, filled = null) {
 
 // Every card has fired and the deck just reshuffled: swap the "cards left" text for a
 // spinning shuffle icon for a moment, then let renderTray's next call show it again.
-let shuffleTimer = 0;
-function flashShuffle() {
-  $('deckLeft').hidden = true;
-  $('shuffleIcon').hidden = false;
-  clearTimeout(shuffleTimer);
-  shuffleTimer = setTimeout(() => {
-    $('deckLeft').hidden = false;
-    $('shuffleIcon').hidden = true;
+function flashShuffle(V) {
+  V.left.hidden = true;
+  V.shuffle.hidden = false;
+  clearTimeout(V.timer);
+  V.timer = setTimeout(() => {
+    V.left.hidden = false;
+    V.shuffle.hidden = true;
   }, 700);
 }
 
@@ -173,7 +195,7 @@ function animatePlay(li) {
   const glow = COL[li.dataset.card];
   li.animate([
     { transform: T(home, NEXT_LIFT), boxShadow: `0 0 0 0 ${glow}`, opacity: 1 },
-    { transform: T(home, -22, 1.08), boxShadow: `0 0 16px 2px ${glow}`, opacity: 1, offset: 0.35 },
+    { transform: T(home, -7, 1.12), boxShadow: `0 0 12px 2px ${glow}`, opacity: 1, offset: 0.35 },
     { transform: T(home, 0), boxShadow: `0 0 0 0 ${glow}`, opacity: 0.35 },
   ], { duration: 320, easing: 'ease-out' });
 }
@@ -207,12 +229,12 @@ function revealCard(li, c, i, isNew, k) {
 }
 
 // New sequence: the fresh cards drop in one after another.
-function animateReset() {
+function animateReset(tray) {
   const slot = slotPx();
-  [...trayEl.children].forEach((li, i) => {
+  [...tray.children].forEach((li, i) => {
     const home = i * slot;
     li.animate([
-      { transform: T(home, -18, 0.9), opacity: 0 },
+      { transform: T(home, -8, 0.9), opacity: 0 },
       { transform: T(home, i === 0 ? NEXT_LIFT : 0), opacity: 1 },
     ], { duration: 240, delay: i * 40, easing: 'cubic-bezier(.2, .9, .3, 1.2)', fill: 'backwards' });
   });

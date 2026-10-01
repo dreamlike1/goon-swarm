@@ -62,8 +62,30 @@ const CARDS = {
              desc: 'A slow bubble that pops into 2 more bubbles, each dealing light damage.' },
   superwasher: { name: 'Super Washer', rarity: 'uncommon', range: 150, dmg: 5, speed: 0, r: 0, knock: 90, look: 'orbit',
                  desc: 'Two water sprays spin all the way round you.' },
+  // Melee (v0.53, THE COMBAT UPDATE!, user): `melee` cards go in your second deck, which plays alongside the ranged one
+  // (melee.js). `range` is their reach. Knife Stab's `start` / `speed` / `ramp` are for KNIFE THROW! (its ×7) only.
+  // Damage, reach and knockback are placeholders.
+  // v0.53 (user): reach 72 and 64 at first, then 100 and 90 (longer), 82 and 74 (shorter again: it strikes the moment
+  // an enemy comes in reach instead, melee.js), 74 and 66, now 64 and 58 (user: a bit less, twice). The Attack range
+  // upgrade stretches it like any card's (combat.js rangeOf).
+  knife: { name: 'Knife Stab', rarity: 'common', melee: true, range: 64, dmg: 7, speed: 980, start: 980, ramp: 0.01, r: 7, knock: 60, look: 'knife',
+           desc: 'Stabs the nearest enemy within reach.' },
+  // The SINS pack (v0.53, user): four Triple S weapons, 2 of each, no combos (sins.js plays them). Sonic Kick is
+  // ranged; the other three are melee. Iron Will is cast on yourself (`self`) whenever its turn comes. Numbers are placeholders.
+  sonickick: { name: 'Sonic Kick', rarity: 'sss', range: 300, dmg: 12, speed: 640, r: 6, knock: 30, look: 'sonic',
+               desc: 'A sonic shot that marks what it hits, then an astral flying kick slams into the mark.' },
+  ironwill: { name: 'Iron Will', rarity: 'sss', melee: true, self: true, dmg: 0, speed: 0, r: 0, knock: 0, look: 'guard', dmgNote: 'absorbs 40 dmg',
+              desc: 'A teal and gold shield around you that soaks up the next 40 damage, for up to 4 s.' },
+  tempest: { name: 'Tempest Slam', rarity: 'sss', melee: true, range: 78, dmg: 18, speed: 0, r: 0, knock: 170, look: 'slam',
+             desc: 'Slams the ground: everything close is hit, and the cracked ground slows enemies for 2.5 s.' },
+  dragonkick: { name: 'Dragon Kick', rarity: 'sss', melee: true, range: 68, dmg: 45, speed: 0, r: 0, knock: 560, look: 'kick',
+                desc: 'One very heavy kick at the nearest enemy, knocking it far back.' },
+  punch: { name: 'Punch', rarity: 'common', melee: true, range: 58, dmg: 8, speed: 0, r: 0, knock: 210, look: 'punch',
+           desc: 'A heavy punch at the nearest enemy within reach. It knocks them back.' },
 };
 const CARD_IDS = Object.keys(CARDS);   // roster order, used for sorting
+const isMelee = id => !!CARDS[id]?.melee;   // which deck a card goes in: melee or ranged (v0.53)
+const kindOf = id => (isMelee(id) ? 'melee' : 'ranged');
 
 const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'sss'];
 const RARITY_NAME = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary', sss: 'Triple S' };

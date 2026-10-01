@@ -157,6 +157,23 @@ function fire() {
   return ev;
 }
 
+// The melee deck's turn (v0.53): like fire(), but it never waits for a target (melee.js).
+function fireMelee() {
+  const cb = comboAt(mdeck.sequence, mdeck.seqPos);
+  if (cb) {
+    const evs = [];
+    for (let k = 0; k < cb.n; k++) { const ev = mdeck.draw(); evs.push(ev); onMeleeAttack(ev); }
+    const hit = meleeCombo(cb, false);
+    if (evs.some(ev => game.aug.has(ev.slot))) later(0.3, () => runCombo(cb, true));
+    return { hit, reshuffle: evs.find(ev => ev.reshuffle)?.reshuffle || null };
+  }
+  const ev = mdeck.draw();
+  const hit = meleeStrike(ev.card, inRange(ev.card));
+  if (game.aug.has(ev.slot)) game.echoes.push({ card: ev.card, t: ECHO_DELAY });   // (an augmented slot: both decks')
+  onMeleeAttack(ev);
+  return { hit, reshuffle: ev.reshuffle };
+}
+
 // The nearest enemy within a card's attack range, or null.
 const rangeOf = card => (CARDS[card].range || Infinity) * (1 + stats.range);   // Attack range upgrades stretch every card's range
 const inRange = (card, from = game.player) => nearestEnemy(from, null, rangeOf(card));
@@ -357,6 +374,7 @@ function edgeDist(x, y, a) {
 function shoot(card, e, o = {}) {
   const spec = CARDS[card];
   const p = o.from || game.player;
+  if (spec.melee) { meleeStrike(card, e, o); return; }       // a melee card (melee.js): a stab or a punch, if it can reach
   if (spec.look === 'mine') { dropMine(card); return; }
   if (spec.silica && !o.raw) { silicaShot(card, e, o); return; }   // the Silica pack's weapons (silica.js)
   if (spec.look === 'laser') { zap(card, e, o); return; }
@@ -437,6 +455,7 @@ function hitEnemy(pr, e) {
   e.kx += (pr.vx / len) * pr.knock * kr;
   e.ky += (pr.vy / len) * pr.knock * kr;
   if (pr.stun) e.stun = Math.max(e.stun || 0, pr.stun);   // Soap Gun (user)
+  if (pr.look === 'sonic') sonicMark(pr, e);              // Sonic Kick: the mark, then the astral kick (sins.js)
   if (e.boss) renderBossBar();
   if (e.makora) renderMakoraBar();
   if (e.obi) renderObiBar();
@@ -534,6 +553,7 @@ function hurtPlayer(raw) {
   const p = game.player;
   if (p.safe > 0 || game.over || (NET.run && ACTIVE?.down)) return;
   if (deflectHit()) return;                        // DEFLECT's shield takes it (obi.js)
+  if (game.sguard && (raw = sinAbsorb(raw)) <= 0) { p.safe = PLAYER.safe; return; }   // Iron Will soaks it up (sins.js)
   if (Math.random() < dodgeChance()) {
     p.safe = PLAYER.safe;
     SFX.dodge();
@@ -564,8 +584,22 @@ function attackStep(dt) {
   game.cooldown -= dt;
   const autoTest = game.practice?.card === DECK_TAB;             // Test loadout's Whole deck: your deck plays as in a run
   if (autoTest) game.practice.t += dt;
-  if (game.practice && !autoTest) game.cooldown = attackInterval();
-  else if (game.cooldown <= 0) {
+  if (game.practice && !autoTest) { game.cooldown = game.mcool = attackInterval(); return; }
+  // the melee deck (v0.53, user): on its own timer, the same length, and it never waits for an enemy in reach. After a
+  // card that hit nothing (`mprimed`), the next goes off the moment an enemy comes within its reach (user: they got to
+  // you before the attack came), and its timer starts again from then.
+  if (mdeck) {
+    game.mcool -= dt;
+    const seq = mdeck.sequence, pos = mdeck.seqPos;
+    if (seq[pos] && (game.mcool <= 0 || (game.mprimed && nearestEnemy(game.player, null, meleeReach(seq, pos))))) {
+      const r = fireMelee();
+      game.mprimed = !r.hit;
+      game.mcdTotal = attackInterval() + (r.reshuffle ? shuffleTime() : 0);
+      game.mcool = Math.min(0, game.mcool) + game.mcdTotal;
+    }
+  }
+  if (!deck) return;
+  if (game.cooldown <= 0) {
     const next = deck.sequence[deck.seqPos];
     if (next && (CARDS[next].auto || inRange(next))) {   // the Mine has no range: it drops on its own (v0.40)
       const ev = fire();
@@ -586,6 +620,7 @@ function playerStep(dt, mx, my) {
   if (updateDash(dt)) { /* BULL charge: it moves the player itself */ }
   else if (ml && !pulledNow()) {           // (OBI ONE's force pull holds you: obi.js drags you instead)
     p.x += (mx / ml) * moveSpeed() * dt; p.y += (my / ml) * moveSpeed() * dt;
+    p.face = Math.atan2(my, mx);         // which way you're going (BLACK FLASH! with nothing in reach punches that way)
     if (isLocal()) hintEl.classList.add('gone');
   }
   if (p.kx || p.ky) {                   // a shove (SKURTOSAURUS's phase-2 roar), dying away quickly
@@ -598,6 +633,7 @@ function playerStep(dt, mx, my) {
   p.safe = Math.max(0, p.safe - dt);
   // Mini shield: a moment of safety right after a level-up choice closes.
   game.shield = Math.max(0, game.shield - dt);
+  game.bflash = Math.max(0, (game.bflash || 0) - dt);   // BLACK FLASH! (melee.js)
   game.shieldHit = Math.max(0, game.shieldHit - dt);
   deflectStep(dt);                      // DEFLECT's shield and cooldown (obi.js)
   // health regen
@@ -710,6 +746,8 @@ function update(dt) {
   updateSabers(dt); updateBolts(dt);    // OBI ONE's thrown saber and the shots he knocks back (obi.js)
   updateDebris(dt); updateBoulders(dt);   // (phase 3's rocks, v0.50)                     // OBI ONE phase 2: the force rains debris down (obi.js)
   updateSprays(dt); updateSoak(dt); updateTrails(dt);   // the Powerwash pack (user)
+  updateMelees(dt);                                     // melee swings (melee.js)
+  updateSins(dt);                                       // the SINS pack (sins.js)
 
   // Pickups reach: a BULL charge also scoops up anything it passes near. (Co-op: whoever gets there; see reacher.)
 

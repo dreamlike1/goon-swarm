@@ -265,7 +265,7 @@ function makoraReturns(m) {
     game.floaters.push({ x: m.x, y: m.y - m.r - 66, text: 'IT LEARNT YOUR DASH', color: COL.relic, life: 2.2, vy: -12, big: true });
   }
   // nothing left that can hurt it: say so once
-  const ids = new Set(deck ? deck.cards : []);
+  const ids = new Set([...(deck ? deck.cards : []), ...(mdeck ? mdeck.cards : [])]);
   if (ids.size && [...ids].every(id => game.makoraAdapted.has(id)) && !game.makoraAll) {
     game.makoraAll = true;
     toast(`${MAKORA.name} HAS ADAPTED TO EVERY WEAPON`, 'enrage');

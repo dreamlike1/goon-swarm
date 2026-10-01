@@ -92,6 +92,26 @@
   --pressurewasher: #4ad9ff;   /* a bright water jet */
   --soapgun: #ffdff7;          /* pale soap-bubble pink-white */
   --superwasher: #21c4c4;      /* a deeper teal for the twin spinning sprays */
+  /* melee (v0.53, THE COMBAT UPDATE!) */
+  --knife: #dfe6f2;            /* steel */
+  --knife-dark: #6b4a33;       /* its wooden handle */
+  --punch: #ff7a5c;            /* a hot coral fist */
+  --punch-dark: #7d2a1e;
+  --black-flash: #060608;      /* BLACK FLASH!: black lightning … */
+  --black-flash-hi: #ff2240;   /* … with red highlights */
+  --black-flash-aura: #4fb2ff; /* and the see-through blue aura after it */
+  --knife-guard: #8d97a8;      /* the crossguard and the blade's fuller */
+  --fist: #ffffff;             /* the punch: a plain white fist … */
+  --fist-line: #2a2232;        /* … with a dark edge */
+  /* the SINS pack (v0.53) */
+  --sonickick: #22e3c9;        /* teal, like the sonic shot */
+  --ironwill: #8fe9d8;         /* a paler teal for the shield */
+  --tempest: #ff2a3d;          /* the slam's red (user: RED; it was orange-gold) */
+  --tempest-hi: #ffb0a6;       /* its hot cores */
+  --tempest-dark: #4a0710;     /* the split ground */
+  --dragonkick: #ff6b1f;       /* the kick's deep orange */
+  --sin-gold: #ffe36b;         /* gold cores and the yellow hit flash */
+  --sin-teal-hi: #c4fff4;
   /* rarity colours, used for rarity labels and reveal glows */
   --r-common: #8fa3b0;
   --r-uncommon: #6fcf97;
@@ -154,14 +174,44 @@ button {
 button:hover { color: var(--text); }
 button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 
-/* Deck: the cards in play order, bottom centre. Dimmed = fired. Raised + coloured border + bar = next.
+/* Decks (v0.53: ranged and melee, both playing at once), bottom centre: a box for each, the melee one on top. Each has its
+   status line (which deck, cards left) over its tray. With both, the HUD above moves up by --deck2. */
+:root { --deck2: 0px; --tray-h: 16px; }
+body.two-decks { --deck2: calc(var(--tray-h) + 8px); }
+/* v0.53 (user: the big cards took too much room): each deck is one slim row, its name and count on the left, then a
+   bar per card in that card's colour. Names are gone (the tray's labels still say them for screen readers). */
+.decks {
+  --cw: 34px; --ch: 12px; --gap: 5px;
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.deckbox { position: relative; display: grid; grid-template-columns: 92px auto; align-items: center; gap: 10px; height: var(--tray-h); }
+.deckbox .deck-status { justify-content: flex-end; }
+.decks .card { border: 0; border-radius: 3px; background: var(--c); }
+.decks .card .card-name, .decks .card .card-idx, .decks .card .card-new { display: none; }
+.decks .card.is-down { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.decks .card .card-back { display: none; }
+.decks .card.is-fired { opacity: .18; }
+.decks .card.is-next { --lift: -3px; box-shadow: 0 0 0 1.5px var(--text), 0 0 10px -1px var(--c); }
+.decks .card .cd { height: 2px; background: var(--text); }
+.decks .card.is-aug::after { content: "×2"; right: 2px; bottom: auto; top: -10px; font-size: 8px; }
+.decks .rapid { left: auto; right: 0; transform: none; bottom: -5px; }
+.decks .shuffle-icon { font-size: 0; }   /* (just the spinning icon: the row is narrow) */
+.decks .rapid-bar { height: 2px; }
+.decks .rapid-bar.is-max { height: 3px; top: 0; }
+@media (max-width: 480px) {
+  .decks { --cw: 27px; --gap: 4px; }
+  .deckbox { grid-template-columns: 72px auto; gap: 6px; }
+}
+.deck-kind { color: var(--text); letter-spacing: .12em; }
+.deckbox.is-melee .deck-kind { color: var(--punch); }
+/* Deck: the cards in play order. Dimmed = fired. Raised + coloured border + bar = next.
    Each card sits at slot * (--cw + --gap); --lift raises the next card, and the change is animated. */
 .deck {
   --n: 7;
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  position: relative;
   width: calc(var(--n) * var(--cw) + (var(--n) - 1) * var(--gap));
   height: var(--ch);
   list-style: none; margin: 0; padding: 0;
@@ -206,13 +256,10 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .card.is-next .cd { display: block; }
 @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
 
-/* Deck status: sits just above the deck tray — how many cards are left before the deck
+/* Deck status: sits just above its tray — which deck, and how many cards are left before it
    reshuffles, swapped for a spinning icon for a moment right as that reshuffle happens. */
 .deck-status {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 6px);
+  height: 14px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -246,7 +293,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .hint {
   position: fixed;
   left: 16px; right: 16px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 76px);   /* above the HP bar */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--tray-h) + var(--deck2) + 62px);   /* above the HP bar */
   margin: 0;
   text-align: center;
   color: var(--muted);
@@ -271,8 +318,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
   overflow: auto;
 }
 .menu:not([hidden]) ~ .hud,
-.menu:not([hidden]) ~ .deck,
-.menu:not([hidden]) ~ .deck-status,
+.menu:not([hidden]) ~ .decks,
 .menu:not([hidden]) ~ .hint,
 .menu:not([hidden]) ~ .hp,
 .menu:not([hidden]) ~ .xp,
@@ -282,7 +328,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 /* Player HP: a green bar, bottom centre, just above the deck (clear of a card that pops up when played) */
 .hp {
   position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 50px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--tray-h) + var(--deck2) + 36px);
   width: min(260px, calc(100% - 32px));
   display: flex; align-items: center; gap: 8px;
   pointer-events: none;
@@ -296,7 +342,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 /* XP and level: a wider blue bar just below the HP bar (still clear of a card that pops up when played) */
 .xp {
   position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 28px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--tray-h) + var(--deck2) + 14px);
   width: min(420px, calc(100% - 32px));
   display: flex; align-items: center; gap: 8px;
   pointer-events: none;
@@ -318,6 +364,17 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .title-logo { position: relative; width: min(640px, 100%); margin: 0; line-height: 0; }
 .title-logo picture, .title-logo img { display: block; width: 100%; height: auto; }
 .title-logo img { position: relative; animation: logo-in .7s cubic-bezier(.2, .9, .25, 1.15) both; }
+/* v0.53 (user): the update's name under the logo, in BLACK FLASH!'s black and red */
+.title-tag {
+  margin: -6px 0 0; text-align: center; text-wrap: balance;
+  font: 400 clamp(20px, 4.4vw, 34px)/1.1 var(--f-metal); letter-spacing: .08em;
+  color: var(--chrome-hi);
+  text-shadow: 0 0 2px var(--black-flash), 2px 2px 0 var(--black-flash), 0 0 14px var(--black-flash-hi), 0 0 28px color-mix(in srgb, var(--black-flash-hi) 60%, transparent);
+  animation: tag-in .6s .45s cubic-bezier(.2, .9, .25, 1.2) both, tag-pulse 2.4s 1.1s ease-in-out infinite;
+}
+@keyframes tag-in { from { opacity: 0; transform: scale(1.35) rotate(-3deg); } to { opacity: 1; transform: none; } }
+@keyframes tag-pulse { 50% { text-shadow: 0 0 2px var(--black-flash), 2px 2px 0 var(--black-flash), 0 0 22px var(--black-flash-hi), 0 0 44px var(--black-flash-hi); } }
+@media (prefers-reduced-motion: reduce) { .title-tag { animation: none; } }
 .title-logo::before {
   content: ""; position: absolute; inset: 8% 4%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--neon) 55%, transparent), transparent);
@@ -386,7 +443,11 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 }
 .mcard .card-idx { top: calc(4px * var(--pv)); left: calc(6px * var(--pv)); font-size: calc(10px * var(--pv)); }
 .preview { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--gap) * var(--pv)); max-width: 100%; }
-#preview .mcard:first-child { border-color: var(--c); }   /* matches the raised "next" card in the deck */
+#preview .mcard:first-child, #preview .preview-break + .mcard { border-color: var(--c); }   /* matches the raised "next" card in each deck */
+.preview-break { flex-basis: 100%; height: 0; }
+/* v0.53 (user): preview cards show their weapon's icon, then fill with its colour before shrinking into the run's bars */
+.pv-card .pv-icon { width: 54%; height: 54%; color: var(--c); }
+.pv-card .pv-fill { position: absolute; inset: 0; background: var(--c); transform: scaleY(0); transform-origin: 50% 100%; }   /* v0.53: the melee deck's row, then the ranged one's */
 
 .go { width: 160px; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .go > span { display: block; height: 100%; background: var(--bullet); transform-origin: left; transform: scaleX(0); }
@@ -401,7 +462,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 
 /* Card packs: a foil pack with a crimped top strip (the part that tears off when you open it).
    Every pack uses this look: the starter pack and the store's packs. --pc is the pack's colour. */
-:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); --pack-silica: #9fb8ff; --pack-powerwash: var(--pressurewasher); }
+:root { --pack-starter: var(--bullet); --pack-artillery: var(--cannon); --pack-magus: var(--arcane); --pack-silica: #9fb8ff; --pack-powerwash: var(--pressurewasher); --pack-sins: var(--r-sss); }
 .screen:focus { outline: none; }
 .start:disabled { opacity: .45; cursor: default; filter: none; }
 .pack-art {
@@ -416,6 +477,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .pack-magus { --pc: var(--pack-magus); }
 .pack-silica { --pc: var(--pack-silica); }
 .pack-powerwash { --pc: var(--pack-powerwash); }
+.pack-sins { --pc: var(--pack-sins); }
 .pack-top, .pack-body {
   display: block;
   background:
@@ -506,8 +568,8 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .pv-testpack:hover { filter: brightness(1.2); transform: translateY(-1px); }
 
 /* Test mode: the HUD a run needs is hidden; a panel at the top fires the attacks */
-body.in-practice .hud, body.in-practice .deck, body.in-practice .deck-status, body.in-practice .xp, body.in-practice .hp,
-body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, body.in-practice .rapid, body.in-practice .runbar { visibility: hidden; }
+body.in-practice .hud, body.in-practice .decks, body.in-practice .xp, body.in-practice .hp,
+body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, body.in-practice .runbar { visibility: hidden; }
 /* v0.33 (user: a better look for TEST PACK): a dark slab with a pink edge and chipped corners, a chrome TEST PACK
    title with the pack under it, weapon chips with their icon, attack slabs, and a big damage count */
 .practice {
@@ -552,7 +614,7 @@ body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, b
 .pr-dmg b { font: 400 22px var(--f-metal); letter-spacing: .02em; color: var(--chrome-hi); vertical-align: -3px; margin-left: 6px; font-variant-numeric: tabular-nums; }
 .menu:not([hidden]) ~ .practice { visibility: hidden; }
 /* Test loadout shows the deck tray, so you can watch the sequences play */
-body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-status { visibility: visible; }
+body.in-practice.is-loadout-test .decks { visibility: visible; }
 
 .odds { border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 180px; }
 .odds caption { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; }
@@ -726,8 +788,8 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
    A 7-card combo's bar is thicker and pulses. */
 .rapid {
   --n: 7;
-  position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px - 8px);
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: -8px;
   width: calc(var(--n) * var(--cw) + (var(--n) - 1) * var(--gap));
   height: 3px;
   pointer-events: none;
@@ -744,7 +806,6 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 }
 @keyframes rapid-live { 50% { box-shadow: 0 0 14px 3px var(--bc); } }
 .rapid-bar.is-max { height: 5px; top: -1px; animation: rapid-live .6s ease-in-out infinite; }
-.menu:not([hidden]) ~ .rapid { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .rapid-bar.is-max { animation: none; } }
 
 
@@ -827,10 +888,10 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
   position: fixed; z-index: 2;
   display: flex; gap: 8px;   /* v0.48: DEFLECT sits beside BULL */
   right: calc(50% + min(130px, 50% - 16px) + 10px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 43px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--tray-h) + var(--deck2) + 29px);
 }
 @media (max-width: 620px) {
-  .relics { right: auto; left: max(16px, calc(50% - 130px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--ch) + 68px); }
+  .relics { right: auto; left: max(16px, calc(50% - 130px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--tray-h) + var(--deck2) + 54px); }
 }
 .relic {
   --k: 1;
@@ -1154,6 +1215,47 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .deck-head .eyebrow { margin: 0; }
 .deck-count { margin: 0; font-size: 12px; color: var(--muted); }
 .deck-count b { font: 400 18px var(--f-metal); color: var(--chrome-hi); }
+/* v0.53: the two decks' tabs (ranged / melee), each with its count. A deck with a problem gets a red dot. */
+.deck-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.deck-tab {
+  --tc: var(--neon);
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent;
+  font: 600 11px var(--f-ui, inherit); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); cursor: pointer;
+}
+.deck-tab.is-melee { --tc: var(--punch); }
+.deck-tab-n { font-size: 11px; letter-spacing: .02em; text-transform: none; }
+.deck-tab-n b { font: 400 18px var(--f-metal); color: var(--chrome-hi); }
+.deck-tab[aria-selected="true"] { color: var(--tc); border-color: var(--tc); background: color-mix(in srgb, var(--tc) 12%, transparent); box-shadow: inset 0 -2px 0 var(--tc); }
+.deck-tab:hover:not([aria-selected="true"]) { color: var(--text); }
+.deck-tab.is-bad::after { content: ""; position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+.deck-switches { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: -2px; }
+.deck-use {
+  --tc: var(--neon);
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+  font: 600 10px var(--f-ui, inherit); letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.deck-use.is-melee { --tc: var(--punch); }
+.deck-use-knob { position: relative; flex: none; width: 28px; height: 16px; border-radius: 8px; background: var(--line); transition: background .15s; }
+.deck-use-knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.deck-use[aria-checked="true"] { color: var(--tc); }
+.deck-use[aria-checked="true"] .deck-use-knob { background: color-mix(in srgb, var(--tc) 45%, transparent); }
+.deck-use[aria-checked="true"] .deck-use-knob::after { transform: translateX(12px); background: var(--tc); }
+.deck-use:hover { color: var(--text); }
+.deck-tab.is-off { opacity: .55; }
+.deck-tab.is-off .deck-tab-n::after { content: " · off"; color: var(--muted); }
+.deck-panel.is-off .deck-list { opacity: .45; }
+@media (prefers-reduced-motion: reduce) { .deck-use-knob, .deck-use-knob::after { transition: none; } }
+/* v0.53 (user): show only one pack's cards */
+.coll-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.cf-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; cursor: pointer;
+  font: 600 11px var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.cf-chip b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.cf-chip[aria-pressed="true"] { color: var(--neon-hi); border-color: var(--neon); background: color-mix(in srgb, var(--neon) 14%, transparent); }
+.cf-chip:hover:not([aria-pressed="true"]) { color: var(--text); }
+.coll-none { grid-column: 1 / -1; margin: 0; padding: 24px; text-align: center; font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; }
 .deck-panel.is-full .deck-count b { color: var(--neon-hi); }
 .deck-list { list-style: none; margin: 0; padding: 0 2px 0 0; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
 .deck-warn { margin: 0; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--bad); border: 1px solid var(--bad); border-radius: 6px; background: color-mix(in srgb, var(--bad) 10%, transparent); }

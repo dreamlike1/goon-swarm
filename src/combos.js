@@ -14,6 +14,11 @@
    so every card has both.
    ============================================================ */
 const COMBOS = {
+  // melee (v0.53, user): melee.js plays these
+  knife:       { 3: { name: 'STAB FLURRY!',  does: 'A burst of fast stabs, each in a random direction inside a cone.' },
+                 7: { name: 'KNIFE THROW!',  does: 'Throws the knife: it flies through every enemy in its path.' } },
+  punch:       { 3: { name: 'FLURRY!',       does: 'A flurry of punches at whatever is in reach.' },
+                 7: { name: 'BLACK FLASH!',  does: 'Black lightning. For 7 s: super fast movement, attack speed and damage.' } },
   bullet:      { 3: { name: 'RAPID!',        does: 'Fires all 3 Bullets in rapid fire at one enemy.' },
                  7: { name: 'SHOTGUN!',      does: 'All 7 Bullets at once in a wide cone, like a shotgun.' } },
   laser:       { 3: { name: 'TRIPLE ZAP!',   does: '3 lasers at once, at up to 3 enemies.' },
@@ -111,6 +116,7 @@ const aimAngle = e => Math.atan2(e.y - game.player.y, e.x - game.player.x);
 
 // Plays a combo. `echo`: it's the second play from an augmented slot (no callout).
 function runCombo(cb, echo = false) {
+  if (CARDS[cb.card].melee) { meleeCombo(cb, echo); return; }   // the melee deck's (melee.js)
   const p = game.player, { card } = cb, spec = CARDS[card], range = rangeOf(card), e0 = inRange(card) || nearestEnemy();
   if (!e0 && card !== 'arcane' && card !== 'mine' && card !== 'shifter' && card !== 'cryo') return;   // nothing to shoot at (the pulse, mines, forms and ice ring still happen)
   const aim = e => aimAt(p.x, p.y, e, spec.speed).a;         // leads a moving target (the Sniper's shots fly straight)

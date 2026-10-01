@@ -20,11 +20,17 @@ const PACKS = {
   silica:    { name: 'Silica pack',    short: 'Silica',    size: 15, price: 100, rarities: ['legendary'], cards: ['gatling', 'cryo', 'shifter'], fixed: { gatling: 5, cryo: 5, shifter: 5 } },
   // Powerwash pack (user): Pressure Washer and Soap Gun (Common), Super Washer (Uncommon).
   powerwash: { name: 'Powerwash pack', short: 'Powerwash', size: 5, price: PACK_PRICE, rarities: ['common', 'uncommon'], cards: ['pressurewasher', 'soapgun', 'superwasher'] },
+  // SINS (v0.53, user): 500 gold, all Triple S, nothing rolled: 2 of each of its 4 weapons.
+  sins:      { name: 'Sins pack',      short: 'Sins',      size: 8, price: 500, rarities: ['sss'], cards: ['sonickick', 'ironwill', 'tempest', 'dragonkick'],
+               fixed: { sonickick: 2, ironwill: 2, tempest: 2, dragonkick: 2 } },
 };
-const STORE_PACKS = ['artillery', 'magus', 'silica', 'powerwash'];
+const STORE_PACKS = ['artillery', 'magus', 'silica', 'powerwash', 'sins'];
 // Every new player (and a reset) opens this first, before anything else (user). Nothing is rolled.
-// v0.30 (user): 5 Bullets and 5 Cannons (it was Bullets and Lasers).
-const STARTER = { name: 'Starter pack', short: 'Starter', cards: { bullet: 5, cannon: 5 } };
+// v0.30 (user): 5 Bullets and 5 Cannons (it was Bullets and Lasers). v0.53 (user): and the melee weapons, 10 Knife Stabs
+// and 10 Punches (5 at first). A save from before gets those once: save.js loadSave.
+const STARTER = { name: 'Starter pack', short: 'Starter', cards: { bullet: 5, cannon: 5, knife: 10, punch: 10 } };
+const MELEE_STARTER = { knife: 10, punch: 10 };
+const MELEE_GIFT = 2;          // which melee gift a save has had: 1 was 5 of each, 2 is 10
 const starterCards = () => Object.entries(STARTER.cards).flatMap(([id, n]) => Array(n).fill(id));
 
 function cardsOfRarity(rarity, pack = null) {

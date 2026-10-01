@@ -23,12 +23,14 @@ function frame(now) {
     // co-op (coop.js): a guest only draws what the host sends; the host runs the fight for everyone, even with its
     // pause menu open, and sends each friend a picture of it
     if (NET.guest && NET.run) { if (!game.inMenu && !game.over) guestFrame(dt); }
-    else if ((!game.paused || NET.run) && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || game.practice)) {
+    else if ((!game.paused || NET.run) && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || mdeck || game.practice)) {
       update(dt);
       if (NET.run) { usePlayer(NET.me); pickTimeouts(); tickPick(); reviveHud(); }
     }
     if (NET.host && NET.run) flushSnaps();
-    if (nextCard) nextCard.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);
+    const R = DECK_VIEWS.ranged.next, Me = DECK_VIEWS.melee.next;   // each deck's next card fills as its timer runs
+    if (R) R.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);
+    if (Me) Me.style.setProperty('--p', 1 - Math.max(0, game.mcool) / (game.mcdTotal || 1));   // (the melee deck never waits)
     draw();
     syncMusic(dt);
   } catch (err) { console.error(err); }
@@ -39,7 +41,7 @@ requestAnimationFrame(frame);
 // For poking at the game from the browser console. resetSave() wipes this computer's progress
 // (the starter pack can then be opened again), so it is a testing tool only.
 window.__swarm = {
-  get deck() { return deck; }, get seed() { return seed; }, get save() { return save; },
+  get deck() { return deck; }, get mdeck() { return mdeck; }, get seed() { return seed; }, get save() { return save; },
   game, record, sameMix, rollPack, PACKS, gainXp, xpNeeded, stats, picks, upOdds, pickChoice,
   resetSave() { if (!game.inMenu) exitToTitle(); resetData(); },
 };

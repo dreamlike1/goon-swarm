@@ -78,7 +78,7 @@ const isBossUp = () => !!(game.boss || game.obi || game.makora || game.bossDue |
 
 function resetFlow() {
   game.flow = { stage: 0, t: 0, wave: -1, swarm: null, name: '', huge: false, state: 'swarm', beaten: [], sweep: 0, dmg: [], boost: 1 };
-  game.deckN = equippedCards().length;   // for the swarm's size (deckBoost)
+  game.deckN = runCards().length;   // for the swarm's size (deckBoost; both decks count, v0.53)
   game.runT = 0;
   game.tally = { dealt: {}, taken: 0 };
   renderFlow();

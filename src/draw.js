@@ -577,6 +577,7 @@ function draw() {
   }
 
   drawBoulders(false);                   // OBI ONE phase 3: his rocks lying round the arena (obi.js)
+  drawSinZones();                        // Tempest Slam's cracked ground (sins.js)
 
   // enemies: squares (normal and big) and triangles that point where they're heading (no health lines since v0.51,
   // user: only the bosses show their HP)
@@ -635,6 +636,8 @@ function draw() {
   for (const pr of game.projectiles) {
     const color = COL[pr.card], t = pr.trail;
     if (pr.look === 'ice') { drawIceShot(pr); continue; }   // Cryo Magus (silica.js)
+    if (pr.look === 'knife') { drawThrownKnife(pr); continue; }   // KNIFE THROW! (melee.js)
+    if (pr.look === 'sonic') { drawSonicShot(pr); continue; }     // Sonic Kick (sins.js)
     if (pr.look === 'bubble') {                              // Soap Gun (user): a transparent, soapy bubble
       // A floaty sway (user): drawn a little off its real (hit-tested) position, drifting on its own stable phase.
       const st = performance.now() / 260 + (pr.sway || 0), bx = pr.x + Math.sin(st) * 2.5, by = pr.y + Math.cos(st * 0.8) * 1.6;
@@ -782,6 +785,8 @@ function draw() {
     else drawBeam(pp.x, pp.y, pp.x + Math.cos(a) * sw.len, pp.y + Math.sin(a) * sw.len, 1, 5, COL[sw.card]);
   }
 
+  if (!game.inMenu) { drawMelees(); drawSins(); }   // melee stabs, punches and black lightning (melee.js); SINS (sins.js)
+
   // player: a circle (hidden behind the start menu), stretched along a BULL charge
   const p = game.player, dsh = game.dash, da = dsh ? Math.atan2(dsh.dy, dsh.dx) : 0;
   ctx.fillStyle = NET.run ? (NET.me?.down ? COL.line : NET.me?.color || COL.player) : COL.player;   // co-op: your colour; grey when down
@@ -793,6 +798,8 @@ function draw() {
     ctx.globalAlpha = 1;
   }
   if (!game.inMenu && !dsh && !(NET.run && NET.me?.down)) drawRelicReady(p);   // your relics, when they're ready again
+  if (!game.inMenu && game.bflash > 0) drawBlackFlashAura(p);                  // BLACK FLASH! (melee.js)
+  if (!game.inMenu) drawSinGuard(p);                                           // Iron Will (sins.js)
   if (dsh && !game.inMenu) {             // BULL charge: speed lines behind, a glowing wedge and a pair of horns in front
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(da);
     ctx.strokeStyle = COL.relic; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.globalAlpha = 0.7;

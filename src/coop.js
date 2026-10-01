@@ -113,7 +113,7 @@ function attachFast(conn) {
   conn.on('data', d => onHostMsg(g.conn, netRead(d)));
   conn.on('close', () => { if (g.fast === conn) g.fast = null; });
 }
-const cleanCards = cards => (Array.isArray(cards) ? cards.filter(c => CARDS[c]).slice(0, DECK_LIMIT) : ['bullet']);
+const cleanCards = cards => (Array.isArray(cards) ? [...cards.filter(c => CARDS[c] && !isMelee(c)).slice(0, DECK_LIMIT), ...cards.filter(isMelee).slice(0, DECK_LIMIT)] : ['bullet']);   // (each deck up to 31)
 function onHostMsg(conn, m) {
   if (!m || typeof m !== 'object') return;
   let g = NET.conns.get(conn);
@@ -177,7 +177,7 @@ function deckSummary(cards) {
 function lobbyChanged() {
   const count = NET.countEnd ? Math.max(0, (NET.countEnd - performance.now()) / 1000) : 0;
   NET.list = NET.lobby.map(p => ({ id: p.id, name: p.name, color: p.color, emoji: p.emoji || '', ping: p.ping, ready: p.local || !!p.ready,
-    deck: deckSummary(p.local ? equippedCards() : p.cards) }));
+    deck: deckSummary(p.local ? runCards() : p.cards) }));
   for (const g of NET.conns.values()) netSend(g.conn, { t: 'lobby', list: NET.list, count });
   renderLobby();
 }
@@ -185,7 +185,7 @@ function lobbyChanged() {
 // Guest: join the room with this key.
 async function coopJoin(name, key) {
   coopReset();
-  Object.assign(NET, { on: true, guest: true, name, key, myCards: equippedCards(), mySeed: (Math.random() * 2 ** 32) >>> 0 });
+  Object.assign(NET, { on: true, guest: true, name, key, myCards: runCards(), mySeed: (Math.random() * 2 ** 32) >>> 0 });
   let conn;
   if (netLocal()) conn = await localJoin(key);
   else {
@@ -317,7 +317,7 @@ function editLoadout() {
 function backFromLoadout() {
   $('btn-loadout-test').hidden = false;
   if (NET.host) lobbyChanged();
-  else if (NET.guest) { NET.myCards = equippedCards(); toHost({ t: 'cards', cards: NET.myCards }); }
+  else if (NET.guest) { NET.myCards = runCards(); toHost({ t: 'cards', cards: NET.myCards }); }
   openCoop();
 }
 
@@ -330,8 +330,8 @@ function coopStart() {
   NET.run = true;
   resize();
   const mine = NET.lobby.find(p => p.local);
-  const host = newCtx(1, NET.name, mine.color, true, equippedCards(), seed);
-  Object.assign(host, { body: game.player, deck, stats, picks, emoji: mine.emoji || '' });   // the host's own run, as resetRun made it
+  const host = newCtx(1, NET.name, mine.color, true, runCards(), seed);
+  Object.assign(host, { body: game.player, deck, mdeck, stats, picks, emoji: mine.emoji || '' });   // the host's own run, as resetRun made it
   for (const k of PKEYS) host[k] = game[k];
   NET.players = [host, ...NET.lobby.filter(p => !p.local).map(g => Object.assign(newCtx(g.id, g.name, g.color, false, g.cards, g.seed),
     { conn: g.conn, lobby: g, ping: g.ping, emoji: g.emoji || '' }))];
@@ -346,7 +346,7 @@ function guestStart(m) {
   NET.world = m.world;
   NET.run = true;
   resize();
-  deck = createDeck(NET.myCards, mulberry32(NET.mySeed), SEQUENCE_SIZE, deckLuck);    // the same deck the host is playing for us
+  [deck, mdeck] = splitDecks(NET.myCards, NET.mySeed);    // the same decks the host is playing for us
   NET.roster = m.roster;
   const r = m.roster.find(x => x.id === m.you) || {};
   NET.me = { id: m.you, name: NET.name, local: true, body: game.player, down: false, rev: 0, color: r.color, emoji: r.emoji || '' };
@@ -531,7 +531,7 @@ function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
-  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots', 'mrocks'];
+  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots', 'mrocks', 'melees', 'zones', 'kicks', 'sinfx'];
 const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts', 'boulders', 'eshots']);
 const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds', 'bones']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
@@ -575,7 +575,7 @@ function flushSnaps(force = false) {
   for (const c of NET.players) {
     if (c.local || !c.conn) continue;
     const g = k => (c === ACTIVE ? game[k] : c[k]);
-    const me = { cd: g('cooldown'), cdt: g('cdTotal'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd'),
+    const me = { cd: g('cooldown'), cdt: g('cdTotal'), mcd: g('mcool'), mcdt: g('mcdTotal'), bf: g('bflash'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd'),
       defl: g('defl'), dfc: g('deflCd'), dfa: g('deflAge') };
     // … plus their own part. A friend whose connection is still busy with earlier pictures skips this one, so they
     // don't fall further and further behind.
@@ -583,7 +583,7 @@ function flushSnaps(force = false) {
     if (backlog(ch) > COOP.backlog) c.skipped = (c.skipped || 0) + 1;
     else netSend(ch, base.slice(0, -1) + ',"me":' + JSON.stringify(me, snapReplacer) + '}');
     // their cards fired and their events (picks, gold, sounds …) never get skipped
-    if (c.fired || c.outbox.length) { netSend(c.conn, { t: 'ev', fired: c.fired, ev: c.outbox.splice(0) }); c.fired = 0; }
+    if (c.fired || c.mfired || c.outbox.length) { netSend(c.conn, { t: 'ev', fired: c.fired, mfired: c.mfired, ev: c.outbox.splice(0) }); c.fired = c.mfired = 0; }
   }
   NET.sfxN = 0; NET.sfxSeen = {};
   if (now - NET.lastPing > COOP.pingMs) { NET.lastPing = now; for (const c of NET.players) if (c.conn) netSend(c.conn, { t: 'ping', ts: now }); }
@@ -674,6 +674,7 @@ function applySnap(s) {
   const me = s.me;
   if (me) {
     game.cooldown = me.cd; game.cdTotal = me.cdt;
+    game.mcool = me.mcd || 0; game.mcdTotal = me.mcdt || 1; game.bflash = me.bf || 0;   // the melee deck's timer, BLACK FLASH!
     const aug = new Set(me.aug || []);
     const augChanged = aug.size !== game.aug.size;
     game.aug = aug;
@@ -694,7 +695,8 @@ function applySnap(s) {
 // Our cards the host fired (our deck plays along with the host's copy of it) and the events, on the main channel.
 function guestEvents(m) {
   if (!NET.run) return;
-  for (let k = 0; k < (m.fired || 0); k++) onAttack(deck.draw());
+  for (let k = 0; k < (m.fired || 0); k++) if (deck) onAttack(deck.draw());
+  for (let k = 0; k < (m.mfired || 0); k++) if (mdeck) onMeleeAttack(mdeck.draw());   // … and our melee deck's (v0.53)
   for (const ev of m.ev || []) guestEvent(ev);
 }
 function guestEvent(ev) {

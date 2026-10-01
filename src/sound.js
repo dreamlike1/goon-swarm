@@ -42,6 +42,29 @@ function audioInit() {
   const d = audio.noise.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   applyVolume();
+  loadSamples();
+}
+// Recorded sound effects (v0.53), played through the same volume as the made-up ones. kick_sfx.m4a is the user's
+// kick.wav cut from 0.90 s (where the kick starts, user: "around 1 sec") to 2.15 s, mono AAC.
+const SAMPLES = { kick: 'assets/kick_sfx.m4a' };
+audio.samples = {};
+function loadSamples() {
+  for (const [k, url] of Object.entries(SAMPLES)) {
+    fetch(url).then(r => r.arrayBuffer())
+      .then(buf => new Promise((ok, no) => audio.ctx.decodeAudioData(buf, ok, no)))   // (the callback form: older Safari)
+      .then(b => { audio.samples[k] = b; })
+      .catch(() => { /* no file, or it won't decode: the made-up sound plays instead */ });
+  }
+}
+// Plays a recorded sound; false if it isn't loaded (yet), so the caller can fall back.
+function sample(k, vol = 1) {
+  const b = audio.samples[k];
+  if (!b || !audible()) return !!b;
+  const src = audio.ctx.createBufferSource(), g = audio.ctx.createGain();
+  src.buffer = b; g.gain.value = vol;
+  src.connect(g).connect(audio.master);
+  src.start();
+  return true;
 }
 addEventListener('pointerdown', audioInit, true);
 addEventListener('keydown', audioInit, true);
@@ -250,7 +273,8 @@ function often(key, ms) {
 
 const COMBO_VOICE = { bullet: [440, 'square'], laser: [660, 'sawtooth'], arcane: [392, 'sine'], cannon: [196, 'triangle'],
   shuriken: [523, 'triangle'], spaceimpact: [330, 'square'], mine: [262, 'triangle'], firebolt: [349, 'sawtooth'],
-  sniper: [587, 'square'], missiles: [466, 'sine'], gatling: [523, 'square'], cryo: [784, 'sine'], shifter: [220, 'sawtooth'] };
+  sniper: [587, 'square'], missiles: [466, 'sine'], gatling: [523, 'square'], cryo: [784, 'sine'], shifter: [220, 'sawtooth'],
+  knife: [698, 'triangle'], punch: [175, 'square'] };
 
 const SFX = {
   // Every weapon has its own sound (user).
@@ -308,6 +332,29 @@ const SFX = {
   combo(n, card) {
     const [root, type] = COMBO_VOICE[card] || [440, 'square'];
     [1, 1.26, 1.5, 2].slice(0, n >= 7 ? 4 : 3).forEach((m, i) => tone({ type, f: root * m, dur: 0.08, vol: 0.06, delay: i * 0.035 }));
+  },
+  // the SINS pack (v0.53)
+  sin(kind) {
+    if (kind === 'mark') { tone({ type: 'sine', f: 900, f2: 1500, dur: 0.12, vol: 0.08 }); }
+    else if (kind === 'fly') { noise({ dur: 0.2, vol: 0.14, freq: 1500, f2: 4200, filter: 'bandpass', q: 2 }); tone({ type: 'triangle', f: 500, f2: 1200, dur: 0.18, vol: 0.06 }); }
+    else if (kind === 'guard') { [660, 990].forEach((f, i) => tone({ type: 'sine', f, dur: 0.25, vol: 0.08, delay: i * 0.05 })); }
+    else if (kind === 'break') { noise({ dur: 0.2, vol: 0.2, freq: 3000, filter: 'highpass' }); }
+    else if (kind === 'slam') { tone({ type: 'sine', f: 110, f2: 40, dur: 0.4, vol: 0.4 }); noise({ dur: 0.3, vol: 0.25, freq: 500, f2: 120 }); }
+    else if (kind === 'kick') {                       // Dragon Kick: the user's kick.wav (the made-up thump until it has loaded)
+      if (!sample('kick', 0.7)) { tone({ type: 'sine', f: 180, f2: 60, dur: 0.18, vol: 0.38 }); noise({ dur: 0.12, vol: 0.2, freq: 1800, f2: 600, filter: 'bandpass', q: 1 }); }
+    }
+  },
+  // melee (v0.53): a stab's swish, a punch's thump, the thrown knife's whirr and BLACK FLASH!'s crack
+  melee(kind) {
+    if (kind !== 'flash' && !often('melee', 30)) return;
+    if (kind === 'knife') { noise({ dur: 0.07, vol: 0.14, freq: 3800, f2: 1600, filter: 'bandpass', q: 1.5 }); tone({ type: 'triangle', f: 1400, f2: 2200, dur: 0.04, vol: 0.04 }); }
+    else if (kind === 'punch') { tone({ type: 'sine', f: 140, f2: 60, dur: 0.1, vol: 0.32 }); noise({ dur: 0.06, vol: 0.16, freq: 700 }); }
+    else if (kind === 'throw') { noise({ dur: 0.25, vol: 0.12, freq: 2600, f2: 900, filter: 'bandpass', q: 3 }); }
+    else if (kind === 'flash') {
+      noise({ dur: 0.5, vol: 0.4, freq: 5000, f2: 300, filter: 'highpass', q: 0.6 });
+      tone({ type: 'sawtooth', f: 90, f2: 40, dur: 0.6, vol: 0.22 });
+      tone({ type: 'square', f: 1900, f2: 200, dur: 0.15, vol: 0.08 });
+    }
   },
   sweep() { tone({ type: 'sawtooth', f: 300, f2: 2400, dur: 0.5, vol: 0.08 }); noise({ dur: 0.5, vol: 0.12, freq: 800, f2: 5000, filter: 'bandpass', q: 2 }); },
   rip() { noise({ dur: 0.3, vol: 0.28, freq: 1800, f2: 5200, filter: 'highpass', q: 0.7 }); noise({ dur: 0.12, vol: 0.18, freq: 600, delay: 0.02 }); },
@@ -499,7 +546,7 @@ function openSoundPanel(on) {
   gearBtn.setAttribute('aria-expanded', String(on));
   if (on) {
     // opening it mid-run pauses the fight
-    if (!game.inMenu && !game.over && !game.choosing && !game.paused && !game.practice && deck) setPaused(true);
+    if (!game.inMenu && !game.over && !game.choosing && !game.paused && !game.practice && (deck || mdeck)) setPaused(true);
     document.getElementById('vol-master').focus();
   }
 }

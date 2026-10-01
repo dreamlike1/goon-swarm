@@ -97,9 +97,11 @@ function shiftWorld(dx, dy) {
 // edge of that cluster so play (player, enemies, orbs) stays clear of it instead of sliding
 // underneath and out of sight.
 function bottomSafeY(arenaRect) {
-  const hudEls = [document.querySelector('.hp'), document.querySelector('.xp'), document.querySelector('.deck'), document.querySelector('.deck-status')].filter(Boolean);
-  if (!hudEls.length) return VH;
-  const topMost = Math.min(...hudEls.map(el => el.getBoundingClientRect().top));
+  // (v0.53: only what's on screen. A hidden deck tray measures as the top of the screen, which shut you into a strip
+  // up there, user: "player is stuck here")
+  const tops = ['.hp', '.xp', '.decks'].map(q => document.querySelector(q)?.getBoundingClientRect()).filter(r => r && r.height > 0).map(r => r.top);
+  if (!tops.length) return VH;
+  const topMost = Math.min(...tops);
   return Math.max(40, topMost - arenaRect.top - 12);
 }
 
@@ -140,7 +142,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) autoP
 addEventListener('focus', releaseHold);
 function autoPause() {
   if (NET.run) return;                               // co-op: the fight goes on for everyone
-  if (game.inMenu || game.over || game.choosing || game.paused || game.practice || !deck) return;
+  if (game.inMenu || game.over || game.choosing || game.paused || game.practice || !(deck || mdeck)) return;
   // During MAKORA's black-screen scenes it just holds, with no pause menu, and carries on when you come back
   // (v0.33, user: alt-tab there froze the scene, or a click landed on the pause menu hidden behind it)
   if (game.cine) { game.cineHold = true; return; }

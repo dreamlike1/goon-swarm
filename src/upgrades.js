@@ -64,13 +64,14 @@ function resetStats() {
 
 /* ---------- what the stats do (combat.js reads these) ---------- */
 const maxHp = () => PLAYER.hp + stats.hp;
-const moveSpeed = () => PLAYER.speed * (1 + Math.min(STATS.speed.cap, stats.speed)) * (game.soakT > 0 ? TUNE.soakTrail.speedMul : 1);   // SOAK TRAIL! (user)
-const damageOf = base => Math.max(1, Math.round(base * (1 + stats.dmg)));
+const moveSpeed = () => PLAYER.speed * (1 + Math.min(STATS.speed.cap, stats.speed)) * (game.soakT > 0 ? TUNE.soakTrail.speedMul : 1)   // SOAK TRAIL! (user)
+  * (game.bflash > 0 ? MELEE.blackFlash.speed : 1);                                                    // BLACK FLASH! (melee.js)
+const damageOf = base => Math.max(1, Math.round(base * (1 + stats.dmg) * (game.bflash > 0 ? MELEE.blackFlash.dmg : 1)));
 const critChance = () => Math.min(STATS.crit.cap, stats.crit);
 const critHit = dmg => Math.max(dmg + 1, Math.round(dmg * (1 + stats.critDmg)));   // a crit always adds at least 1
 const dodgeChance = () => Math.min(STATS.dodge.cap, stats.dodge);
 const armorCut = dmg => Math.max(1, dmg - stats.armor);                        // a hit always does at least 1
-const attackInterval = () => Math.max(MIN_INTERVAL, ATTACK_INTERVAL * (1 - stats.atk));
+const attackInterval = () => Math.max(MIN_INTERVAL, ATTACK_INTERVAL * (1 - stats.atk)) * (game.bflash > 0 ? MELEE.blackFlash.atk : 1);   // (BLACK FLASH! goes past the limit)
 const shuffleTime = () => SHUFFLE_TIME * (1 - Math.min(STATS.atk.cap, stats.atk));
 const orbDropChance = () => XP_BOOST.on ? XP_BOOST.drop : Math.min(LUCK.dropMax, XP.drop + stats.luck * LUCK.drop);
 const xpGain = v => v * (1 + stats.xp) * (XP_BOOST.on ? XP_BOOST.value : 1);
@@ -102,7 +103,7 @@ function rollChoices() {
     out.push({ id, rarity: rollRarity() });
   }
   // Sometimes one card is a random weapon instead (user).
-  if (deck && out.length && Math.random() < WEAPON_CARD) out[Math.floor(Math.random() * out.length)] = { id: 'weapon', rarity: 'epic' };
+  if ((deck || mdeck) && out.length && Math.random() < WEAPON_CARD) out[Math.floor(Math.random() * out.length)] = { id: 'weapon', rarity: 'epic' };
   return out;
 }
 
@@ -164,7 +165,7 @@ function renderStatCards() {
   document.getElementById('up-keys').textContent = 'Press 1, 2 or 3 · hold a direction to move off the moment you pick';
   choiceCards.innerHTML = choices.map((c, i) => {
     if (c.id === 'weapon') {                   // the random weapon card: you find out what it is when you pick it
-      const n = deck.size + deck.pendingAdds.length;
+      const n = [deck, mdeck].reduce((s, d) => s + (d ? d.size + d.pendingAdds.length : 0), 0);   // (both decks)
       return `<li><button class="upcard is-weapon" type="button" data-i="${i}" style="--rc: var(--xp)">`
         + `<span class="up-key" aria-hidden="true">${i + 1}</span>`
         + `<span class="up-rarity">Weapon</span>`
@@ -197,7 +198,7 @@ function renderSlots() {
   sub.hidden = false;
   sub.textContent = 'Whatever card is in this slot fires twice, every sequence.';
   document.getElementById('up-keys').textContent = 'Press 1 to 7 · hold a direction to move off the moment you pick';
-  const seq = deck.sequence;
+  const seq = (deck || mdeck).sequence;   // (slot n of both decks: the ranged deck's shown, or the melee one's)
   choiceCards.innerHTML = seq.map((c, i) => {
     const done = game.aug.has(i);
     return `<li><button class="slotcard${done ? ' is-aug' : ''}" type="button" data-slot="${i}"${done ? ' disabled' : ''} style="--c: ${c ? `var(--${c})` : 'var(--muted)'}"`
@@ -221,7 +222,7 @@ function wheelSlices(ids = CARD_IDS) {
 let wheel = null;   // { slices, result, spun, done }
 
 function renderWheel() {
-  const slices = wheelSlices();
+  const slices = wheelSlices(CARD_IDS.filter(playable));
   wheel = { slices, result: null, spun: false, done: false };
   document.getElementById('up-title').textContent = 'Spin for a weapon';
   const sub = document.getElementById('up-sub');
@@ -332,10 +333,13 @@ function takeWheelXp() {
 }
 
 // The random weapon card: one of the weapons you own (user), rolled with the wheel's odds, straight into this run's deck.
-const ownedIds = () => { const ids = CARD_IDS.filter(id => (save.owned[id] || 0) > 0); return ids.length ? ids : CARD_IDS; };
+// (v0.53: only weapons for a deck you're playing, ranged or melee; a won card goes into its own deck)
+const playable = id => (isMelee(id) ? !!mdeck : !!deck);
+const runDeckOf = id => (isMelee(id) ? mdeck : deck);
+const ownedIds = () => { const ids = CARD_IDS.filter(id => (save.owned[id] || 0) > 0 && playable(id)); return ids.length ? ids : CARD_IDS.filter(playable); };
 function takeRandomWeapon() {
   const id = pickSlice(wheelSlices(ownedIds())).id;
-  deck.addCard(id);
+  runDeckOf(id).addCard(id);
   game.won.push(id);
   SFX.upgrade(Math.max(0, RARITIES.indexOf(CARDS[id].rarity)) + 1);
   celebrate(`+ ${CARDS[id].name.toUpperCase()}`, COL[id]);
@@ -376,7 +380,7 @@ function closeRelic() {
 function takeWheel() {
   if (!wheel || !wheel.done) return;
   const id = wheel.result;
-  deck.addCard(id);                      // this run's deck only; joins at the next sequence
+  runDeckOf(id).addCard(id);             // this run's deck only (its own kind's); joins at the next sequence
   game.won.push(id);
   celebrate(`+ ${CARDS[id].name.toUpperCase()}`, COL[id]);
   wheel = null;
