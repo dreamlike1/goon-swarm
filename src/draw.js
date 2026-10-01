@@ -7,6 +7,35 @@ function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ct
 const TAU = Math.PI * 2;
 function ellipse(x, y, rx, ry, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, TAU); ctx.fill(); }
 
+// Ready to use (user): your relics show on you while their cooldown is done, fading in and out. BULL: a pair of
+// horns on top of you and a soft glow, in its orange. DEFLECT: its shield's three arcs, still and faint, in blue.
+// (Gone while you use them: the charge and the shield draw their own.)
+function drawRelicReady(p) {
+  const t = performance.now() / 1000, pulse = k => reducedMotion ? 0.7 : 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * TAU / 1.4 + k));
+  if (game.relics.includes('deflect') && !(game.deflCd > 0) && !(game.defl > 0)) {
+    const a = pulse(Math.PI), R = PLAYER.r + 7;
+    ctx.strokeStyle = COL.deflect; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.12 * a; ctx.fillStyle = COL.deflect; circle(p.x, p.y, R);
+    ctx.globalAlpha = 0.85 * a;
+    for (let i = 0; i < 3; i++) { const s = -Math.PI / 2 + i * TAU / 3 + 0.35; ctx.beginPath(); ctx.arc(p.x, p.y, R, s, s + 1.4); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  if (game.relics.includes('bull') && !(game.dashCd > 0)) {
+    const a = pulse(0), r = PLAYER.r;
+    ctx.globalAlpha = 0.4 * a; ctx.strokeStyle = COL.relic; ctx.lineWidth = 3;   // a glow round you, not over you
+    ctx.beginPath(); ctx.arc(p.x, p.y, r + 3, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.55 + 0.45 * a; ctx.fillStyle = COL.relic;
+    for (const s of [-1, 1]) {                               // a horn either side of the top, rooted on your edge, curving up and out
+      ctx.beginPath();
+      ctx.moveTo(p.x + s * r * 0.45, p.y - r * 0.9);
+      ctx.quadraticCurveTo(p.x + s * r * 0.55, p.y - r - 9, p.x + s * (r + 8), p.y - r - 11);
+      ctx.quadraticCurveTo(p.x + s * (r + 3), p.y - r * 0.75, p.x + s * r * 0.92, p.y - r * 0.4);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
 // A lumpy rock (SKURTOSAURUS throws these).
 function rockShape(x, y, r, spin) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(spin);
@@ -777,6 +806,7 @@ function draw() {
     else circle(p.x, p.y, PLAYER.r);    // the Druid summons animals separately now (silica.js)
     ctx.globalAlpha = 1;
   }
+  if (!game.inMenu && !dsh && !(NET.run && NET.me?.down)) drawRelicReady(p);   // your relics, when they're ready again
   if (dsh && !game.inMenu) {             // BULL charge: speed lines behind, a glowing wedge and a pair of horns in front
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(da);
     ctx.strokeStyle = COL.relic; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.globalAlpha = 0.7;

@@ -51,6 +51,7 @@ const NEWS = [
   { tag: 'Run', text: 'The run follows a clock now: 30 s of swarm, then a huge swarm, then a boss, three times over. A big bar across the top shows how far you are, with a marker for each boss.' },
   { tag: 'Run', text: 'When a boss is about to come, every XP orb, potion and diamond still on the floor flies to you first.' },
   { tag: 'Run', text: 'Bigger decks face bigger swarms: from 11 cards up, a few more enemies come, up to about 1.3× as many with a full 31-card deck (less in big-red waves).' },
+  { tag: 'Relic', text: 'You can see when your relics are ready: orange horns on you for BULL, a blue shield ring for DEFLECT, fading in and out until you use them.' },
   { tag: 'Upgrade', text: 'New level-up stat, Weapon luck: more ×3 and ×7 combos, by lining up copies already in your deck. Each pick adds less than the last, and it tops out at about 33% for ×3 and 8% for ×7.' },
   { tag: 'Fix', text: 'Lasers, Pressure Washer sprays and Gatling barrel flashes stay on you when you move fast, instead of being left behind.' },
   { tag: 'Boss', text: 'Bosses match your damage: if your last 30 s before a boss would kill it too fast, it comes with more health (up to 2.5×), and says so.' },
