@@ -24,7 +24,7 @@
    user's 150 HP, level 15 and ×2. */
 const MAKORA = {
   // level: 30 since v0.48 (user: OBI ONE takes level 20, MAKORA moves to 30)
-  name: 'MAKORA', level: 30, hp: 150, mult: 2, r: 56,  // hp 20 and ×3 until v0.37 (user: 150, ×2). `r`: the drawing's size
+  name: 'MAKORA', level: 30, hp: 150, mult: 2, r: 72,  // hp 20 and ×3 until v0.37 (user: 150, ×2). `r`: the drawing's size (56 before v0.52)
   // v0.46 (user: its hitbox should fit it and grow with it): each wheel turn it grows `grow` bigger (up to `growMax`),
   // and its hitbox is a capsule of radius `hit.r` from its legs up to its head (drawing units: 30 = r px)
   grow: 0.08, growMax: 1.4, hit: { r: 30, cap: [0, 12, 0, -62] },
@@ -124,7 +124,7 @@ function spinMakoraWheel(c, m) {
 function startMakora() {
   game.makoraDue = false;
   for (const e of game.enemies) burst(e.x, e.y, enemyCol(e), 6, 140);   // the swarm scatters
-  game.enemies = []; game.projectiles = []; game.rocks = []; game.mines = [];
+  game.enemies = []; game.projectiles = []; game.rocks = []; game.mines = []; game.mrocks = [];
   aliveEl.textContent = 0;
   game.cine = { kind: 'summon', t: 0, step: 0 };
   cineEl.className = 'cine';
@@ -213,7 +213,7 @@ function spawnMakora() {
   const x = W / 2, y = Math.min(playH || H, H) * 0.32;
   const m = {
     makora: true, type: 'makora', shape: 'makora', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: MAKORA.r, size: MAKORA.r,
-    hp: Math.round(MAKORA.hp * coopBossHp()), maxHp: Math.round(MAKORA.hp * coopBossHp()), dmg: MAKORA.touch,   // co-op: tougher
+    hp: Math.round(MAKORA.hp * bossHpMul()), maxHp: Math.round(MAKORA.hp * bossHpMul()), dmg: MAKORA.touch,   // tougher in co-op, and for a strong run (flow.js)
     hit: 0, born: 0, speed: MAKORA.walk,
     state: 'walk', t: 0, cd: 1, aim: Math.PI / 2, face: 1, step: 0, anim: 0,
     turns: 0, wheelA: 0, queue: [], slice: null, punch: null, kick: null, fast: false, down: false,
@@ -252,7 +252,7 @@ function showAdaptScene(m) {
 // … and it comes back, ×2 the HP and ×2 the damage, and faster.
 function makoraReturns(m) {
   const k = MAKORA.mult ** m.turns;
-  const hp = Math.round(MAKORA.hp * k * coopBossHp());
+  const hp = Math.round(MAKORA.hp * k * bossHpMul());
   Object.assign(m, { down: false, hp, maxHp: hp, dmg: MAKORA.touch * k, state: 'rest', t: 0.9, queue: [], slice: null, punch: null, kick: null, kickCd: 2, kx: 0, ky: 0, born: 0.3, hit: 0 });
   m.x = W / 2; m.y = Math.min(playH || H, H) * 0.32;
   game.rings.push({ x: m.x, y: m.y, r: m.r, max: m.r * 5, life: 0.6, color: COL.wheel });
@@ -278,6 +278,7 @@ const makoraDamage = m => MAKORA.dmg * MAKORA.mult ** m.turns;
 const makoraUnit = m => ((m.size || MAKORA.r) * (0.5 + 0.5 * m.born) * Math.min(MAKORA.growMax, 1 + MAKORA.grow * m.turns)) / 30;
 function sizeMakora(m) {
   const u = makoraUnit(m), c = MAKORA.hit.cap;
+  if (applyHitbox(m, 'makora', u, m.face || 1)) return;      // v0.52: the drawn hitboxes (hitboxes.js)
   m.r = MAKORA.hit.r * u;
   m.cap = [c[0] * u, c[1] * u, c[2] * u, c[3] * u];
 }
@@ -454,10 +455,11 @@ function kickStomp(m, K) {
   burst(K.x, K.y, COL.rock, 18, 220);
   groundBreak(K.x, K.y, 22);                                 // the ground breaks where the rock comes up (boss.js)
 }
-// The rock goes into game.enemies, so your weapons aim at it and hit it like anything else (combat.js).
+// The rock has its own list, game.mrocks (v0.52, user: not a target): your weapons don't aim at it or hit it, so they
+// keep on MAKORA. DEFLECT can still send it back (moveKickRock).
 function kickRock(m, K) {
   const S = MAKORA.kick, hp = S.hp + S.hpPerTurn * m.turns, v = S.speed * (1 + S.speedPerTurn * m.turns);
-  game.enemies.push({
+  game.mrocks.push({
     mrock: true, type: 'mrock', x: K.x, y: K.y, vx: Math.cos(K.a) * v, vy: Math.sin(K.a) * v, kx: 0, ky: 0,
     r: S.r, hp, maxHp: hp, dmg: S.dmg * MAKORA.mult ** m.turns, hit: 0, born: 1, t: 0, spin: Math.random() * TAU,
     seed: Math.floor(Math.random() * 1000),
@@ -474,7 +476,17 @@ function moveKickRock(k, dt) {
   k.x += k.vx * dt; k.y += k.vy * dt;
   if (!reducedMotion && Math.random() < 0.5) game.particles.push({ x: k.x - k.vx * 0.05, y: k.y + k.r * 0.6, vx: -k.vx * 0.1, vy: -20 * Math.random(), life: 0.3, color: COL.rock });
   if (k.x < -k.r * 2 || k.y < -k.r * 2 || k.x > W + k.r * 2 || k.y > H + k.r * 2) { k.gone = true; return; }
+  if (k.back) {                                              // mirrored by DEFLECT (v0.52): it blows up on MAKORA
+    const m = game.makora;
+    if (m && !m.down && hitGap(m, k.x, k.y) < k.r) rockBlast(k);
+    return;
+  }
   if (Math.hypot(k.x - p.x, k.y - p.y) > k.r + PLAYER.r) return;
+  if (!(game.shield > 0 || game.dash) && deflectHit()) {     // DEFLECT (v0.52, user): it goes straight back at MAKORA
+    const m = game.makora, a = m ? Math.atan2(m.y - k.y, m.x - k.x) : Math.atan2(-k.vy, -k.vx), v = Math.hypot(k.vx, k.vy) * DEFLECT.mirror.speed;
+    Object.assign(k, { back: true, vx: Math.cos(a) * v, vy: Math.sin(a) * v });
+    return;
+  }
   k.gone = true;                                             // it hits you, and shatters (no explosion: that's for shooting it)
   burst(k.x, k.y, COL.rock, 26, 280);
   game.shake = Math.max(game.shake, 0.3);
@@ -485,11 +497,11 @@ function moveKickRock(k, dt) {
   p.kx = (p.kx || 0) + Math.cos(a) * MAKORA.kick.knock; p.ky = (p.ky || 0) + Math.sin(a) * MAKORA.kick.knock;
   hurtPlayer(k.dmg);
 }
-// You shot it apart (combat.js hitEnemy): it explodes. The blast hurts MAKORA if it's inside (not you: you earned it).
+// It blows up (DEFLECT sent it back into MAKORA): it explodes. The blast hurts MAKORA if it's inside (not you: you earned it).
 function rockBlast(k) {
   const S = MAKORA.kick, m = game.makora;
-  const i = game.enemies.indexOf(k);
-  if (i >= 0) game.enemies.splice(i, 1);
+  const i = game.mrocks.indexOf(k);
+  if (i >= 0) game.mrocks.splice(i, 1);
   k.dead = true;
   SFX.rockBlast();
   game.shake = Math.max(game.shake, 0.35);
@@ -506,7 +518,7 @@ function rockBlast(k) {
   if (m.hp <= 0) makoraDown(m, null);                        // its own rock finished it: it adapts to nothing
   else renderMakoraBar();
 }
-function clearKickRocks() { game.enemies = game.enemies.filter(e => !e.mrock); }
+function clearKickRocks() { game.mrocks = []; }
 
 // The boss bar: MAKORA, how many times the wheel has turned, and what it has adapted to.
 function renderMakoraBar() {
@@ -542,8 +554,7 @@ function resetMakora() {
    A flat cartoon with a dark grey outline round every shape, seen from the front in a wide, bent-kneed stance: grey
    and muscular (pecs, a six-pack), a chain mark across the chest, a dark torn cloth knotted at the waist, thick black
    rings on its wrist, forearm and ankles, bare feet. A small eyeless head with an open mouth, feathery tufts fanning
-   out from both sides of it, two big horns curling up round it (one hooks into a crescent), and the golden
-   eight-spoked wheel above, which turns a notch each time it adapts. A short blade in the hand on the side it faces.
+   out from both sides of it (its two big horns are gone since v0.52, user), and the golden eight-spoked wheel above, which turns a notch each time it adapts. A short blade in the hand on the side it faces.
    It's drawn small on its own canvas and blown up with hard edges, for the same pixelation as the rest of the arena
    (v0.37, user). Local units: 30 = its radius, feet at y ≈ 34; it faces +x. */
 function drawMakora(m) {
@@ -672,7 +683,11 @@ function drawMakora(m) {
   const c = mkx;
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pw, ph);
   c.setTransform(q * m.face, 0, 0, q, -MK.x0 * q, -MK.y0 * q);   // MK's box is centred on x, so the flip stays inside it
-  drawMakoraBody(c, m, { lean, crouch, dA, dB, knife, fA, fB, fFront, legN, footRot, stride, breathe, t, still });
+  const g0 = B / bs, toWorld = new DOMMatrix([g0, 0, 0, g0, Math.round((m.x + MK.x0 * k) / g0) * g0, Math.round((m.y + MK.y0 * k) / g0) * g0]);
+  const mark = name => boneMark(m, name, c, toWorld);         // its hitbox's parts (combat.js), from its own canvas
+  c.filter = 'none'; bonePaint(m, 'root', c);                // (the editor's part view; normally nothing)
+  drawMakoraBody(c, m, { lean, crouch, dA, dB, knife, fA, fB, fFront, legN, footRot, stride, breathe, t, still, mark });
+  c.filter = 'none';
   c.setTransform(1, 0, 0, 1, 0, 0);
   if (readbackOK()) {                                        // hard edges: every block is there or it isn't
     try {
@@ -838,16 +853,14 @@ function drawMakoraBody(c, m, P) {
   leg(-1, -P.stride, null);
   leg(1, P.stride, P.legN);
 
+  P.mark?.('root');                                          // (the legs)
   c.save();                                                  // everything above the hips leans with it
   c.translate(0, hipY); c.rotate(P.lean); c.translate(0, -hipY);
   const up = P.crouch;                                       // the upper body sinks with the crouch
   c.translate(0, up);
+  P.mark?.('body');                                          // (the body and head)
 
-  // the horns, behind the head: one loops up round behind the wheel, the other sweeps out and hooks into a crescent
-  const hl = ribbon(SH, [[-3, -64], [-42, -64], [-46, -100], [-6, -103]], 11, 2.5);   // loops over, behind the wheel
-  const hr = ribbon(SK, [[3, -64], [36, -62], [46, -86], [30, -101]], 11, 1);           // out and up …
-  ribbon(SK, [[31, -100], [27, -104], [20, -104], [15, -99]], 3.4, 0.5, 6);            // … hooking back in at the tip
-  for (const H of [hl, hr]) for (const i of [3, 6, 9, 12]) { const [x, y, nx, ny, w] = H[i]; lines(0.8, [[x + nx * w, y + ny * w, x - nx * w * 0.3, y - ny * w * 0.3]]); }   // ridges
+  // (v0.52, user: no horns any more; they looped round behind the wheel and hooked into a crescent)
   // the far tufts, behind, a shade darker
   tuft(-2, -64, -2.1, 30, 5.5, SH); tuft(2, -64, -1.0, 30, 5.5, SH);
 

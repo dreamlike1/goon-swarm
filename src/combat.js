@@ -13,21 +13,10 @@ function vacuumStep(o, dt) {
   o.x += dx / d * step; o.y += dy / d * step;
 }
 
-// A random type among those unlocked at this level, by weight.
-// After OBI ONE (v0.51), a quarter are green shooters and the red squares come half as often.
-function pickType() {
-  if (game.obiDone && Math.random() < SHOOTER.share) return 'shooter';
-  const ids = TYPE_IDS.filter(k => game.level >= ENEMY_TYPES[k].from);
-  const wt = k => ENEMY_TYPES[k].weight * (game.obiDone && k === 'square' ? SHOOTER.squareMul : 1);
-  const total = ids.reduce((s, k) => s + wt(k), 0);
-  let x = Math.random() * total;
-  for (const k of ids) if ((x -= wt(k)) < 0) return k;
-  return ids[0];
-}
-
+// v0.52: what comes next is up to the run's clock (flow.js pickUnit), not your level.
 function spawnEnemy() {
   const p = game.player;
-  const type = pickType(), T = ENEMY_TYPES[type], R = T.r;
+  const u = pickUnit(), type = u.type, T = ENEMY_TYPES[type], R = T.r;
   let best = null;
   for (let i = 0; i < 12; i++) {
     const side = Math.floor(Math.random() * 4);
@@ -38,9 +27,10 @@ function spawnEnemy() {
     if (!best || d > best.d) best = { x, y, d };
     if (d > Math.min(W, H) * 0.4) break;
   }
-  // the purple ones: squares split in two; a triangle is an exploder (v0.51)
-  const special = Math.random() < splitChance(game.level), e = makeEnemy(type, best.x, best.y, special && SPLIT.types.includes(type));
-  if (special && type === 'triangle') e.boom = true;
+  // the purple ones: split squares split in two; a purple triangle is an exploder (v0.51). The wave says which (v0.52).
+  const e = makeEnemy(type, best.x, best.y, !!u.split);
+  if (u.boom) e.boom = true;
+  if (u.n) e.n = u.n;                   // (how much room it takes in the swarm)
   game.enemies.push(e);
   aliveEl.textContent = game.enemies.length;
 }
@@ -55,6 +45,7 @@ function makeEnemy(type, x, y, split = false) {
   };
   // Crabs (mini dinos before v0.46) have a small state machine (see moveRaptor in boss.js).
   if (T.shape === 'crab') Object.assign(e, { state: 'walk', t: 0, dir: 0, face: 0, step: 0, anim: 0, throwing: null, recoil: 0, cd: RAPTOR.every[0] });
+  if (type === 'lunger') Object.assign(e, { state: 'walk', t: 0, dir: 0, cd: between(LUNGER.every) });   // (boss.js moveLunger)
   return e;
 }
 const enemyCol = e => COL[e.split ? `${e.type}-split` : e.boom ? 'triangle-split' : e.type];
@@ -78,13 +69,52 @@ function splitEnemy(e) {
 // (`e.cap`: its two ends, as offsets from x, y; boss.js sizeBoss, makora.js sizeMakora), so their chest and head can be
 // hit too, not only their middle. hitPoint: the point on that line nearest (x, y); hitGap: how far (x, y) is from its edge.
 function hitPoint(e, x, y) {
-  const c = e.cap;
-  if (!c) return e;
-  const ax = e.x + c[0], ay = e.y + c[1], vx = c[2] - c[0], vy = c[3] - c[1];
-  const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1)));
-  return { x: ax + vx * t, y: ay + vy * t };
+  const parts = e.parts || (e.cap ? [[...e.cap, e.r]] : null);
+  if (!parts) return e;
+  let best = null, bd = Infinity;
+  for (const c of parts) {                                   // v0.52: a boss can have several shapes (hitboxes.js)
+    const ax = e.x + c[0], ay = e.y + c[1], vx = c[2] - c[0], vy = c[3] - c[1];
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1)));
+    const q = { x: ax + vx * t, y: ay + vy * t, r: c[4] }, gap = Math.hypot(x - q.x, y - q.y) - q.r;
+    if (gap < bd) { bd = gap; best = q; }
+  }
+  return best;
 }
-const hitGap = (e, x, y) => { const q = hitPoint(e, x, y); return Math.hypot(x - q.x, y - q.y) - e.r; };
+const hitGap = (e, x, y) => { const q = hitPoint(e, x, y); return Math.hypot(x - q.x, y - q.y) - (q.r ?? e.r); };
+// A boss's hitbox for its pose right now (v0.52, hitboxes.js): its shapes for this state (or its default ones), scaled
+// by `u` (its size / 30) and flipped to the side it faces. `e.r` becomes the biggest shape's radius.
+// Each shape is pinned to a body part (its 6th value: 'root' — the legs, and the jump — 'body', 'head' …) and follows
+// it: the draw code marks every part's frame as it draws it (boneMark), so a jump, a lean or a nod carries the shape
+// along. Before the boss has been drawn once, the shapes sit as they would on its default pose.
+function applyHitbox(e, kind, u, face = 1) {
+  const H = HITBOXES[kind], list = H && (H[e.state] || H.default);
+  if (!list || !list.length) return false;
+  const B = e.bones;
+  e.parts = list.map(([x1, y1, x2, y2, r, bone = 'root']) => {
+    const m = B && B[bone];
+    if (!m) return [x1 * u * face, y1 * u, x2 * u * face, y2 * u, r * u];
+    return [m[0] * x1 + m[2] * y1 + m[4], m[1] * x1 + m[3] * y1 + m[5], m[0] * x2 + m[2] * y2 + m[4], m[1] * x2 + m[3] * y2 + m[5],
+      r * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))];
+  });
+  e.cap = e.parts[0].slice(0, 4);
+  e.r = Math.max(...e.parts.map(c => c[4]));
+  return true;
+}
+// A body part's frame, as it's drawn (v0.52): from its drawing units to px from the boss's middle. `boneInv` undoes the
+// camera (draw.js sets it each frame, the hitbox editor its own); `toWorld` is for a part drawn on another canvas
+// (MAKORA's), from that canvas's px to the world.
+let boneInv = null;
+function boneMark(e, name, c = ctx, toWorld = null) {
+  const m = toWorld ? toWorld.multiply(c.getTransform()) : boneInv ? boneInv.multiply(c.getTransform()) : null;
+  if (m) (e.bones ||= {})[name] = [m.a, m.b, m.c, m.d, m.e - e.x, m.f - e.y];
+  bonePaint(e, name, c);
+}
+// The hitbox editor's view of the parts (localhost only): while `boneHL` is set for this boss, everything drawn from
+// here on (until the canvas state is restored) gets that part's filter, so each part's own pixels show. Off in a run.
+let boneHL = null;
+function bonePaint(e, name, c = ctx) {
+  if (boneHL && boneHL.e === e) c.filter = boneHL.filter(name);
+}
 
 // The nearest enemy to a point, skipping any in `skip`, optionally within `range`.
 // Distances are to the enemy's edge, not its middle (v0.30, user: you had to be right up against SKURTOSAURUS, whose
@@ -159,7 +189,7 @@ function spray(card, angle, arc, range, o = {}) {
     hitEnemy({ card, look: 'spray', dmg, knock, vx: dx / (d || 1), vy: dy / (d || 1), x: e.x, y: e.y }, e);
   }
   const life = o.wipe ? 0.36 : 0.22;
-  game.sprays.push({ x: p.x, y: p.y, a: angle, arc, range, card, life, max: life, wipe: !!o.wipe, seed: Math.random() * 10 });
+  game.sprays.push(pinTo({ x: p.x, y: p.y, a: angle, arc, range, card, life, max: life, wipe: !!o.wipe, seed: Math.random() * 10 }));
   const col = COL[card];   // droplets flicked out along the cone
   for (let k = 0, n = o.wipe ? 14 : 7; k < n; k++) {
     const da = angle + (Math.random() - 0.5) * arc, s = 90 + Math.random() * 140;
@@ -168,7 +198,7 @@ function spray(card, angle, arc, range, o = {}) {
   if (!o.quiet) SFX.fire(card);
 }
 function updateSprays(dt) {
-  for (let i = game.sprays.length - 1; i >= 0; i--) if ((game.sprays[i].life -= dt) <= 0) game.sprays.splice(i, 1);
+  for (let i = game.sprays.length - 1; i >= 0; i--) if ((game.sprays[i].life -= dt) <= 0) game.sprays.splice(i, 1); else followOwner(game.sprays[i]);
 }
 // Super Washer (user): two sprays spin a full turn around you (reuses Laser ×7's sweep, twice, offset by half a turn).
 function superSweep(card, range, dmg) {
@@ -200,11 +230,32 @@ function updateTrails(dt) {
 // Laser: an instant zap from the player to `e`, drawn as a beam for a moment (draw.js).
 function zap(card, e, o = {}) {
   const spec = CARDS[card], p = game.player, dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
-  game.beams.push({ x1: p.x, y1: p.y, x2: e.x, y2: e.y, life: 0.14, max: 0.14, w: 3, card });
+  const b = { x1: p.x, y1: p.y, x2: e.x, y2: e.y, life: 0.14, max: 0.14, w: 3, card, owner: ownerId(), target: e };
+  game.beams.push(b);
+  pinBeam(b);
   hitEnemy({ card, look: 'laser', dmg: damageOf(o.dmg ?? spec.dmg), knock: knockOf(spec.knock), vx: dx / d, vy: dy / d, x: e.x, y: e.y }, e);
   if (o.quiet) return;
   game.muzzle = { a: Math.atan2(dy, dx), life: 0.08, card };
   SFX.fire(card);
+}
+// Attacks that show for a moment stay on whoever fired them (user: moving fast or zig-zagging, they were left behind
+// where they fired, over you or with a gap). `pinTo` notes the owner and the offset from them; `followOwner` puts
+// it back there each frame (sprays, the Gatling's barrel flashes). A laser's beam goes from the edge of your circle
+// to wherever its target is now (pinBeam).
+const ownerBody = o => (NET.run && byId(o.owner)?.body) || game.player;
+function pinTo(o) {
+  const p = game.player;
+  return Object.assign(o, { owner: ownerId(), ox: o.x - p.x, oy: o.y - p.y });
+}
+function followOwner(o) {
+  const p = ownerBody(o);
+  o.x = p.x + o.ox; o.y = p.y + o.oy;
+}
+function pinBeam(b) {
+  const p = ownerBody(b), e = b.target;
+  if (e && !e.dead && !e.gone && game.enemies.includes(e)) { b.x2 = e.x; b.y2 = e.y; }
+  const dx = b.x2 - p.x, dy = b.y2 - p.y, d = Math.hypot(dx, dy) || 1, off = Math.min(PLAYER.r + 2, d);
+  b.x1 = p.x + dx / d * off; b.y1 = p.y + dy / d * off;
 }
 // Laser ×7: a line at angle a0, held for a moment, then swept a full turn back to where it started. Every enemy the
 // beam passes over (within `len`) is hit once.
@@ -375,6 +426,7 @@ function hitEnemy(pr, e) {
     game.rings.push({ x: e.x, y: e.y, r: e.r * 0.5, max: e.r + 22, life: 0.25, color: COL.wheelHi });
     burst(e.x, e.y, COL.wheelHi, 8, 260);
   }
+  if (!e.dummy) tallyHit(pr.card, Math.min(pr.dmg, Math.max(0, e.hp)));   // for the end-of-run screen (flow.js)
   e.hp -= pr.dmg;
   if (e.dummy) {                                    // test dummies never die or move; they count the damage instead
     game.practice.dmg += pr.dmg; e.hp = e.maxHp; pr = { ...pr, knock: 0 };
@@ -401,7 +453,6 @@ function hitEnemy(pr, e) {
   if (e.hp <= 0 && e.boss && bossNextPhase(e)) return;   // SKURTOSAURUS: phase 1's bar is gone, phase 2 begins
   if (e.hp <= 0 && e.obi && obiNextPhase(e)) return;     // … and OBI ONE's
   if (e.hp <= 0 && e.makora) { makoraDown(e, pr.card); return; }   // MAKORA never stays down: it adapts and comes back
-  if (e.hp <= 0 && e.mrock) { rockBlast(e); return; }                // MAKORA's kicked rock: shot apart, it explodes (makora.js)
   if (e.hp <= 0) {
     e.dead = true;
     SFX.kill(e.r > 15);
@@ -490,6 +541,7 @@ function hurtPlayer(raw) {
     return;
   }
   const dmg = armorCut(raw);
+  if (game.tally && isLocal()) game.tally.taken += Math.min(dmg, p.hp);
   p.hp = Math.max(0, p.hp - dmg);
   p.safe = PLAYER.safe;
   if (isLocal()) SFX.hurt();
@@ -560,6 +612,7 @@ function update(dt) {
   if (first) return;                    // wait until the arena has a real size (see resize)
   zoomStep(dt);                         // a boss fight's bigger arena eases in and out (arena.js)
   if (game.hitstop > 0) { game.hitstop -= dt; return; }   // a BULL hit freezes the frame for a moment
+  if (!game.practice) game.runT = (game.runT || 0) + dt;   // how long the run has lasted (the end-of-run screen)
   if (game.intro) { updateIntro(dt); updateEffects(dt); return; }   // SKURTOSAURUS's intro: the fight waits
   if (game.cine) { updateCine(dt); updateEffects(dt); return; }     // MAKORA's black-screen scenes: so does this
   let p = game.player;
@@ -572,14 +625,15 @@ function update(dt) {
     game.started = true;
     for (let i = 0; i < 3; i++) spawnEnemy();
   }
+  flowStep(dt);                         // the run's clock: the waves, the huge swarm, and when each boss comes (flow.js)
   if (game.bossDue && !game.boss) { startIntro(); return; }   // nothing else happens once the footsteps start
-  if (game.obiDue && !game.boss && !game.obi && !game.makora) { startObi(); return; }   // level 20: OBI ONE (obi.js)
-  if (game.makoraDue && !game.boss && !game.obi && !game.makora) { startMakora(); return; }   // level 30: the last fight
+  if (game.obiDue && !game.boss && !game.obi && !game.makora) { startObi(); return; }   // stage 2's boss: OBI ONE (obi.js)
+  if (game.makoraDue && !game.boss && !game.obi && !game.makora) { startMakora(); return; }   // stage 3's: the last fight
   game.spawnTimer -= dt;
-  if (game.spawnTimer <= 0 && !game.boss && !game.obi && !game.makora && !game.practice) {   // no swarm at all while a boss is up (user)
-    const n = game.enemies.length, low = n < swarmMin(game.level) * coopCount();   // co-op: many more of them
-    if (n < swarmMax(game.level) * coopCount()) spawnEnemy();
-    game.spawnTimer = (low ? SWARM.refill : spawnEvery(game.level)) / coopCount();
+  if (game.spawnTimer <= 0 && !game.boss && !game.obi && !game.makora && !game.practice && game.flow.state !== 'sweep') {   // (nor while the drops fly in before one)   // no swarm at all while a boss is up (user)
+    const S = swarmNow(), n = fieldLoad(), low = n < S.min;    // (co-op: many more of them; a huge swarm: more still)
+    if (n < S.max) spawnEnemy();
+    game.spawnTimer = (low ? SWARM.refill : S.every) / coopCount();
   }
 
   // enemies: chase, keep a little apart from each other, get shoved on contact
@@ -599,9 +653,9 @@ function update(dt) {
     if (e.boss) moveBoss(e, dt);
     else if (e.makora) moveMakora(e, dt);
     else if (e.obi) moveObi(e, dt);
-    else if (e.mrock) { moveKickRock(e, dt); e.hit = Math.max(0, e.hit - dt); continue; }   // it does its own hitting (makora.js)
     else if (e.shape === 'crab') moveRaptor(e, dt);
     else if (e.type === 'shooter') moveShooter(e, dt);         // v0.51: keeps off and shoots (boss.js)
+    else if (e.type === 'lunger') moveLunger(e, dt);           // v0.52: creeps, lights up, dashes (boss.js)
     else if (e.boom && fuseStep(e, dt, d)) { /* an exploder, lit: it stops and flashes (boss.js) */ }
     else {
       e.kx *= decay; e.ky *= decay;
@@ -615,24 +669,30 @@ function update(dt) {
     }
     e.hit = Math.max(0, e.hit - dt);
     const shielded = game.shield > 0;
-    const reach = e.r + PLAYER.r + (shielded ? SHIELD.r : 0);
-    if (e.cap) { const q = hitPoint(e, p.x, p.y); dx = p.x - q.x; dy = p.y - q.y; d = Math.hypot(dx, dy) || 1; }   // a boss: its nearest part
+    let reach = e.r + PLAYER.r + (shielded ? SHIELD.r : 0);
+    if (e.cap) {                                            // a boss: its nearest part (and that part's own size)
+      const q = hitPoint(e, p.x, p.y); dx = p.x - q.x; dy = p.y - q.y; d = Math.hypot(dx, dy) || 1;
+      reach = (q.r ?? e.r) + PLAYER.r + (shielded ? SHIELD.r : 0);
+    }
     if (d < reach && e.state !== 'jump') {   // contact: push out, shove back, and hurt the player (unless shielded; not while the boss is in the air)
       if (e.boss || e.makora || e.obi) { p.x += (dx / d) * (reach - d); p.y += (dy / d) * (reach - d); clampTo(p, PLAYER.r); }   // a boss shoves you, not the other way round
       else {
         e.x -= (dx / d) * (reach - d); e.y -= (dy / d) * (reach - d); e.kx -= (dx / d) * 260; e.ky -= (dy / d) * 260;
         if (e.state === 'charge') { e.state = 'rest'; e.t = RAPTOR.rest; }   // a crab's dash stops when it hits you
+        else if (e.state === 'dash' && e.type === 'lunger') { e.state = 'rest'; e.t = LUNGER.rest; }   // … and a lunger's
       }
       if (shielded || game.dash) game.shieldHit = 0.15;
       else { p.flash = 0.2; hurtPlayer(e.dmg); }
     }
   }
   for (const e of es.filter(e => e.blowNow)) blowUp(e);   // exploders whose fuse ran out (after the loop: it can kill others)
-  for (let i = es.length - 1; i >= 0; i--) if (es[i].gone) es.splice(i, 1);   // MAKORA's rocks that broke or flew off
+  for (let i = es.length - 1; i >= 0; i--) if (es[i].gone) es.splice(i, 1);   // … and gone once they have
+  // MAKORA's kicked rocks: their own list (not targets), and they do their own hitting (makora.js)
+  for (const k of game.mrocks.slice()) moveKickRock(k, dt);
+  game.mrocks = game.mrocks.filter(k => !k.gone && !k.dead);   // (broke on you, blew up, or flew off)
   for (let i = 0; i < es.length; i++) {
     for (let j = i + 1; j < es.length; j++) {
       const a = es[i], b = es[j];
-      if (a.mrock || b.mrock) continue;                        // a flying rock goes through everything
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
       const overlap = (a.r + b.r) * 1.1 - d;
       if (overlap > 0) {
@@ -854,7 +914,7 @@ function updateEffects(dt) {
   game.particles = game.particles.filter(q => q.life > 0);
   for (const r of game.rings) { r.life -= dt; r.r += (r.max - r.r) * Math.min(1, dt * 12); }
   game.rings = game.rings.filter(r => r.life > 0);
-  for (const b of game.beams) b.life -= dt;
+  for (const b of game.beams) { b.life -= dt; pinBeam(b); }
   game.beams = game.beams.filter(b => b.life > 0);
   for (const f of game.floaters) { f.y += f.vy * dt; f.life -= dt; }
   game.floaters = game.floaters.filter(f => f.life > 0);

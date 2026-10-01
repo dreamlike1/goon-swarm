@@ -1,6 +1,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Packs Silica</title>
+<link rel="icon" href="favicon/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png">
+<link rel="apple-touch-icon" href="favicon/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@500;600;700&display=swap">
@@ -123,6 +127,7 @@
         </div>
         <ol class="deck-list" id="deck-list"></ol>
         <p class="deck-empty" id="deck-empty" hidden>Drag cards here, or click one to add it.</p>
+        <p class="deck-warn" id="deck-warn" role="status" hidden></p>
         <div class="deck-tools">
           <button type="button" id="btn-auto" title="Build a deck from your best cards">Auto</button>
           <button type="button" id="btn-clear" title="Take every card out of the deck">Clear</button>
@@ -185,6 +190,11 @@
   </div>
 </div>
 
+<!-- v0.52 (user): the run's progress, top centre: three stretches, one per stage, each ending at its boss (flow.js) -->
+<div class="runbar" id="runbar" role="progressbar" aria-label="Run progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <p class="rb-head"><span class="rb-now">SWARM</span><span class="rb-time">0:00</span></p>
+  <div class="rb-track"></div>
+</div>
 <ol class="statpanel" id="statpanel" aria-label="Your stats"></ol>
 <div class="relics" id="relics" hidden></div>
 <div class="bossbar" id="bossbar" role="meter" aria-label="SKURTOSAURUS health" aria-valuemin="0" aria-valuemax="280" aria-valuenow="280" hidden>
@@ -251,16 +261,24 @@
   <button class="back" id="btn-pr-back" type="button">Back to pack</button>
 </div>
 
+<!-- The end of a run (v0.52, user: the stats, then Retry or Back): how long, how far, what you beat, your best weapons -->
 <div class="pause" id="defeat" role="dialog" aria-labelledby="d-title" hidden>
-  <section class="screen">
+  <section class="screen over">
+    <p class="eyebrow" id="d-eyebrow">Run over</p>
     <h2 id="d-title">Defeated</h2>
-    <p class="sub" id="d-stats"></p>
+    <p class="sub" id="d-where"></p>
+    <dl class="over-stats" id="d-stats"></dl>
+    <ul class="over-bosses" id="d-bosses" aria-label="Bosses"></ul>
+    <div class="over-weapons" id="d-weapons-box">
+      <p class="eyebrow">Top weapons</p>
+      <ol class="over-weapons-list" id="d-weapons"></ol>
+    </div>
     <p class="gold" id="d-gold"></p>
     <p class="sub small" id="d-wait" hidden>Waiting for the host to start the next run…</p>
     <div class="nav">
-      <button class="start" id="btn-retry" type="button">Try again</button>
+      <button class="start" id="btn-retry" type="button">Retry</button>
       <button id="btn-room" type="button" hidden>Back to the room</button>
-      <button id="btn-defeat-menu" type="button">Main menu</button>
+      <button id="btn-defeat-menu" type="button">Back</button>
     </div>
   </section>
 </div>
@@ -317,6 +335,7 @@
 <script src="src/packs.js"></script>
 <script src="src/save.js"></script>
 <script src="src/config.js"></script>
+<script src="src/hitboxes.js"></script>
 <script src="src/sound.js"></script>
 <script src="src/display.js"></script>
 <script src="src/state.js"></script>
@@ -327,6 +346,7 @@
 <script src="src/boss.js"></script>
 <script src="src/makora.js"></script>
 <script src="src/obi.js"></script>
+<script src="src/flow.js"></script>
 <script src="src/silica.js"></script>
 <script src="src/draw.js"></script>
 <script src="src/hud.js"></script>
@@ -335,4 +355,4 @@
 <script src="src/coop.js"></script>
 <script src="src/main.js"></script>
 <!-- The test panel (src/devtools.js): loaded only on localhost, and never pushed to GitHub -->
-<script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.write('<script src="src/devtools.js"><\/script>');</script>
+<script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.write('<script src="src/devtools.js"><\/script><script src="src/hitedit.js"><\/script>');</script>

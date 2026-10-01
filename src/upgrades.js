@@ -1,4 +1,4 @@
-/* upgrades.js — Level-up upgrades: the 13 player stats, rarity rolls, the pick-one-of-3 screen, slot augments and the stats panel. */
+/* upgrades.js — Level-up upgrades: the 14 player stats, rarity rolls, the pick-one-of-3 screen, slot augments and the stats panel. */
 'use strict';
 
 /* ============================================================
@@ -11,6 +11,11 @@
 const UP_RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];   // no SSS for upgrades (user)
 const UP_WEIGHTS = { common: 60, uncommon: 25, rare: 10, epic: 4, legendary: 1 };
 const UP_MULT = { common: 1, uncommon: 1.5, rare: 2, epic: 3, legendary: 5 };
+// Weapon luck's chances for a sequence: ×3 up to `p3`, ×7 up to `p7`, closing in on them by `soft` points (each
+// pick adds less). About 6 common picks: 1 sequence in 4 gets a ×3, 1 in 18 a ×7.
+const WLUCK = { p3: 0.35, p7: 0.08, soft: 24 };
+const wluckOdds = (pts = stats.wluck || 0) => { const k = 1 - Math.exp(-pts / WLUCK.soft); return { p3: WLUCK.p3 * k, p7: WLUCK.p7 * k }; };
+const deckLuck = () => wluckOdds();                         // what the deck asks as it deals a sequence (deck.js)
 const LUCK = { rarity: 25, drop: 0.006, dropMax: 1 };     // every 25 Luck doubles the weight of each rarity above Common; each point adds 0.6% orb drop chance, up to 100%
 
 // `base` is the Common amount; `round` keeps whole-number stats whole. `show` formats the total for the panel.
@@ -30,6 +35,12 @@ const STATS = {
   knock: { name: 'Knockback',    short: 'KNK', base: 0.15,               show: () => pct(stats.knock, true),             gain: v => `+${pct(v)} knockback on every hit` },
   range: { name: 'Attack range', short: 'RNG', base: 0.08,               show: () => pct(stats.range, true),             gain: v => `+${pct(v)} attack range` },
   luck:  { name: 'Luck',         short: 'LCK', base: 5,    round: true,  show: () => `${stats.luck}`,                    gain: v => `+${v} luck: rarer upgrades, more orbs` },
+  // Weapon luck (v0.52, user): more ×3 and ×7 combos, by gathering copies already in your deck (deck.js). Kept from
+  // being too strong (user): every pick adds less than the one before (WLUCK), the ×7 grows a quarter as fast, both
+  // stop at a ceiling, it turns up less often in level ups, and the stat is full at `cap` points.
+  wluck: { name: 'Weapon luck',  short: 'WLK', base: 4,    round: true, cap: 72, weight: 0.4,
+           show: () => `${pct(wluckOdds().p3)}·${pct(wluckOdds().p7)}`,   // the ×3 and ×7 chances
+           gain: () => 'More ×3 · ×7 combos (chance of each per sequence)' },
   xp:    { name: 'XP',           short: 'XP',  base: 0.1,                show: () => pct(stats.xp, true),                gain: v => `+${pct(v)} XP from orbs, wider pull` },
 };
 const STAT_IDS = Object.keys(STATS);
@@ -107,9 +118,7 @@ function queueLevelUps(from, to) {
     game.upQueue.push({ kind: 'stat', level: l });
     if (isWheelLevel(l)) game.upQueue.push({ kind: 'wheel', level: l });
     if (l % AUG_EVERY === 0) game.upQueue.push({ kind: 'aug', level: l });
-    if (l === BOSS.level && !game.bossDone && !game.boss) game.bossDue = true;   // SKURTOSAURUS arrives once these picks are done
-    if (l === OBI.level && !game.obiDone && !game.obi) game.obiDue = true;      // … OBI ONE at 20 (v0.48)
-    if (l === MAKORA.level && !game.makora) game.makoraDue = true;             // … and MAKORA at 30, the last level
+    // (v0.52, user: the bosses come by the run's clock now, flow.js, not at levels 10, 20 and 30)
   }
   if (!game.choosing) openNext();
   else renderMore();
@@ -480,7 +489,7 @@ function renderStats(changed = null) {
 function countUp(el, to) {
   const from = parseFloat((el.textContent || '0').replace(/[^\d.-]/g, '')) || 0;
   const m = to.match(/-?\d+(\.\d+)?/);
-  if (!m) { el.textContent = to; return; }
+  if (!m || to.match(/\d+/g).length > 1) { el.textContent = to; return; }   // (Weapon luck shows two: no count-up)
   const target = parseFloat(m[0]), dec = (m[1] || '').length - (m[1] ? 1 : 0), t0 = performance.now(), run = el.countId;
   const step = now => {
     if (el.countId !== run) return;

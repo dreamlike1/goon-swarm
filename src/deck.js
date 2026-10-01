@@ -38,7 +38,11 @@ function shuffle(cards, rng) {
   return a;
 }
 
-function createDeck(cards, rng, seqSize = SEQUENCE_SIZE) {
+// Weapon luck (v0.52, user): `luck()` gives this moment's chances { p3, p7 } (upgrades.js deckLuck). It only reorders
+// the draw pile as a sequence is dealt, never adds cards: a ×7 needs 7 copies of a card still to be dealt, a ×3 three.
+// After a luck-made ×7 the next sequence can't roll for one. The rolls always use the rng the same number of times,
+// so a co-op guest's copy of the deck (coop.js) stays in step.
+function createDeck(cards, rng, seqSize = SEQUENCE_SIZE, luck = null) {
   cards = cards.slice();                // the run's own list: cards won mid-run are added to it
   let small = cards.length < seqSize;
   const ids = cards.map((_, i) => i);   // piles hold card positions, so copies of a card stay distinct
@@ -51,6 +55,8 @@ function createDeck(cards, rng, seqSize = SEQUENCE_SIZE) {
   let pos = 0;                          // next slot to fire
   let seqNo = 1;                        // sequences played so far this run, counting from 1
   let shuffles = 1;                     // shuffles so far this run (the first is the one the run starts with)
+  let lucky = 0;                        // what weapon luck made of this sequence: 3, 7 or 0
+  let rested = false;                   // the last sequence was a lucky ×7: no roll for one this time
 
   // Shuffle the used pile (or, for a small deck, the whole deck) into a new draw pile.
   function reshuffle() {
@@ -103,8 +109,39 @@ function createDeck(cards, rng, seqSize = SEQUENCE_SIZE) {
     firstNew = [];
     pos = 0;
     const shuffled = drawPile.length ? null : reshuffle();   // ran out exactly as the last sequence ended
+    lucky = luck ? pullTogether(luck()) : 0;
     fill();
     return shuffled;
+  }
+  // Weapon luck: maybe gather copies of one card at the front of the draw pile, the next sequence. Swaps only.
+  function pullTogether({ p3 = 0, p7 = 0 }) {
+    const r7 = rng(), r3 = rng(), r = rng();                // (always three rolls: see above)
+    if (small || drawPile.length < seqSize) { rested = false; return 0; }
+    const swap = (i, j) => { [drawPile[i], drawPile[j]] = [drawPile[j], drawPile[i]]; };
+    const at = (c, from) => { for (let j = from; j < drawPile.length; j++) if (cards[drawPile[j]] === c) return j; return -1; };
+    if (!rested && r7 < p7) {
+      const n = countCards(drawPile.map(i => cards[i]));
+      const ok = Object.keys(n).filter(c => n[c] >= seqSize).sort();
+      if (ok.length) {
+        const c = ok[Math.floor(r * ok.length)];
+        for (let k = 0; k < seqSize; k++) if (cards[drawPile[k]] !== c) swap(k, at(c, k + 1));
+        rested = true;
+        return 7;
+      }
+    }
+    rested = false;
+    if (r3 >= p3) return 0;
+    const front = drawPile.slice(0, seqSize).map(i => cards[i]);
+    for (let k = 0; k + 2 < seqSize; k++) if (front[k] === front[k + 1] && front[k] === front[k + 2]) return 0;   // one's there already
+    for (let t = 0, s0 = Math.floor(r * (seqSize - 2)); t < seqSize - 2; t++) {   // from a random slot, the first that can
+      const s = (s0 + t) % (seqSize - 2), c = front[s];
+      const a = at(c, s + 1);
+      if (a < 0 || at(c, a + 1) < 0) continue;
+      if (a !== s + 1) swap(s + 1, a);
+      swap(s + 2, at(c, s + 2));
+      return 3;
+    }
+    return 0;
   }
   deal();
 
@@ -114,6 +151,7 @@ function createDeck(cards, rng, seqSize = SEQUENCE_SIZE) {
     get seqPos() { return pos; },
     get seqNo() { return seqNo; },
     get passNo() { return shuffles; },
+    get lucky() { return lucky; },                                                                 // weapon luck's doing this sequence
     get left() { return hand.slice(pos).filter(id => id !== null).length + drawPile.length; },   // cards left before the next shuffle
     get passBreaks() { return firstNew.slice(); },                                                 // where shuffled-in cards start
     piles() { return { draw: drawPile.slice(), hand: hand.filter(id => id !== null), used: used.slice() }; },   // for checks

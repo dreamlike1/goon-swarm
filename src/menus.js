@@ -47,6 +47,21 @@ function renderGold() { for (const el of document.querySelectorAll('.gold-n')) e
 /* ---------- what's new (title screen and main menu) ---------- */
 // Newest first, under version headings. Keep it short: one line per change a player would notice.
 const NEWS = [
+  { ver: 'v0.52' },
+  { tag: 'Run', text: 'The run follows a clock now: 30 s of swarm, then a huge swarm, then a boss, three times over. A big bar across the top shows how far you are, with a marker for each boss.' },
+  { tag: 'Run', text: 'When a boss is about to come, every XP orb, potion and diamond still on the floor flies to you first.' },
+  { tag: 'Run', text: 'Bigger decks face bigger swarms: from 11 cards up, a few more enemies come, up to about 1.3× as many with a full 31-card deck (less in big-red waves).' },
+  { tag: 'Upgrade', text: 'New level-up stat, Weapon luck: more ×3 and ×7 combos, by lining up copies already in your deck. Each pick adds less than the last, and it tops out at about 33% for ×3 and 8% for ×7.' },
+  { tag: 'Fix', text: 'Lasers, Pressure Washer sprays and Gatling barrel flashes stay on you when you move fast, instead of being left behind.' },
+  { tag: 'Boss', text: 'Bosses match your damage: if your last 30 s before a boss would kill it too fast, it comes with more health (up to 2.5×), and says so.' },
+  { tag: 'Boss', text: 'MAKORA’s kicked rocks are no longer targets: your weapons stay on MAKORA. Dodge the rocks, or DEFLECT them back at it.' },
+  { tag: 'Run', text: 'Levelling up no longer calls the bosses. Level as much as you like; the harder swarms only come once you’ve levelled up.' },
+  { tag: 'Enemies', text: 'Every 10 s a new wave, each a swarm type (with an extra enemy mixed in): reds, triangles, big reds and their mixes first; crabs, lungers and exploders after SKURTOSAURUS; shooters after OBI ONE.' },
+  { tag: 'Enemies', text: 'New: the lunger, a slow amber square. It stops, lights up, then dashes straight at you.' },
+  { tag: 'Boss', text: 'The bosses are bigger. In phase 2, OBI ONE also pulls you in after 2–3 saber throws in a row if you’re still out of his reach.' },
+  { tag: 'Relic', text: 'DEFLECT’s shield lasts 2 s and stops one hit, then it’s gone. Ranged attacks it stops fly straight back: shooter orbs, OBI ONE’s saber, bolts and rocks, SKURTOSAURUS’s rocks and MAKORA’s kicked rocks.' },
+  { tag: 'Deck', text: 'A deck can hold up to 14 copies of one card (7 before). More than 7 of a card needs at least 7 other cards in the deck with it.' },
+  { tag: 'Run', text: 'When you fall, the end-of-run screen shows your time, level, kills, damage, bosses beaten and top weapons, then Retry or Back.' },
   { ver: 'v0.51.1' },
   { tag: 'View', text: 'Normal play is back at full size (the zoom-out left too much empty space). Boss fights zoom in a little closer, in a smaller square arena.' },
   { tag: 'Relic', text: 'DEFLECT sends a shooter’s orb back: it turns blue, flies faster at the nearest enemy and hurts it instead of you.' },
@@ -636,7 +651,7 @@ const CARD_ICON = {                                  // a small picture of each 
 };
 const RARITY_RANK = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
 const freeCopies = id => (save.owned[id] || 0) - (save.equipped[id] || 0);                // owned and not in the deck
-const canEquip = id => (save.equipped[id] || 0) < Math.min(COPY_LIMIT, save.owned[id] || 0);   // a deck takes up to 7 of each
+const canEquip = id => (save.equipped[id] || 0) < Math.min(COPY_LIMIT, save.owned[id] || 0);   // a deck takes up to 14 of each
 function renderLoadout() {
   const cards = equippedCards(), full = cards.length >= DECK_LIMIT;
   $('deck-n').textContent = cards.length;
@@ -661,7 +676,11 @@ function renderLoadout() {
   }).join('');
   $('btn-clear').disabled = !cards.length;
   $('btn-auto').disabled = !CARD_IDS.some(id => save.owned[id]);
-  $('btn-play').disabled = $('btn-loadout-test').disabled = deckProblems().length > 0;
+  const problems = deckProblems();
+  $('btn-play').disabled = $('btn-loadout-test').disabled = problems.length > 0;
+  const warn = problems.find(p => p.includes('other cards'));   // (v0.52: 8+ of one card needs 7 others: say so under the list)
+  $('deck-warn').hidden = !warn;
+  $('deck-warn').textContent = warn || '';
 }
 // Add (d = 1) or take out (d = -1) one copy. Returns false if it can't.
 function changeDeck(id, d) {
@@ -687,17 +706,25 @@ function addCard(id) {
   if (changeDeck(id, 1)) return;
   const own = save.owned[id] || 0, name = CARDS[id].name;
   builderHint(equippedCards().length >= DECK_LIMIT ? `The deck is full: ${DECK_LIMIT} cards at most.`
-    : (save.equipped[id] || 0) >= COPY_LIMIT ? `${COPY_LIMIT} ${name} is the most a deck can hold.`
+    : (save.equipped[id] || 0) >= COPY_LIMIT ? `${COPY_LIMIT} ${name} is the most a deck can hold (and it needs ${BALANCE.others} other cards with it).`
     : `All ${own} of your ${name} cards are in the deck. Get more in the Store.`);
 }
-// Auto: your best cards first (rarest, then hardest-hitting), up to 7 of each, until the deck is full.
+// Auto: your best cards first (rarest, then hardest-hitting), up to 7 of each, until the deck is full; then, if
+// there's room, the best ones topped up toward 14 (v0.52), as far as the balance rule allows (7 other cards each).
 function autoDeck() {
   const ids = CARD_IDS.filter(id => save.owned[id]).sort((a, b) => RARITY_RANK[CARDS[b].rarity] - RARITY_RANK[CARDS[a].rarity] || CARDS[b].dmg - CARDS[a].dmg);
   save.equipped = {};
   let left = DECK_LIMIT;
   for (const id of ids) {
-    const n = Math.min(COPY_LIMIT, save.owned[id], left);
+    const n = Math.min(BALANCE.over, save.owned[id], left);
     if (n > 0) { save.equipped[id] = n; left -= n; }
+  }
+  for (const id of ids) {
+    if (!left) break;
+    const n = save.equipped[id] || 0, total = DECK_LIMIT - left, room = Math.min(COPY_LIMIT, save.owned[id]) - n;
+    if (room <= 0 || total - n < BALANCE.others) continue;
+    const add = Math.min(room, left);
+    save.equipped[id] = n + add; left -= add;
   }
   writeSave(); renderLoadout(); SFX.confirm();
 }
@@ -865,9 +892,10 @@ function resetRun() {
     projectiles: [], particles: [], rings: [], floaters: [], orbs: [], muzzle: null, shake: 0, kills: 0, over: false,
     level: 1, xp: 0, cdTotal: ATTACK_INTERVAL, aug: new Set(), echoes: [], upQueue: [], mines: [], potions: [], diamonds: [], won: [], timers: [], shield: 0, shieldHit: 0,
     beams: [], sweeps: [], swooshes: [], practice: null, goldBonus: 0,
-    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [], boulders: [], eshots: [],
+    sprays: [], trails: [], soakT: 0, soakCard: null, soakSweep: 0, soakDrop: 0, debris: [], boulders: [], eshots: [], mrocks: [],
   });
   resetStats();
+  resetFlow();                            // the run's clock and its bar (flow.js)
   resetBoss();
   resetMakora();
   resetZoom();                            // (a boss fight's bigger arena: arena.js)
@@ -899,14 +927,34 @@ function exitToTitle() {
   showScreen('scr-title');
 }
 
-// HP ran out: stop the run and offer another go, or the main menu.
+// The end-of-run screen's stats (v0.52, user): how long you lasted and how far you got along the run's bar, the
+// bosses, and your best weapons by damage (co-op: the host counts everyone's hits; a guest sees the rest).
+function renderRunStats() {
+  const f = game.flow || { stage: 0, beaten: [] }, S = FLOW.stages[f.stage], turns = game.makora ? game.makora.turns : 0;
+  const t = game.tally, num = n => n >= 10000 ? `${(n / 1000).toFixed(1)}k` : Math.round(n).toLocaleString('en');
+  $('d-where').textContent = f.state === 'swarm' || f.state === 'sweep' ? `Fell in stage ${f.stage + 1} of ${FLOW.stages.length}, before ${S.name}`
+    : `Fell fighting ${S.name}` + (game.makora && turns ? ` · its wheel turned ${turns} time${turns === 1 ? '' : 's'}` : '');
+  const dealt = t ? Object.values(t.dealt).reduce((a, b) => a + b, 0) : 0;
+  const rows = [['Time', clockText(game.runT || 0)], ['Level', game.level], ['Defeated', num(game.kills)]];
+  if (t && !(NET.run && NET.guest)) rows.push(['Damage dealt', num(dealt)], ['Damage taken', num(t.taken)]);
+  rows.push(['Sequences', deck ? deck.seqNo : 0]);
+  $('d-stats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  $('d-bosses').innerHTML = FLOW.stages.map((B, i) => {
+    const done = f.beaten.includes(B.boss), at = i === f.stage && f.state === 'boss' && !done;
+    return `<li class="${done ? 'is-done' : at ? 'is-at' : ''}" style="--c:var(--${RB_COL[i]})"><i aria-hidden="true"></i>${B.name}<span class="sr">${done ? ' beaten' : at ? ' fought' : ' not reached'}</span></li>`;
+  }).join('');
+  const top = t && !(NET.run && NET.guest) ? Object.entries(t.dealt).sort((a, b) => b[1] - a[1]).slice(0, 3) : [];
+  $('d-weapons-box').hidden = !top.length;
+  $('d-weapons').innerHTML = top.map(([id, n]) => `<li style="--c:var(--${CARDS[id] ? id : 'saber'})"><span>${CARDS[id] ? CARDS[id].name : id === 'deflect' ? 'Deflect' : id}</span>`
+    + `<b>${num(n)}</b><i style="--w:${n / top[0][1]}"></i></li>`).join('');
+}
+
+// HP ran out: stop the run, show how it went, and offer another go, or the main menu.
 function defeat() {
   game.over = true;
   SFX.defeat();
   keys.clear();
-  const turns = game.makora ? game.makora.turns : 0;
-  $('d-stats').textContent = `Level ${game.level} · Sequence ${deck.seqNo} · ${game.kills} enem${game.kills === 1 ? 'y' : 'ies'} defeated`
-    + (game.makora ? ` · MAKORA's wheel turned ${turns} time${turns === 1 ? '' : 's'}` : '');
+  renderRunStats();
   const g = payGold(game.kills);                   // 1 gold per 15 defeated (user, v0.43; 50 before)
   const bonus = game.goldBonus || 0;
   $('d-gold').innerHTML = `<span class="coin" aria-hidden="true"></span><b>+${g + bonus} gold</b> · ${g} for kills (1 per ${GOLD_PER})${bonus ? ` + ${bonus} bonus` : ''} · you have ${save.gold}`;
@@ -914,7 +962,7 @@ function defeat() {
   $('defeat').hidden = false;
   // co-op: only the host can start the next run (everyone comes along); the others wait for it
   $('btn-retry').hidden = NET.run && NET.guest;
-  $('btn-retry').textContent = NET.run ? 'Play again together' : 'Try again';
+  $('btn-retry').textContent = NET.run ? 'Play again together' : 'Retry';
   $('btn-room').hidden = !(NET.run && NET.host);   // co-op: or back to the room, to change decks (v0.46)
   $('d-wait').hidden = !(NET.run && NET.guest);
   if (NET.run) { closeRevive(); closePick(); }

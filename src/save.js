@@ -4,21 +4,25 @@
 /* Kept apart from the run: opening a pack changes the collection and the equipped deck,
    never a deck that is already being played.
    Rules from docs/spec-packs-and-stores.md:
-   - The equipped deck holds at most 31 cards, with at most 7 copies of one card type (5 until v0.47).
+   - The equipped deck holds at most 31 cards, with at most 14 copies of one card type (7 until v0.52, 5 until v0.47);
+     a card with more than 7 needs at least 7 other cards in the deck with it (BALANCE).
    - Copies 1–5 of a type are usable. Later copies count toward that type's upgrades
      (tiers and bonuses are still to be decided, so they are only counted for now).
    - Special currency and the stores are not built yet. */
 const SAVE_KEY = 'rogue.save';
 const SAVE_VERSION = 2;        // v2 (user, v0.6): the starter packs are gone, so older saves start over
 const DECK_LIMIT = 31;
-const COPY_LIMIT = 7;          // copies of one card a deck can hold (v0.47, user: 7, so a whole sequence of one card, its ×7 ult, can happen; 5 before)
+const COPY_LIMIT = 14;         // copies of one card a deck can hold (v0.52, user: 14; 7 since v0.47, so its ×7 ult can happen; 5 before)
+// v0.52 (user: 14 copies, but you must include 7 other cards to balance it): more than `over` copies of one card, and
+// the deck needs at least `others` cards that aren't that one.
+const BALANCE = { over: 7, others: 7 };
 const OWN_LIMIT = 999;         // copies of one card you can own (v0.46, user: packs kept stopping at 5)
 const GOLD_PER = 15;           // 1 gold for every 15 enemies defeated in a run, paid when you die or quit (user; 50 until v0.43)
 
 function blankSave() {
   return {
     v: SAVE_VERSION,
-    owned: {},              // card id → copies you own (0–999; a deck holds up to 7 of each)
+    owned: {},              // card id → copies you own (0–999; a deck holds up to 14 of each)
     equipped: {},           // card id → copies in the deck
     gold: 100,              // for the store. A new save (or a reset) starts with 100 (v0.30, user; it was 0)
     starterDone: false,     // the starter pack has been opened (its cards are in the collection)
@@ -85,6 +89,9 @@ function deckProblems() {
   for (const id of CARD_IDS) {
     const n = save.equipped[id] || 0;
     if (n > COPY_LIMIT) out.push(`${CARDS[id].name}: ${n} copies; the limit is ${COPY_LIMIT}.`);
+    const others = cards.length - n;
+    if (n > BALANCE.over && others < BALANCE.others)
+      out.push(`${n} ${CARDS[id].name} needs ${BALANCE.others} other cards with it: add ${BALANCE.others - others} more.`);
     if (n > (save.owned[id] || 0)) out.push(`${CARDS[id].name}: more equipped than owned.`);
   }
   return out;

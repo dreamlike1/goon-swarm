@@ -164,22 +164,30 @@ function drawBoss(b) {
   const air = st === 'jump' ? Math.sin(Math.PI * Math.min(1, 1 - b.t / BOSS.jump)) : 0;
   ctx.globalAlpha = 0.3 - air * 0.12; ctx.fillStyle = '#000'; ellipse(0, 32, 28 * (1 - air * 0.4), 6 * (1 - air * 0.4)); ctx.globalAlpha = 1;   // shadow
   if (air) ctx.translate(0, -air * BOSS.jumpHeight / k);
+  boneMark(b, 'root');                                       // its hitbox's parts (combat.js): the legs, up in a jump …
   dinoLeg(-5, 10 + crouch, farPh, stride, dark, false);                                         // far leg
 
   ctx.save();                                                // everything above the legs tilts around the hip
   ctx.translate(0, 10 + crouch - bob); ctx.rotate(lean); ctx.translate(0, -10);
+  boneMark(b, 'body');                                       // … the body, tail and neck, leaning …
   ctx.fillStyle = body;
   const tipY = -20 + tail;                                   // tail: thick at the hip, curling up to a round tip
+  {                                                          // its hitbox part (v0.52, user: the tail's shapes follow it):
+    // the body's frame, turned and stretched round the tail's root so its tip goes from where it is at rest to here
+    const r0 = Math.atan2(-12, -38), r1 = Math.atan2(tipY + 8, -38), s1 = Math.hypot(-38, tipY + 8) / Math.hypot(-38, -12);
+    ctx.save(); ctx.translate(-6, -8); ctx.rotate(r1 - r0); ctx.scale(s1, s1); ctx.translate(6, 8); boneMark(b, 'tail'); ctx.restore();
+  }
   ctx.beginPath(); ctx.moveTo(-6, -8);
   ctx.quadraticCurveTo(-26, -4, -44, tipY);
   ctx.quadraticCurveTo(-47, tipY + 4, -43, tipY + 5);
   ctx.quadraticCurveTo(-30, 14, -2, 14);
-  ctx.closePath(); ctx.fill();
+  bonePaint(b, 'tail'); ctx.closePath(); ctx.fill(); bonePaint(b, 'body');   // (the editor's part view: the tail is its own part)
   ellipse(3, 2, 18, 15, -0.35);                              // body
   ellipse(11, -12, 9, 13, 0.3);                              // neck
 
   ctx.save();                                                // head, nodding around the top of the neck
   ctx.translate(12, -20); ctx.rotate(head); ctx.translate(-12, 20);
+  boneMark(b, 'head');                                       // … and the head, nodding
   const ja = jaw * 0.6, jc = Math.cos(ja), js = Math.sin(ja);
   if (jaw > 0.04) {                                          // inside of the open mouth
     ctx.fillStyle = COL.floor;
@@ -222,6 +230,27 @@ function chilled(c) {
   const a = hex(c), b = hex(COL.frozen), out = a && b ? `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * 0.62)).join(',')})` : c;
   chillCache.set(c, out);
   return out;
+}
+
+// A lunger (v0.52) lighting up before its dash: it brightens toward pale gold, with a halo that grows, and a faint lane
+// shows where it'll go (it blinks faster once the aim has locked). Drawn in the square's own frame.
+const lungerLit = e => e.state === 'glow' ? 1 - Math.max(0, e.t) / LUNGER.glow : e.state === 'dash' ? 1 : 0;
+function drawLungerGlow(e, s) {
+  const q = lungerLit(e);
+  if (!q) return;
+  ctx.fillStyle = COL.lungerHi;
+  ctx.globalAlpha = 0.18 * q; ctx.fillRect(-s * (1.3 + 0.4 * q), -s * (1.3 + 0.4 * q), s * (2.6 + 0.8 * q), s * (2.6 + 0.8 * q));
+  ctx.globalAlpha = q * 0.85; ctx.fillRect(-s * 0.8, -s * 0.8, s * 1.6, s * 1.6);
+  ctx.globalAlpha = 1;
+}
+function lungerAim(e) {
+  const len = LUNGER.speed * LUNGER.dash * enemySpeedMul(game.level), locked = e.t <= LUNGER.glow * (1 - LUNGER.lock);
+  const blink = reducedMotion ? 0.3 : 0.25 + 0.25 * Math.sin(e.t * (locked ? 40 : 18));
+  ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.dir);
+  ctx.fillStyle = COL.lunger; ctx.globalAlpha = 0.1; ctx.fillRect(0, -e.r, len, e.r * 2);
+  ctx.strokeStyle = COL.lungerHi; ctx.globalAlpha = 0.25 + blink; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+  ctx.beginPath(); ctx.moveTo(e.r, 0); ctx.lineTo(len, 0); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore(); ctx.globalAlpha = 1;
 }
 
 /* ---------- the crab (v0.46, user's picture; the mini dino before) ----------
@@ -429,6 +458,7 @@ function draw() {
     const s = game.shake * 28;
     ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
   }
+  boneInv = ctx.getTransform().inverse();   // (the bosses' body parts, for their hitboxes: combat.js boneMark)
   if (wall > 0) drawArenaWall(wall);
 
   // broken ground where the boss landed: under everything else, fading out at the end
@@ -535,14 +565,15 @@ function draw() {
 
   // enemies: squares (normal and big) and triangles that point where they're heading (no health lines since v0.51,
   // user: only the bosses show their HP)
+  for (const k of game.mrocks) drawKickRock(k);   // MAKORA's kicked rocks (makora.js)
   for (const e of game.enemies) {
     if (e.boss) { drawBoss(e); continue; }
     if (e.makora) { if (!e.down) drawMakora(e); continue; }
     if (e.obi) { drawObi(e); continue; }
-    if (e.mrock) { drawKickRock(e); continue; }
     if (e.dummy) { drawDummy(e); continue; }
     const s = e.r * (0.4 + 0.6 * e.born);
     if (e.shape === 'crab') { drawCrab(e); continue; }       // the crab (v0.46; the mini dino before)
+    if (e.type === 'lunger' && e.state === 'glow') lungerAim(e);   // where it's about to dash
     const lit = e.boom && e.fuse != null;                    // an exploder about to go: its blast ring, filling
     if (lit) {
       const q = Math.min(1, e.fuse / EXPLODER.fuse);
@@ -561,6 +592,7 @@ function draw() {
       if (e.boom) { ctx.fillStyle = flash ? COL.bad : COL.player; ctx.globalAlpha = 0.85; circle(-s * 0.15, 0, s * 0.32); ctx.globalAlpha = 1; }
     } else {
       ctx.fillRect(-s, -s, s * 2, s * 2);
+      if (e.type === 'lunger') drawLungerGlow(e, s);
       if (e.split) { ctx.strokeStyle = COL.floor; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); }
       if (e.type === 'shooter') {                            // a dark muzzle toward you, glowing red as it charges
         const p = game.player, a = Math.atan2(p.y - e.y, p.x - e.x), q = e.aim != null ? Math.min(1, e.aim / SHOOTER.tele) : 0;
@@ -573,7 +605,8 @@ function draw() {
   // the shooters' orbs: slow, red and glowing (they don't home)
   for (const b of game.eshots) {
     const pulse = reducedMotion ? 0 : Math.sin(b.t * 10) * 1.5;
-    ctx.fillStyle = b.back ? COL.saber : COL.bad;             // (blue once DEFLECT has sent it back) ctx.globalAlpha = 0.18; circle(b.x, b.y, b.r * 2.4 + pulse);
+    ctx.fillStyle = b.back ? COL.saber : COL.bad;             // (blue once DEFLECT has sent it back)
+    ctx.globalAlpha = 0.18; circle(b.x, b.y, b.r * 2.4 + pulse);
     ctx.globalAlpha = 0.35; circle(b.x, b.y, b.r * 1.5);
     ctx.globalAlpha = 1; circle(b.x, b.y, b.r);
     ctx.fillStyle = COL.player; ctx.globalAlpha = 0.8; circle(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.4); ctx.globalAlpha = 1;

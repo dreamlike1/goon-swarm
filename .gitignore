@@ -5,3 +5,5 @@
 docs/
 *.command
 src/devtools.js
+src/hitedit.js
+tools/

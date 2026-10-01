@@ -1,4 +1,4 @@
-/* obi.js — OBI ONE, the level-20 boss (v0.48, user): a Jedi with a lightsaber, and the DEFLECT relic he drops. */
+/* obi.js — OBI ONE, stage 2's boss (v0.48, user; the level-20 boss until v0.52): a Jedi with a lightsaber, and the DEFLECT relic he drops. */
 'use strict';
 
 /* The fight (user):
@@ -13,15 +13,15 @@
      shakes; smash SPACE, or tap, to fill the ring round you and break free before you reach him). Stay inside it
      for 3–5 s and the force shoves you off while debris rains down all over the arena.
    - Phase 3 (v0.50): rocks fall and stay round the arena, and he hurls them at you with the force.
-   - Beat him and you get DEFLECT: P raises a shield for 5 s that stops the first hit. Raise it just before a hit
+   - Beat him and you get DEFLECT: P raises a shield for 2 s (5 before v0.52) that stops one hit. Raise it just before a hit
      lands (a perfect deflect) and half its cooldown comes back.
    His music is his own song, obi-music.m4a from about 30 s in (v0.50, user; SKURTOSAURUS's before).
    Numbers are placeholders apart from the user's (level 20, more HP than
-   SKURTOSAURUS's phase 2, phase 2 more than phase 1, the 5 s shield). */
+   SKURTOSAURUS's phase 2, phase 2 more than phase 1, the shield's length). */
 const OBI = {
-  name: 'OBI ONE', level: 20, hp: 360, r: 40,          // hp: SKURTOSAURUS's phase 2 has 300. `r`: the drawing's size
+  name: 'OBI ONE', level: 20, hp: 360, r: 52,          // hp: SKURTOSAURUS's phase 2 has 300. `r`: the drawing's size (40 before v0.52, user: bigger bosses)
   hit: { r: 13, cap: [0, 18, 0, -26] },                // his hitbox, in drawing units (30 = r px): legs up to his head
-  walk: 110, keep: 110, knockResist: 0.12,
+  walk: 110, keep: 125, knockResist: 0.12,
   dmg: 10, dashDmg: 16,                                // touching him / being hit by his dash
   cd: [0.45, 0.95], rest: 0.5,
   slice: { at: 125, tele: 0.36, anim: 0.2, arc: 2.3, range: 120, dmg: 18, lunge: 160 },
@@ -41,7 +41,10 @@ const OBI = {
     // v0.51 (user): his melee reach and his throw range. Between the two he throws; inside his reach for `pushAfter`
     // s, the force pushes you off; beyond his throw range for `pullAfter` s, it pulls you in.
     melee: 150, throwRange: 480,
-    pullAfter: [2, 2], pushAfter: [2, 2],
+    pullAfter: [2.5, 2.5], pushAfter: [2, 2],
+    // v0.52 (user: if he throws 2–3 sabers in a row and you're still far, he pulls you in; both pulls stay): `pullAfter`
+    // 2 → 2.5 s so the two don't land on top of each other
+    pullThrows: [2, 3.99],
     pull: { speed: 185, reach: 62, press: 0.12, decay: 0.25, dmg: 26, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
     rotation: ['smallSlash', 'stabDash', 'bigSlash'],  // up close, round and round
     smallSlash: { tele: 0.16, anim: 0.12, arc: 1.5, range: 105, dmg: 10, lunge: 80 },
@@ -71,7 +74,9 @@ const OBI = {
 };
 // DEFLECT (user): P, or tap its icon. `time`: how long the shield lasts; `perfect`: a hit this soon after raising it
 // is a perfect deflect, which gives back half the cooldown. `push`/`knock`: the shove to enemies nearby when it goes.
-const DEFLECT = { name: 'DEFLECT', key: 'P', time: 5, cd: 12, perfect: 0.3, safe: 0.45, push: 90, knock: 620 };
+// v0.52 (user: it stops one hit, then it's gone; the shield lasts 2 s, 5 before): no safe moment after it any more (`safe` 0.45 s before), and a
+// long-range attack it stops is mirrored back (`mirror`: that many times as fast, and as hard, as it came; deflectBack).
+const DEFLECT = { name: 'DEFLECT', key: 'P', time: 2, cd: 12, perfect: 0.3, push: 90, knock: 620, mirror: { speed: 2.2, dmg: 1.5 } };
 // A shield with a blade across it: the relic's icon by the HP bar (next to BULL) and in its message.
 const DEFLECT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">`
   + `<path d="M12 3l7 3v5.5c0 4.2-3 7.6-7 9.5-4-1.9-7-5.3-7-9.5V6z"/><path d="M8 15.5L16.5 7"/><path d="M6.5 17l1.5-1.5"/></svg>`;
@@ -121,7 +126,7 @@ function showObiName() {
 function spawnObi() {
   const p = game.player, h = Math.min(playH || H, H);
   const x = p.x < W / 2 ? W * 0.76 : W * 0.24, y = Math.max(90, Math.min(h - 90, p.y));   // the side furthest from you (clear of the stats)
-  const hp = Math.round(OBI.hp * coopBossHp());
+  const hp = Math.round(OBI.hp * bossHpMul());
   const o = {
     obi: true, type: 'obi', shape: 'obi', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: OBI.r, size: OBI.r,
     hp, maxHp: hp, dmg: OBI.dmg, hit: 0, born: 0, speed: OBI.walk,
@@ -139,6 +144,7 @@ function spawnObi() {
 // His hitbox follows his drawing: a capsule from his legs up to his head, growing in as he arrives.
 function sizeObi(o) {
   const u = (o.size || OBI.r) * (0.5 + 0.5 * o.born) / 30, c = OBI.hit.cap;
+  if (applyHitbox(o, 'obi', u, o.face || 1)) return;         // v0.52: the drawn hitboxes (hitboxes.js)
   o.r = OBI.hit.r * u;
   o.cap = [c[0] * u, c[1] * u, c[2] * u, c[3] * u];
 }
@@ -203,6 +209,7 @@ function moveObi(o, dt) {
         else if (d > P2.melee) startThrow(o, OBI.throw.tele * q);
         else {
           const move = P2.rotation[(o.rot || 0) % P2.rotation.length]; o.rot = (o.rot || 0) + 1;
+          o.throwsRow = 0;                                   // you came in close: the run of throws is over
           if (move === 'smallSlash') startSlice(o, P2.smallSlash.tele * q, 1, P2.smallSlash);
           else if (move === 'bigSlash') startSlice(o, P2.bigSlash.tele * q, 1, P2.bigSlash);
           else startDash(o, P2.stabDash);
@@ -354,6 +361,7 @@ function throwSaber(o) {
   const th = o.th, T = OBI.throw, h = obiHand(o);
   game.sabers = [{ x: h.x, y: h.y, vx: Math.cos(th.a) * T.speed, vy: Math.sin(th.a) * T.speed, spin: 0, back: false, flown: 0, L: Math.max(120, th.L), t: 0, hitIds: [] }];
   o.state = 'thrown'; o.th = null;
+  if (o.phase >= 2) o.throwsRow = (o.throwsRow || 0) + 1;     // (2–3 in a row, and he pulls: obiCatch)
   SFX.saberThrow();
 }
 // It flies out down its lane, turns, and homes back into his hand. It hits each player once each way.
@@ -384,7 +392,11 @@ function updateSabers(dt) {
         else { s.back = true; s.hitIds = []; SFX.saberThrow(); }
       }
     } else {
-      const h = obiHand(o), dx = h.x - s.x, dy = h.y - s.y, d = Math.hypot(dx, dy) || 1, v = T.back * Math.min(1.6, 0.6 + s.t * 0.5);
+      const h = obiHand(o), dx = h.x - s.x, dy = h.y - s.y, d = Math.hypot(dx, dy) || 1, v = T.back * Math.min(1.6, 0.6 + s.t * 0.5) * (s.mirror ? 1.3 : 1);
+      if (s.mirror && (hitGap(o, s.x, s.y) < T.r || d < T.catch || d < v * dt)) {   // mirrored by DEFLECT (v0.52): it cuts him on the way into his hand
+        mirrorStrike(o, s.mirror.dmg, s.x, s.y, s.vx, s.vy, s.mirror.owner, 0); s.mirror = null;
+        if (game.obi !== o || o.dead) { game.sabers.splice(i, 1); continue; }
+      }
       if (d < T.catch || d < v * dt) { game.sabers.splice(i, 1); obiCatch(o); continue; }
       s.vx = dx / d * v; s.vy = dy / d * v;
       s.x += s.vx * dt; s.y += s.vy * dt;
@@ -392,9 +404,13 @@ function updateSabers(dt) {
     if (!reducedMotion && Math.random() < 0.6) game.particles.push({ x: s.x, y: s.y, vx: -s.vx * 0.08, vy: -s.vy * 0.08, life: 0.22, color: COL.saber });
     eachLiving(c => {
       const p = game.player, who = ownerId();
-      if (s.hitIds.includes(who) || Math.hypot(p.x - s.x, p.y - s.y) > T.r + PLAYER.r) return;
+      if (s.mirror || s.hitIds.includes(who) || Math.hypot(p.x - s.x, p.y - s.y) > T.r + PLAYER.r) return;
       s.hitIds.push(who);
       if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+      if (deflectHit()) {                                    // DEFLECT (v0.52, user): it's knocked straight back to him
+        Object.assign(s, { mirror: { owner: who, dmg: mirrorDmg(T.dmg) }, back: true, aim: null, again: true, t: 0 });
+        return;
+      }
       p.flash = 0.25;
       const a = Math.atan2(s.vy, s.vx);
       p.kx = (p.kx || 0) + Math.cos(a) * 260; p.ky = (p.ky || 0) + Math.sin(a) * 260;
@@ -461,6 +477,12 @@ function nearestBody(x, y) {
   for (const c of living()) { const d = Math.hypot(c.body.x - x, c.body.y - y); if (d < bd) { bd = d; best = c.body; } }
   return best;
 }
+// Who that is (co-op).
+function nearestId(x, y) {
+  let best = null, bd = Infinity;
+  for (const c of living()) { const d = Math.hypot(c.body.x - x, c.body.y - y); if (d < bd) { bd = d; best = c; } }
+  return best ? best.id : ownerId();
+}
 // How far the nearest living player is (without switching whose turn it is).
 function nearestGap(x, y) {
   if (!NET.run) return Math.hypot(game.player.x - x, game.player.y - y);
@@ -475,6 +497,13 @@ function obiCatch(o) {
   if (o.intro) { o.intro = false; showObiName(); }
   if (o.state === 'pull') return;                            // he caught it mid-pull: the pull carries on
   o.dodgedBy = null;
+  // phase 2 on (v0.52, user): 2–3 throws in a row and you're still out of his reach: the force pulls you in (as well
+  // as the pull for staying beyond his throw range, in moveObi)
+  if (o.phase >= 2 && (o.throwsRow || 0) >= (o.throwsNeed ||= between(OBI.phase2.pullThrows) | 0) && nearestGap(o.x, o.y) > OBI.phase2.melee) {
+    o.throwsRow = 0; o.throwsNeed = between(OBI.phase2.pullThrows) | 0; o.farT = 0;
+    startPull(o, NET.run ? nearestId(o.x, o.y) : ownerId());
+    return;
+  }
   // phase 2 on, and you're still out of his reach: a long dash straight at you (user: longer dashes to you)
   if (o.phase >= 2 && nearestGap(o.x, o.y) > OBI.phase2.melee) { startDash(o, OBI.phase2.lunge); return; }
   obiRest(o);
@@ -487,17 +516,28 @@ function updateBolts(dt) {
     const b = game.bolts[i];
     b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.t > B.life || b.x < -30 || b.y < -30 || b.x > W + 30 || b.y > H + 30) { game.bolts.splice(i, 1); continue; }
-    let hit = false;
+    if (b.back) {                                            // mirrored by DEFLECT (v0.52): yours again
+      const e = game.enemies.find(e => !e.dead && !e.gone && !e.dummy && hitGap(e, b.x, b.y) < b.r);
+      if (e) { game.bolts.splice(i, 1); mirrorStrike(e, b.dmg, b.x, b.y, b.vx, b.vy, b.owner, 120); }
+      continue;
+    }
+    let hit = false, back = false;
     eachLiving(() => {
       const p = game.player;
       if (hit || Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
       hit = true;
       burst(b.x, b.y, COL[b.card] || COL.saber, 6, 160);
       if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+      if (deflectHit()) {
+        const a = Math.atan2(-b.vy, -b.vx), v = B.speed * DEFLECT.mirror.speed;
+        Object.assign(b, { back: true, owner: ownerId(), t: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, dmg: mirrorDmg(B.dmg) });
+        b.x = p.x + Math.cos(a) * (PLAYER.r + b.r + 2); b.y = p.y + Math.sin(a) * (PLAYER.r + b.r + 2);
+        back = true; return;
+      }
       p.flash = 0.2;
       hurtPlayer(B.dmg);
     });
-    if (hit) game.bolts.splice(i, 1);
+    if (hit && !back) game.bolts.splice(i, 1);
   }
 }
 
@@ -506,7 +546,7 @@ function updateBolts(dt) {
 // brings the arena down round you (phase 3). True if he did.
 function obiNextPhase(o) {
   if (o.phase >= 3) return false;
-  const next = o.phase + 1, P = next === 3 ? OBI.phase3 : OBI.phase2, hp = Math.round(P.hp * coopBossHp());
+  const next = o.phase + 1, P = next === 3 ? OBI.phase3 : OBI.phase2, hp = Math.round(P.hp * bossHpMul());
   Object.assign(o, { phase: next, hp, maxHp: hp, dead: false, state: 'focus', t: P.focus, sl: null, th: null, pull: null, dodgedBy: null, kx: 0, ky: 0,
     closeT: 0, farT: 0, pushAt: null, pullAt: null, hurlT: 2.5, refillT: 3 });
   game.sabers = []; game.bolts = [];                         // (a saber in the air is back in his hand)
@@ -579,6 +619,12 @@ function updateBoulders(dt) {
       if (b.t >= H3.lift) { b.state = 'fly'; b.t = 0; b.vx = Math.cos(b.a) * H3.speed; b.vy = Math.sin(b.a) * H3.speed; SFX.kick(); game.shake = Math.max(game.shake, 0.12); }
     } else if (b.state === 'fly') {
       b.x += b.vx * dt; b.y += b.vy * dt; b.spin += dt * 9;
+      if (b.back) {                                          // mirrored by DEFLECT (v0.52): it flies back at him
+        if (b.x < -b.r * 2 || b.y < -b.r * 2 || b.x > W + b.r * 2 || b.y > H + b.r * 2) { game.boulders.splice(i, 1); continue; }
+        const e = game.enemies.find(e => !e.dead && !e.gone && !e.dummy && hitGap(e, b.x, b.y) < b.r);
+        if (e) { game.boulders.splice(i, 1); burst(b.x, b.y, COL.rock, 26, 280); SFX.stomp(2); mirrorStrike(e, b.dmg, b.x, b.y, b.vx, b.vy, b.owner, 200); }
+        continue;
+      }
       if (!reducedMotion && Math.random() < 0.7) game.particles.push({ x: b.x, y: b.y, vx: -b.vx * 0.1, vy: -b.vy * 0.1, life: 0.3, color: COL.saber });
       if (b.x < -b.r * 2 || b.y < -b.r * 2 || b.x > W + b.r * 2 || b.y > H + b.r * 2) { game.boulders.splice(i, 1); continue; }
       let hit = false;
@@ -587,11 +633,17 @@ function updateBoulders(dt) {
         if (hit || b.hitIds.includes(who) || Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
         b.hitIds.push(who); hit = true;
         if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
+        if (deflectHit()) {                                  // DEFLECT (v0.52): back at him (he threw it from afar, with the force)
+          const o = game.obi, a = o ? Math.atan2(o.y - b.y, o.x - b.x) : b.a + Math.PI, v = H3.speed * DEFLECT.mirror.speed;
+          Object.assign(b, { back: true, owner: who, a, vx: Math.cos(a) * v, vy: Math.sin(a) * v, dmg: mirrorDmg(H3.dmg) });
+          hit = 'back'; return;
+        }
         p.flash = 0.25;
         p.kx = (p.kx || 0) + Math.cos(b.a) * H3.knock; p.ky = (p.ky || 0) + Math.sin(b.a) * H3.knock;
         hurtPlayer(H3.dmg);
       });
-      if (hit) { burst(b.x, b.y, COL.rock, 26, 280); game.shake = Math.max(game.shake, 0.25); SFX.stomp(2); game.boulders.splice(i, 1); }
+      if (hit === 'back') { burst(b.x, b.y, COL.saber, 16, 240); SFX.saberClash(); }
+      else if (hit) { burst(b.x, b.y, COL.rock, 26, 280); game.shake = Math.max(game.shake, 0.25); SFX.stomp(2); game.boulders.splice(i, 1); }
     }
   }
 }
@@ -658,7 +710,7 @@ function drawBoulders(up) {
 // The force pull (phase 2, user): he raises his arm and drags you in while the screen shakes. Smash SPACE to fill the
 // ring round you; full, you break free and he staggers. If you reach him first, he cuts you and lets go.
 function startPull(o, id) {
-  o.state = 'pull'; o.t = OBI.phase2.pull.max;
+  o.state = 'pull'; o.t = OBI.phase2.pull.max; o.throwsRow = 0;
   o.pull = { id, fill: 0 };
   SFX.forceHum(3);
   const c = NET.run ? byId(id) : null, p = c ? c.body : game.player;
@@ -795,7 +847,6 @@ function deflectHit() {
   if (!(game.defl > 0)) return false;
   const p = game.player, perfect = game.deflAge <= DEFLECT.perfect;
   game.defl = 0;
-  p.safe = Math.max(p.safe, DEFLECT.safe);
   if (perfect) game.deflCd = Math.max(0, game.deflCd - DEFLECT.cd / 2);   // a perfect deflect: half the cooldown back (user)
   for (const e of game.enemies) {                            // and a shove to whatever is close
     if (e.dummy || hitGap(e, p.x, p.y) > DEFLECT.push) continue;
@@ -813,6 +864,17 @@ function deflectHit() {
   if (perfect) SFX.upgrade(2);
   renderRelics();
   return true;
+}
+
+// A long-range attack the shield stopped, sent back (v0.52, user: it mirrors the shot back): what it hits takes
+// `DEFLECT.mirror.dmg` times its damage, scaled by your damage stat, and the kill is yours.
+const mirrorDmg = base => Math.round(damageOf(base) * DEFLECT.mirror.dmg);
+function mirrorStrike(e, dmg, x, y, vx, vy, owner, knock = 260) {
+  const l = Math.hypot(vx, vy) || 1;
+  if (owner != null) usePlayerId(owner);
+  hitEnemy({ card: 'deflect', look: 'blast', dmg, knock, vx: vx / l, vy: vy / l, x, y, noCrit: true }, e);
+  burst(x, y, COL.saber, 12, 220);
+  game.rings.push({ x, y, r: 6, max: 46, life: 0.3, color: COL.saber });
 }
 
 /* ---------- drawing (user: a Jedi like their sample; the body and the saber drawn apart so both can move) ----------
@@ -914,6 +976,7 @@ function drawObi(o) {
   const jit = ps.jit ? (Math.random() - 0.5) * ps.jit * 3 : 0;
   ctx.save();
   ctx.translate(o.x + jit, o.y); ctx.scale(face * k, k);
+  boneMark(o, 'root');                                       // his hitbox's parts (combat.js): the legs …
   ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ellipse(0, 33, 17, 4.5); ctx.globalAlpha = 1;   // shadow
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
@@ -934,6 +997,8 @@ function drawObi(o) {
   ctx.save();                                                          // everything above the hips leans
   ctx.translate(0, hip); ctx.rotate(ps.lean); ctx.translate(0, -hip);
   const cy = ps.crouch;
+  ctx.save(); ctx.translate(0, cy); boneMark(o, 'body'); ctx.restore();   // … and the body and head, leaning and crouching
+  bonePaint(o, 'body');
   const SH = [[-8.5, -14 + cy], [8.5, -14 + cy]];                      // shoulders: back, front
   const arm = (sx, sy, tx, ty, bend, open) => {                        // a wide Jedi sleeve and a hand
     const [ex, ey] = joint(sx, sy, tx, ty, 9, 9.5, bend);

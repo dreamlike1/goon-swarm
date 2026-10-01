@@ -1,4 +1,4 @@
-/* boss.js — SKURTOSAURUS, the level-10 boss, its rocks, and the BULL relic it drops. */
+/* boss.js — SKURTOSAURUS, stage 1's boss (the level-10 boss until v0.52), its rocks, and the BULL relic it drops. */
 'use strict';
 
 /* ============================================================
@@ -13,7 +13,7 @@
 const BOSS = {
   // hp: phase 1 (user, v0.20: 20% less than the 350 it had, since a second phase follows; v0.21: a bit weaker still,
   // 280 → 240, and it throws a little less often: `throwEvery1`). r: 30 before v0.8.
-  level: 10, name: 'SKURTOSAURUS', hp: 240, r: 50, throwEvery1: 2.0,   // renamed from KURTSAURUS in v0.9 (user)
+  level: 10, name: 'SKURTOSAURUS', hp: 240, r: 65, throwEvery1: 2.0,   // renamed from KURTSAURUS in v0.9 (user). r 50 before v0.52 (user: bigger bosses)
   jump: 0.5, jumpHeight: 70,                               // v0.9: every charge ends in a hop; it lands, the ground breaks, and the ring of rocks flies out
   crack: { life: 4, fade: 1.5 },                           // the broken ground lasts `life` s, fading out over the last `fade`
   walk: 70, dmg: 15, chargeDmg: 25,                        // contact damage, walking / charging
@@ -104,7 +104,7 @@ function spawnBoss() {
   const x = p.x < W / 2 ? W * 0.8 : W * 0.2, y = Math.min(playH || H, H) / 2;
   const b = {
     boss: true, type: 'boss', shape: 'boss', x, y, vx: 0, vy: 0, kx: 0, ky: 0, r: BOSS.r, size: BOSS.r, flip: 1,
-    hp: Math.round(BOSS.hp * coopBossHp()), maxHp: Math.round(BOSS.hp * coopBossHp()), dmg: BOSS.dmg,   // co-op: tougher
+    hp: Math.round(BOSS.hp * bossHpMul()), maxHp: Math.round(BOSS.hp * bossHpMul()), dmg: BOSS.dmg,   // tougher in co-op, and for a strong run (flow.js)
     hit: 0, born: 0, speed: BOSS.walk,
     state: 'walk', t: 0, dir: 0, throwT: 1.2, chargeT: 2.4, face: 0, phase: 1, throwsLeft: 0, dashesLeft: 0, wind: BOSS.throwWind,
     step: 0, throwing: null, recoil: 0, anim: 0,               // walk cycle, throw windup / follow-through, clock (for draw.js)
@@ -125,6 +125,7 @@ function sizeBoss(b) {
   const u = b.size * (0.5 + 0.5 * b.born) / 30, c = BOSS.hit.cap;
   const toward = b.state === 'charge' || b.state === 'windup' ? Math.cos(b.dir) : game.player.x - b.x;
   if (Math.abs(toward) > 1e-3) b.flip = toward < 0 ? -1 : 1;
+  if (applyHitbox(b, 'boss', u, b.flip)) return;            // v0.52: the drawn hitboxes (hitboxes.js); BOSS.hit if none
   b.r = BOSS.hit.r * u;
   b.cap = [c[0] * u * b.flip, c[1] * u, c[2] * u * b.flip, c[3] * u];
 }
@@ -146,7 +147,7 @@ function renderBossBar() {
 function bossNextPhase(b) {
   if (b.phase !== 1) return false;
   const P = BOSS.phase2, p = game.player;
-  Object.assign(b, { phase: 2, hp: Math.round(P.hp * coopBossHp()), maxHp: Math.round(P.hp * coopBossHp()), dead: false, state: 'enrage', t: P.enrage, throwing: null, recoil: 0, throwsLeft: 0, dashesLeft: 0, kx: 0, ky: 0 });
+  Object.assign(b, { phase: 2, hp: Math.round(P.hp * bossHpMul()), maxHp: Math.round(P.hp * bossHpMul()), dead: false, state: 'enrage', t: P.enrage, throwing: null, recoil: 0, throwsLeft: 0, dashesLeft: 0, kx: 0, ky: 0 });
   game.rocks = [];                                           // a clean slate for the second round
   // the roar shoves you back
   eachLiving(() => {
@@ -256,6 +257,33 @@ function moveRaptor(e, dt) {
   e.x += e.vx * dt; e.y += e.vy * dt;
 }
 
+// A lunger (v0.52, user: a slow square that lights up, then dashes fast at you): it creeps in, and once you're within
+// LUNGER.sight it plants and glows brighter and brighter (its aim follows you, then locks), shoots straight down that
+// line, and rests a moment.
+function moveLunger(e, dt) {
+  const L = LUNGER, p = game.player, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+  const decay = Math.exp(-6 * dt);
+  e.kx *= decay; e.ky *= decay;
+  e.t -= dt; e.cd -= dt;
+  if (e.state === 'walk') {
+    e.vx = (dx / d) * e.speed + e.kx; e.vy = (dy / d) * e.speed + e.ky;
+    if (e.cd <= 0 && d < L.sight) { e.state = 'glow'; e.t = L.glow; e.dir = Math.atan2(dy, dx); SFX.saberHum(); }
+  } else if (e.state === 'glow') {                           // planted, lighting up (draw.js)
+    e.vx = e.kx; e.vy = e.ky;
+    if (e.t > L.glow * (1 - L.lock)) e.dir = Math.atan2(dy, dx);
+    if (e.t <= 0) { e.state = 'dash'; e.t = L.dash; SFX.dash(); }
+  } else if (e.state === 'dash') {
+    const v = L.speed * enemySpeedMul(game.level);
+    e.vx = Math.cos(e.dir) * v + e.kx; e.vy = Math.sin(e.dir) * v + e.ky;
+    if (!reducedMotion && Math.random() < 0.6) game.particles.push({ x: e.x, y: e.y, vx: -e.vx * 0.15, vy: -e.vy * 0.15, life: 0.25, color: COL.lunger });
+    if (e.t <= 0) { e.state = 'rest'; e.t = L.rest; }
+  } else {                                                  // rest
+    e.vx = e.kx; e.vy = e.ky;
+    if (e.t <= 0) { e.state = 'walk'; e.cd = between(L.every); }
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+}
+
 /* ---------- shooters and exploders (v0.51, user) ---------- */
 // A shooter (after OBI ONE): walks in to about SHOOTER.keep px, backs off if you come closer, and when its timer is up
 // and you're in range it stops, glows, and fires a slow red orb at where you are (it doesn't home).
@@ -285,15 +313,9 @@ function updateEnemyShots(dt) {
     const b = game.eshots[i];
     b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.t > SHOOTER.shot.life || b.x < -20 || b.y < -20 || b.x > W + 20 || b.y > H + 20) { game.eshots.splice(i, 1); continue; }
-    if (b.back) {                                           // knocked back by DEFLECT: it hits enemies now
+    if (b.back) {                                           // mirrored by DEFLECT: it hits enemies now
       const e = game.enemies.find(e => !e.dead && !e.gone && !e.dummy && hitGap(e, b.x, b.y) < b.r);
-      if (e) {
-        usePlayerId(b.owner);
-        const l = Math.hypot(b.vx, b.vy) || 1;
-        hitEnemy({ card: 'deflect', look: 'blast', dmg: b.dmg, knock: 260, vx: b.vx / l, vy: b.vy / l, x: e.x, y: e.y, noCrit: true }, e);
-        burst(b.x, b.y, COL.saber, 10, 200);
-        game.eshots.splice(i, 1);
-      }
+      if (e) { mirrorStrike(e, b.dmg, b.x, b.y, b.vx, b.vy, b.owner); game.eshots.splice(i, 1); }
       continue;
     }
     let hit = false, back = false;
@@ -302,7 +324,7 @@ function updateEnemyShots(dt) {
       if (hit || Math.hypot(p.x - b.x, p.y - b.y) > b.r + PLAYER.r) return;
       hit = true;
       if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; burst(b.x, b.y, COL.bad, 8, 150); return; }
-      if (game.defl > 0 && p.safe <= 0) { deflectHit(); reflectShot(b, p); back = true; return; }   // DEFLECT sends it back (user)
+      if (deflectHit()) { reflectShot(b, p); back = true; return; }   // DEFLECT mirrors it back (user)
       burst(b.x, b.y, COL.bad, 8, 150);
       p.flash = 0.2;
       hurtPlayer(b.dmg);
@@ -310,12 +332,11 @@ function updateEnemyShots(dt) {
     if (hit && !back) game.eshots.splice(i, 1);
   }
 }
-// DEFLECT turned a shooter's orb (v0.51.1, user): it flies back, faster, at the nearest enemy (or straight back),
-// and hits enemies instead of you.
+// DEFLECT stopped a shooter's orb (v0.51.1; v0.52, user: it mirrors back): it flies straight back the way it came,
+// faster, at whoever fired it, and hits enemies instead of you.
 function reflectShot(b, p) {
-  const e = nearestEnemy(b), v = SHOOTER.shot.speed * SHOOTER.reflect;
-  const a = e ? Math.atan2(e.y - b.y, e.x - b.x) : Math.atan2(-b.vy, -b.vx);
-  Object.assign(b, { back: true, owner: ownerId(), t: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, dmg: Math.max(b.dmg, damageOf(SHOOTER.shot.dmg)) });
+  const a = Math.atan2(-b.vy, -b.vx), v = SHOOTER.shot.speed * DEFLECT.mirror.speed;
+  Object.assign(b, { back: true, owner: ownerId(), t: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, dmg: mirrorDmg(SHOOTER.shot.dmg) });
   b.x = p.x + Math.cos(a) * (PLAYER.r + b.r + 2); b.y = p.y + Math.sin(a) * (PLAYER.r + b.r + 2);
 }
 // An exploder close to you lights its fuse: it stops and flashes (draw.js), then blows up. True while it's lit.
@@ -408,6 +429,11 @@ function updateRocks(dt) {
     k.x += k.vx * dt; k.y += k.vy * dt;
     const gone = (!k.big && k.t > BOSS.rockLife) || k.x < -40 || k.y < -40 || k.x > W + 40 || k.y > H + 40;
     if (gone) { game.rocks.splice(i, 1); continue; }
+    if (k.back) {                                            // mirrored by DEFLECT (v0.52): it hits the boss (or whatever's in the way)
+      const e = game.enemies.find(e => !e.dead && !e.gone && !e.dummy && hitGap(e, k.x, k.y) < k.r);
+      if (e) { mirrorStrike(e, k.dmg, k.x, k.y, k.vx, k.vy, k.owner, k.big ? 300 : 120); burst(k.x, k.y, COL.rock, k.big ? 24 : 8, 200); game.rocks.splice(i, 1); }
+      continue;
+    }
     let p = game.player;
     if (NET.run) {                                           // co-op: whoever it hits
       const c = living().find(c => Math.hypot(k.x - c.body.x, k.y - c.body.y) < k.r + PLAYER.r);
@@ -415,6 +441,13 @@ function updateRocks(dt) {
       p = c ? c.body : null;
     }
     if (p && Math.hypot(k.x - p.x, k.y - p.y) < k.r + PLAYER.r) {
+      if (game.defl > 0 && !(game.shield > 0 || game.dash)) {   // DEFLECT: it goes back the way it came (v0.52)
+        deflectHit();
+        const v = Math.hypot(k.vx, k.vy) * DEFLECT.mirror.speed, a = Math.atan2(-k.vy, -k.vx);
+        Object.assign(k, { back: true, owner: ownerId(), t: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, dmg: mirrorDmg(k.big ? BOSS.bigRock.dmg : BOSS.rockDmg) });
+        k.x = p.x + Math.cos(a) * (PLAYER.r + k.r + 2); k.y = p.y + Math.sin(a) * (PLAYER.r + k.r + 2);
+        continue;
+      }
       game.rocks.splice(i, 1);
       burst(k.x, k.y, COL.rock, k.big ? 24 : 8, k.big ? 260 : 160);
       if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; continue; }

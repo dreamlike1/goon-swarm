@@ -63,7 +63,7 @@ function gatlingBurst(card, e0, { rounds, aoe = null, dmg, gun = 0, delay = 0 })
     const a = Math.atan2(e.y - p.y, e.x - p.x), side = a + gun * Math.PI / 2;
     const from = gun ? { x: p.x + Math.cos(side) * G.twin.offset, y: p.y + Math.sin(side) * G.twin.offset } : null;
     shoot(card, e, { raw: true, angle: a + (Math.random() - 0.5) * G.spread * 2, homeDelay: 0.05, aoe, dmg, from, quiet: k % 3 > 0 });
-    if (from) game.muzzles.push({ x: from.x, y: from.y, a, life: 0.06 });
+    if (from) game.muzzles.push(pinTo({ x: from.x, y: from.y, a, life: 0.06 }));
   });
 }
 
@@ -165,7 +165,7 @@ function updateSilica(dt) {
   if (!NET.run) updateFrost(dt);                             // co-op: each player's own ring (coop.js)
   for (const b of game.bites) b.life -= dt;
   game.bites = game.bites.filter(b => b.life > 0);
-  for (const m of game.muzzles) m.life -= dt;
+  for (const m of game.muzzles) { m.life -= dt; followOwner(m); }
   game.muzzles = game.muzzles.filter(m => m.life > 0);
   for (let i = game.summons.length - 1; i >= 0; i--) {        // the Druid's summoned animals
     const s = game.summons[i];

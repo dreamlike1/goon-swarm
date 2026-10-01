@@ -43,6 +43,8 @@
   --enemy-big-split: #8f3a8a;
   --enemy-fast-split: #d970c4;
   --enemy-shooter: #4fd06a;      /* v0.51: the green squares that shoot, after OBI ONE */
+  --enemy-lunger: #e89a2c;       /* v0.52: the slow squares that light up and dash (amber, so shooters stay the green ones) */
+  --enemy-lunger-hi: #fff2c4;    /* … lit up, just before the dash */
   --crab: #f2452a;               /* the crab (v0.46, user's picture): orange-red, glossy, big pale-yellow eyes */
   --crab-dark: #c9301b;
   --crab-hi: #ff8a70;
@@ -274,7 +276,8 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 .menu:not([hidden]) ~ .hint,
 .menu:not([hidden]) ~ .hp,
 .menu:not([hidden]) ~ .xp,
-.menu:not([hidden]) ~ .statpanel { visibility: hidden; }
+.menu:not([hidden]) ~ .statpanel,
+.menu:not([hidden]) ~ .runbar { visibility: hidden; }
 
 /* Player HP: a green bar, bottom centre, just above the deck (clear of a card that pops up when played) */
 .hp {
@@ -504,7 +507,7 @@ button:focus-visible { outline: 2px solid var(--bullet); outline-offset: 2px; }
 
 /* Test mode: the HUD a run needs is hidden; a panel at the top fires the attacks */
 body.in-practice .hud, body.in-practice .deck, body.in-practice .deck-status, body.in-practice .xp, body.in-practice .hp,
-body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, body.in-practice .rapid { visibility: hidden; }
+body.in-practice .statpanel, body.in-practice .hint, body.in-practice .relics, body.in-practice .rapid, body.in-practice .runbar { visibility: hidden; }
 /* v0.33 (user: a better look for TEST PACK): a dark slab with a pink edge and chipped corners, a chrome TEST PACK
    title with the pack under it, weapon chips with their icon, attack slabs, and a big damage count */
 .practice {
@@ -766,10 +769,42 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .levelup.is-wheel .up-cards { flex-direction: column; }
 
 
+/* The run's bar (v0.52, user: progress with the 3 bosses on it, big, no names): across the top, with the stats and
+   the log moved under it. Each stage's stretch fills in its boss's colour; the red part is its huge swarm. Each boss
+   is a round marker with its icon (a footprint, a saber, the wheel). */
+:root { --rb-top: 12px; --rb-h: 58px; }
+.runbar {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 1;
+  top: calc(env(safe-area-inset-top, 0px) + var(--rb-top));
+  width: min(760px, calc(100% - 120px)); box-sizing: border-box; padding-inline: 17px;
+  pointer-events: none;
+}
+@media (max-width: 520px) { .runbar { width: calc(100% - 32px); } }
+.rb-head { margin: 0 0 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; line-height: 1; }
+.rb-now { font-size: 13px; font-weight: 700; letter-spacing: .2em; color: var(--text); white-space: nowrap; }
+.rb-now.is-huge { color: var(--bad); }
+.rb-now.is-boss { color: var(--relic); }
+.rb-time { font: 700 14px var(--f-num); color: var(--text); }
+.rb-track { position: relative; height: 12px; border-radius: 6px; background: var(--line); }
+.rb-huge { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--bad) 32%, var(--line)); }
+.rb-fill { position: absolute; top: 0; bottom: 0; width: 0; background: var(--c); box-shadow: 0 0 14px -2px var(--c); }
+.rb-fill[data-i="0"] { border-radius: 6px 0 0 6px; }
+.rb-knob { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--player); box-shadow: 0 0 12px var(--player); }
+.rb-node {
+  position: absolute; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; box-sizing: border-box; border-radius: 50%;
+  display: grid; place-items: center; color: var(--c); background: var(--floor); border: 3px solid var(--c);
+}
+.rb-node svg { width: 18px; height: 18px; }
+.rb-node.is-up { box-shadow: 0 0 16px 2px var(--c); animation: rb-pulse 1s ease-in-out infinite; }
+.rb-node.is-done { background: var(--c); color: var(--floor); }
+@keyframes rb-pulse { 50% { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .rb-node.is-up { animation: none; } }
+.hud { padding-top: calc(env(safe-area-inset-top, 0px) + var(--rb-top) + var(--rb-h) + 4px); }   /* the stats and log, under it */
+
 /* KURTSAURUS: a health bar with its name, top centre */
 .bossbar {
   position: fixed; left: 50%; transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top, 0px) + 50px);
+  top: calc(env(safe-area-inset-top, 0px) + var(--rb-top) + var(--rb-h) + 40px);   /* under the run's bar and the stats (v0.52) */
   width: min(420px, calc(100% - 32px));
   display: grid; gap: 4px; justify-items: center;
   pointer-events: none;
@@ -818,7 +853,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 /* Announcements (boss, relic): a short banner under the boss bar */
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top, 0px) + 92px);
+  top: calc(env(safe-area-inset-top, 0px) + var(--rb-top) + var(--rb-h) + 84px);
   margin: 0; padding: 8px 16px; border-radius: 8px;
   font-size: 14px; font-weight: 700; letter-spacing: .04em; text-align: center;
   background: var(--card); border: 1.5px solid var(--line); color: var(--text);
@@ -1121,6 +1156,7 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 .deck-count b { font: 400 18px var(--f-metal); color: var(--chrome-hi); }
 .deck-panel.is-full .deck-count b { color: var(--neon-hi); }
 .deck-list { list-style: none; margin: 0; padding: 0 2px 0 0; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.deck-warn { margin: 0; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--bad); border: 1px solid var(--bad); border-radius: 6px; background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .deck-empty { flex: 1; display: grid; place-items: center; margin: 0; padding: 16px; text-align: center; font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; }
 .drow, .drag-ghost {
   display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 9px;
@@ -1322,3 +1358,25 @@ body.in-practice.is-loadout-test .deck, body.in-practice.is-loadout-test .deck-s
 /* DEFLECT's message (v0.48): its points in saber blue */
 .relic-art.is-deflect ~ .relic-facts b, .relic-art.is-deflect ~ .relic-facts kbd { color: var(--saber); }
 .relic-art.is-deflect ~ .relic-facts li::before { background: var(--saber); }
+
+/* The end of a run (v0.52, user: post-game stats, then Retry / Back): a stat grid, the three bosses, top weapons */
+.over { gap: 14px; width: min(440px, 100%); }
+.over h2 { margin: -6px 0 0; font-size: 30px; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }
+.over-stats { margin: 0; width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.over-stats div { padding: 10px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); display: grid; gap: 4px; }
+.over-stats dt { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.over-stats dd { margin: 0; font: 700 18px var(--f-num); color: var(--text); }
+@media (max-width: 420px) { .over-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.over-bosses { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
+.over-bosses li { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
+.over-bosses i { position: relative; width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--line); }
+.over-bosses li.is-at { color: var(--c); }
+.over-bosses li.is-at i { border-color: var(--c); }
+.over-bosses li.is-done { color: var(--c); }
+.over-bosses li.is-done i { border-color: var(--c); background: var(--c); }
+.over-bosses li.is-done i::after { content: ""; position: absolute; left: 2.5px; top: 0; width: 2.5px; height: 5px; border: solid var(--floor); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.over-weapons { width: 100%; display: grid; gap: 8px; }
+.over-weapons-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.over-weapons-list li { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 6px; overflow: hidden; font-size: 13px; font-weight: 600; color: var(--text); background: var(--card); }
+.over-weapons-list li i { position: absolute; left: 0; bottom: 0; height: 2px; width: calc(var(--w) * 100%); background: var(--c); }
+.over-weapons-list li b { font: 700 13px var(--f-num); color: var(--c); }

@@ -48,6 +48,7 @@ const game = {
   sabers: [],         // his lightsaber while it's thrown
   bolts: [],          // your shots, knocked back at you while he blocks
   eshots: [],         // the shooters' slow red orbs (v0.51)
+  mrocks: [],         // MAKORA's kicked rocks (v0.52: their own list, so nothing aims at them)
   boulders: [],       // OBI ONE phase 3: rocks lying round the arena, which he hurls at you (v0.50)
   debris: [],         // phase 2: the force rains debris down; red circle telegraphs, then a hit (user)
   defl: 0,            // DEFLECT: seconds of shield left …
@@ -82,6 +83,6 @@ const record = {
 function newDeck() {
   seed = (Math.random() * 2 ** 32) >>> 0;
   const cards = equippedCards();
-  deck = cards.length ? createDeck(cards, mulberry32(seed)) : null;
+  deck = cards.length ? createDeck(cards, mulberry32(seed), SEQUENCE_SIZE, deckLuck) : null;
   Object.assign(record, { current: [], seqs: [], passFired: [], passes: 0, passesOk: 0, trayOk: true, logOk: true });
 }

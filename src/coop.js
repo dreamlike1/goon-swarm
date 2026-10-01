@@ -346,7 +346,7 @@ function guestStart(m) {
   NET.world = m.world;
   NET.run = true;
   resize();
-  deck = createDeck(NET.myCards, mulberry32(NET.mySeed));    // the same deck the host is playing for us
+  deck = createDeck(NET.myCards, mulberry32(NET.mySeed), SEQUENCE_SIZE, deckLuck);    // the same deck the host is playing for us
   NET.roster = m.roster;
   const r = m.roster.find(x => x.id === m.you) || {};
   NET.me = { id: m.you, name: NET.name, local: true, body: game.player, down: false, rev: 0, color: r.color, emoji: r.emoji || '' };
@@ -431,11 +431,7 @@ function coopAttacks(dt) {
 
 // Everyone gets their own picks when the team levels up (combat.js gainXp calls this in co-op).
 function coopLevelUps(from, to) {
-  for (let l = from + 1; l <= to; l++) {
-    if (l === BOSS.level && !game.bossDone && !game.boss) game.bossDue = true;
-    if (l === OBI.level && !game.obiDone && !game.obi) game.obiDue = true;
-    if (l === MAKORA.level && !game.makora) game.makoraDue = true;
-  }
+  // (v0.52: the bosses come by the run's clock now, flow.js)
   eachPlayer(c => {
     for (let l = from + 1; l <= to; l++) {
       c.pickQ.push(l);
@@ -535,9 +531,9 @@ function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
-  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots'];
+  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots', 'mrocks'];
 const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts', 'boulders', 'eshots']);
-const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds']);
+const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds', 'bones']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
 function snapReplacer(k, v) {
   if (SNAP_DROP.has(k)) return undefined;
@@ -563,6 +559,7 @@ function flushSnaps(force = false) {
     adapted: game.makoraAdapted ? [...game.makoraAdapted] : [],
     cine: game.cine ? { kind: game.cine.kind, t: game.cine.t, step: game.cine.step } : null,
     intro: game.intro ? { kind: game.intro.kind || '', t: game.intro.t, stomp: game.intro.stomp } : null,
+    flow: game.flow, rt: game.runT,
     pl: NET.players.map(playerView) };
   for (const k of WORLD_KEYS) world[k] = game[k];
   // the heavy ones, trimmed: orbs only what's drawn, fewer particles, and the ground cracks (which don't move) only
@@ -649,6 +646,7 @@ function applySnap(s) {
   if (up) SFX_RAW.levelUp();
   if (s.lv !== game.level || s.xp !== game.xp) { game.level = s.lv; game.xp = s.xp; renderXp(up); }
   if (s.kills !== game.kills) { game.kills = s.kills; $('kills').textContent = game.kills; }
+  if (s.flow) { game.flow = s.flow; game.runT = s.rt || 0; renderFlow(); }   // the run's bar (flow.js)
   aliveEl.textContent = game.enemies.length;
   game.boss = game.enemies.find(e => e.boss) || null;
   game.makora = game.enemies.find(e => e.makora) || (s.cine && game.makora) || null;
