@@ -409,20 +409,14 @@ function packTop(key) {
 const PACK_LOGO = { bigger: 'Bigger<br>Weapons',   // (v0.59, user: the pack itself on two lines: BIGGER / WEAPONS; it said GUNS for a while)
   magus: '<span class="pack-logo-sm">Ulti</span><br>Magus' };   // (v0.60: a small gold ULTI over a big MAGUS, like a magic-show bill)
 const PACK_COVER = new Set(['starter', 'bigger', 'magus', 'silica', 'tballs']);   // packs with their own cover art (style.css .has-cover)
-// (two slabs per layer, one under the seal and one under the body, with the diamond band between them left empty so the diamonds stay
-// see-through; plain rectangles, no clip-paths: v0.72, user: "the animation is laggy")
-const PACK_SLABS = Array.from({ length: 4 }, (_, i) => `<span class="pack-slab is-seal" style="--i:${i + 1}"></span><span class="pack-slab is-body" style="--i:${i + 1}"></span>`).join('');
 function packArt(key, { big = false } = {}) {
   const name = PACK_LOGO[key] || PACKS[key].short, top = packTop(key), shade = '<span class="pack-shade"></span><span class="pack-holo"></span>';
-  // v0.68 (user: "make the packs 3D so it looks real like a pack"): the seal and the body sit in `.pack-3d`, which turns in
-  // real 3D, over a stack of slabs behind them: the pouch's thickness, seen at its edge as it turns (style.css .pack-3d).
-  return `<span class="pack-art pack-${key} top-${top}${PACK_COVER.has(key) ? ' has-cover' : ''}${big ? ' is-big' : ''}" aria-hidden="true"><span class="pack-3d">`
-    + PACK_SLABS
+  return `<span class="pack-art pack-${key} top-${top}${PACK_COVER.has(key) ? ' has-cover' : ''}${big ? ' is-big' : ''}" aria-hidden="true">`
     + `<span class="pack-top">${shade}</span>`
     + `<span class="pack-body">${shade}<svg class="pack-emblem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PACK_EMBLEM[key]}</svg>`
     + `<span class="pack-logo">${name}</span><span class="pack-word">Pack</span></span>`   // (v0.59, user: no "10 cards" on the packs any more; v0.60, user: every one ends in PACK, all lined up)
     + (PACKS[key].isNew ? '<span class="pack-new" aria-hidden="true"><b>New</b></span>' : '')   // (v0.72: the diagonal NEW ribbon, set in the store editor)
-    + `</span></span>`;
+    + `</span>`;
 }
 
 // BACK on the pack's page (v0.60, user: "color the button too"): in the colour of the pack it's on.
@@ -583,7 +577,7 @@ function renderStore() {
   $('store-packs').innerHTML = packs.map((k, i) => {
     const pk = PACKS[k], short = save.gold < pk.price;
     return `<button class="store-pack pack-${k}${short ? ' is-short' : ''}" type="button" data-pack="${k}" style="--i: ${i}" aria-label="${pk.name}, ${pk.price} gold${pk.discount ? ` (${pk.discount}% off)` : ''}: see what's inside">`
-      + packArt(k)
+      + `<span class="pack-tilt">${packArt(k)}</span>`
       + priceHtml(pk)
       + `</button>`;
   }).join('');
@@ -596,22 +590,21 @@ const TILT = { max: 16 };
 // (v0.59, user: "the packs and the cards fake 3D again": `artSel` is what turns, a pack or a card face)
 function packTilt(root, find, artSel = '.pack-art') {
   if (!animOk) return;
-  let on = null, ev = null, raf = 0, frame = 0;
-  const heavy = artSel === '.pack-art';                // (v0.72, user: "the pack animation is laggy": a pack's turn is set every frame, but its shine numbers, which repaint its foil, every other one)
+  let on = null;
   const off = () => {
-    cancelAnimationFrame(raf); raf = 0; ev = null;
     if (!on) return;
     on.host.classList.remove('is-tilt');
     for (const v of ['--rx', '--ry', '--sx', '--mx', '--my', '--fx', '--fy', '--px', '--py', '--posx', '--posy', '--pos', '--hyp']) on.art.style.removeProperty(v);
     on = null;
   };
-  const apply = () => {
-    raf = 0;
-    if (!ev || !on) return;
-    const { art } = on, e = ev, r = art.getBoundingClientRect(), x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+  root.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return;
+    const host = find(e.target), art = host?.matches(artSel) ? host : (host?.querySelector(artSel) || host?.closest(artSel));
+    if (!art) { off(); return; }
+    if (on?.art !== art) { off(); on = { host, art }; host.classList.add('is-tilt'); }
+    const r = art.getBoundingClientRect(), x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
     art.style.setProperty('--ry', `${((x - 0.5) * 2 * TILT.max).toFixed(2)}deg`);
     art.style.setProperty('--rx', `${((0.5 - y) * 2 * TILT.max).toFixed(2)}deg`);
-    if (heavy && (frame++ & 1)) return;
     art.style.setProperty('--sx', `${((0.5 - x) * 2 * TILT.max * 0.8).toFixed(1)}px`);   // its shadow, falling away from the tilt
     art.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
     art.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
@@ -623,19 +616,11 @@ function packTilt(root, find, artSel = '.pack-art') {
     const posx = `${(37 + x * 26).toFixed(1)}%`, posy = `${(33 + y * 34).toFixed(1)}%`;
     art.style.setProperty('--posx', posx); art.style.setProperty('--posy', posy); art.style.setProperty('--pos', `${posx} ${posy}`);
     art.style.setProperty('--hyp', Math.min(1, Math.hypot(x - 0.5, y - 0.5) * 2).toFixed(3));
-  };
-  root.addEventListener('pointermove', e => {
-    if (e.pointerType === 'touch') return;
-    const host = find(e.target), art = host?.matches(artSel) ? host : host?.querySelector(artSel);
-    if (!art) { off(); return; }
-    if (on?.art !== art) { off(); on = { host, art }; host.classList.add('is-tilt'); }
-    ev = e;
-    if (!raf) raf = requestAnimationFrame(apply);      // (many pointer events a frame: only the last one counts)
   });
   root.addEventListener('pointerleave', off);
   root.addEventListener('click', off);                 // (it may be leaving the screen: don't stay turned)
 }
-packTilt($('store-packs'), t => t.closest('.store-pack'));
+packTilt($('store-packs'), t => t.closest('.store-pack'), '.pack-tilt');
 
 // Pack preview (compact, one screen): the pack, its price and Buy; one tab per weapon with its drop rate; and the
 // chosen weapon's details: stats, passive (its smaller combo), ult (×7) and Test it.
@@ -723,7 +708,7 @@ function renderPackView() {
   }).join('');
   // v0.59 (user): no "Store" over it; your gold big at the top right; the list (and the details) fit the height of the
   // pack and its buttons, scrolling inside if they must; the details without a frame
-  $('pv').innerHTML = `<div class="pv-head"><div class="pv-side">${packArt(k)}`
+  $('pv').innerHTML = `<div class="pv-head"><div class="pv-side"><span class="pack-tilt">${packArt(k)}</span>`
     + `<div class="pv-buy"><button class="start" type="button" id="btn-buy"${afford ? '' : ' disabled'}>Buy <span class="coin" aria-hidden="true"></span>${pk.price}${pk.discount ? `<s class="pack-was">${pk.base}</s>` : ''}</button>`
     + `<button type="button" class="pv-testpack" id="btn-testpack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${CARD_ICON.sniper}</svg>Test pack</button>`
     + (afford ? '' : `<span class="sub small">${pk.price - save.gold} more gold to go</span>`) + `</div></div>`
@@ -762,7 +747,7 @@ function weaponDetail(id) {
     + (!COMBOS[id] ? `<p class="type-combo"><b>No combos</b> ${k.rarity === 'sss' ? 'Triple S: strong' : 'Strong'} enough on its own.</p>` : '')
     + `<button type="button" class="pv-test" data-card="${id}" style="--c: var(--${id})">Test ${k.name}</button>`;   // (v0.60, user: under the description)
 }
-packTilt($('pv'), t => t.closest('.pv-head .pack-art'));
+packTilt($('pv'), t => t.closest('.pv-head .pack-art'), '.pack-tilt');
 packTilt($('pv'), t => t.closest('.pv-face'), '.rand-deck, .cf');       // the chosen weapon's card (v0.59), or a Random row's stack (v0.61)
 packTilt($('coll'), t => t.closest('.ccard'), '.cf');                    // … and the collection's
 $('pv').addEventListener('click', e => {

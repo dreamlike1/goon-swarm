@@ -695,12 +695,17 @@ body.hud-glide .hint { transition: bottom .26s cubic-bezier(.3, .8, .3, 1), opac
   padding: 6px; border: 0; border-radius: 14px; background: none; cursor: pointer;
 }
 .store-pack:focus-visible { outline: none; }
-.store-pack:focus-visible .pack-art { --lift: -8px; --s: 1.05; }   /* (focused: lifted, and its price underlined) */
+.store-pack:focus-visible .pack-tilt { --lift: -8px; --s: 1.05; }   /* (focused: lifted, and its price underlined) */
 .store-pack:focus-visible .pack-price { text-decoration: underline 2px; text-underline-offset: 5px; }
-.store-pack .pack-art, .pv-head .pack-art {
-  --w: clamp(110px, calc((100vw - 200px) / 5.6), 196px); --rx: 0deg;   /* (seven in a row, down to a narrow window) */ --ry: 0deg; --sx: 0px; --mx: 50%; --my: 30%; --lift: 0px; --s: 1;
-  transform: translateY(var(--lift)) scale(var(--s));   /* (v0.68: the turn is on the inner .pack-3d, so its thickness shows) */
-  transition: transform .5s cubic-bezier(.2, .9, .25, 1.2), filter .3s;
+/* v0.72.3 (user: "still laggy, just do what the Upcoming packs do"): the turn is on a wrapper, `.pack-tilt` (menus.js renderStore, the pack's page),
+   like the Upcoming packs' .ann-tilt, and the pack's `filter` shadow is not transitioned: it used to be re-animated by every pointer move. */
+.pack-tilt { display: flex; flex: none; }
+.store-pack .pack-art, .pv-head .pack-art { --w: clamp(110px, calc((100vw - 200px) / 5.6), 196px); }   /* (seven in a row, down to a narrow window) */
+.store-pack .pack-tilt, .pv-head .pack-tilt {
+  --rx: 0deg; --ry: 0deg; --sx: 0px; --mx: 50%; --my: 30%; --lift: 0px; --s: 1;
+  transform: translateY(var(--lift)) rotateX(var(--rx)) rotateY(var(--ry)) scale(var(--s));
+  transform-style: preserve-3d;
+  transition: transform .5s cubic-bezier(.2, .9, .25, 1.2);
 }
 .pv-head .pack-art { --w: 250px; }
 @media (max-width: 720px) { .pv-head .pack-art { --w: 150px; } }
@@ -713,11 +718,11 @@ body.hud-glide .hint { transition: bottom .26s cubic-bezier(.3, .8, .3, 1), opac
     linear-gradient(calc(90deg + var(--ry) * 4), transparent 30%, color-mix(in srgb, var(--player) 18%, transparent) 48%, transparent 62%);
   mix-blend-mode: overlay;
 }
-.store-pack.is-tilt .pack-art, .pv-head .pack-art.is-tilt { --lift: -10px; --s: 1.08; transition: transform .12s ease-out, filter .3s;
-  filter: drop-shadow(var(--sx) 22px 18px rgba(0, 0, 0, .55)); }
-.pv-head .pack-art.is-tilt { --lift: 0px; --s: 1; }   /* (v0.60, user: on the pack's page it only tilts, no zoom: it covered BACK) */
+.store-pack.is-tilt .pack-tilt { --lift: -10px; --s: 1.08; transition: transform .12s ease-out; }
+.pv-head .pack-tilt:has(.pack-art.is-tilt) { transition: transform .12s ease-out; }   /* (v0.60, user: on the pack's page it only tilts, no zoom: it covered BACK) */
+.store-pack.is-tilt .pack-art, .pv-head .pack-art.is-tilt { filter: drop-shadow(var(--sx) 22px 18px rgba(0, 0, 0, .55)); }
 .store-pack.is-tilt .pack-body::after, .pv-head .pack-art.is-tilt .pack-body::after { opacity: 1; }
-.store-pack:active .pack-art { --s: 1.02; }
+.store-pack:active .pack-tilt { --s: 1.02; }
 .pack-price { display: inline-flex; align-items: center; gap: 6px; font: 700 15px var(--f-num); letter-spacing: .04em; color: var(--r-legendary); font-variant-numeric: tabular-nums; }
 .store-pack.is-short .pack-price { color: var(--muted); }
 .store-pack.is-short .pack-art { filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .45)) saturate(.55) brightness(.8); }
@@ -997,9 +1002,9 @@ body.hud-glide .hint { transition: bottom .26s cubic-bezier(.3, .8, .3, 1), opac
 @property --swx { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
 @property --swp { syntax: '<length>'; inherits: true; initial-value: 0px; }
 @keyframes pv-sway { 0% { --sway: -10deg; --swx: 4deg; --swp: 8px; } 100% { --sway: 10deg; --swx: -3deg; --swp: -8px; } }
-.pv-head .pack-art { animation: pv-sway 5.5s ease-in-out infinite alternate;
-  transform: translateY(var(--lift)) scale(var(--s));
-  filter: drop-shadow(calc(var(--sx) + var(--swp)) 16px 16px rgba(0, 0, 0, .55)); }
+.pv-head .pack-tilt { animation: pv-sway 5.5s ease-in-out infinite alternate;
+  transform: translateY(var(--lift)) rotateX(calc(var(--rx) + var(--swx))) rotateY(calc(var(--ry) + var(--sway))) scale(var(--s)); }
+.pv-head .pack-art { filter: drop-shadow(var(--sx) 16px 16px rgba(0, 0, 0, .55)); }   /* (v0.72.3: it no longer sways with the pack, so its filter isn't redrawn every frame) */
 .pv-face { perspective: 900px; }
 .pv-face .cf { --rx: 0deg; --ry: 0deg; animation: pv-sway 6.5s ease-in-out infinite alternate; transform-style: preserve-3d;
   transform: rotateX(calc(var(--rx) + var(--swx))) rotateY(calc(var(--ry) + var(--sway))); transition: transform .5s cubic-bezier(.2, .9, .25, 1.2);
@@ -1012,7 +1017,7 @@ body.hud-glide .hint { transition: bottom .26s cubic-bezier(.3, .8, .3, 1), opac
 .arc-face { perspective: 900px; }
 .arc-face .cf { --rx: 0deg; --ry: 0deg; transform: rotateX(var(--rx)) rotateY(var(--ry)); transition: transform .5s cubic-bezier(.2, .9, .25, 1.2); }
 .arc-face.is-tilt .cf { transition: transform .12s ease-out; }
-@media (prefers-reduced-motion: reduce) { .pv-head .pack-art, .pv-face .cf { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pv-head .pack-tilt, .pv-face .cf { animation: none; } }
 .pv-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .pv-tab {
   display: grid; justify-items: start; gap: 1px; min-width: 104px; padding: 6px 10px; border-radius: 8px; text-align: left;
@@ -3064,28 +3069,11 @@ body.in-archive .bossbar, body.in-archive .intro { visibility: hidden; }
   .arc-desc { font-size: 13px; }
 }
 
-/* ---------- v0.68 (user: "make the packs 3D so it looks real like a pack"; then "the old pack design was good, keep the thicker 3D") ----------
-   The pack's look is the original one; packArt only puts the seal and the body in `.pack-3d`, which turns in real 3D (the
-   pointer on the Packs screen, the pack page's sway), over seven `.pack-slab`s stacked behind them: the foil's thickness,
-   seen at its edge as the pack turns. No idle sway on the Packs screen or the starter pack (user). The pack's own `filter`
-   shadow follows whatever shape that makes. The other places show a pack face on, as before. */
-.pack-art { perspective: calc(var(--w) * 4.6); }
-.pack-3d { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; transform-style: preserve-3d; --T: calc(var(--w) * .09); }
-.store-pack .pack-3d, .pv-head .pack-3d { --rx: 0deg; transform: rotateX(calc(var(--rx) + var(--swx))) rotateY(calc(var(--ry) + var(--sway)));
-  transition: transform .5s cubic-bezier(.2, .9, .25, 1.2); }
-.store-pack.is-tilt .pack-3d, .pv-head .pack-art.is-tilt .pack-3d { transition: transform .12s ease-out; }
-.pack-slab { position: absolute; left: -1px; right: -1px; pointer-events: none;
-  transform: translateZ(calc(var(--T) * var(--i) * -.25));
-  background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 40%, #000), color-mix(in srgb, var(--pc) 62%, #000) 50%, color-mix(in srgb, var(--pc) 36%, #000));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 70%, rgba(255, 255, 255, .5)); }
-/* a slab under the seal and one under the body; the band between them (the diamonds) is left empty, so the diamonds where the two interlock stay
-   see-through, as on the original pack. Plain rectangles: no clip-paths, which made the turn laggy (v0.72). */
-.pack-slab.is-seal { top: 0; height: 12.5%; border-radius: 6px 6px 0 0; }
-.pack-slab.is-body { top: 19%; bottom: 0; border-radius: 0 0 8px 8px; }
-.pack-art.is-ripping .pack-slab, .pack-art.is-ripping .pack-new { display: none; }
+/* (v0.68's real-3D pack with thickness slabs was tried and taken out again: user, "still laggy, bring back the old pack behaviour") */
+.pack-art.is-ripping .pack-new { display: none; }
 /* the NEW ribbon (v0.72, user: "instead of a glow, a NEW banner, diagonal or a badge"): across the pack's top-left corner, set in the
-   store editor. It sits on the pack's face, so it turns with it. */
-.pack-new { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 6px 6px 8px 8px; transform: translateZ(2px); }
+   store editor. It is part of the pack, so it turns with it. */
+.pack-new { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 6px 6px 8px 8px; }
 .pack-new b { position: absolute; left: calc(var(--w) * -.27); top: calc(var(--w) * .13); width: calc(var(--w) * .8); padding: calc(var(--w) * .025) 0 calc(var(--w) * .02);
   transform: rotate(-45deg); text-align: center; font: 400 calc(var(--w) * .1) / 1 var(--f-metal); letter-spacing: .2em; text-indent: .2em; text-transform: uppercase; color: #fff;
   background: linear-gradient(180deg, #ff6a6a, #e2192e 55%, #a30d1f); box-shadow: 0 2px 5px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -1px 0 rgba(0, 0, 0, .3);
@@ -3101,14 +3089,3 @@ body.in-archive .bossbar, body.in-archive .intro { visibility: hidden; }
 .maint-note { margin: 2px 0 0; font: 400 15px/1 var(--f-metal); letter-spacing: .24em; text-transform: uppercase; color: var(--logo-orange, #ff6a1c);
   text-shadow: 0 0 12px color-mix(in srgb, var(--logo-orange, #ff6a1c) 55%, transparent); }
 .maint-note[hidden] { display: none; }
-
-/* The turn, made light (v0.72, user: "the pack animation is laggy, it should behave like a card would"): a pack on the Packs screen or its page
-   no longer has a `filter` shadow (re-drawn every frame as it turned, with the holo's blend modes inside): its shadow is a plane behind it that
-   turns with it, and the unaffordable look is on the seal and body themselves. Its layer is promoted, and packTilt only sets its numbers once a frame. */
-.store-pack .pack-art, .store-pack.is-tilt .pack-art, .store-pack.is-short .pack-art, .store-pack.is-short.is-tilt .pack-art,
-.pv-head .pack-art, .pv-head .pack-art.is-tilt { filter: none; }
-.store-pack .pack-3d, .pv-head .pack-3d { will-change: transform; }
-.store-pack .pack-3d::before, .pv-head .pack-3d::before { content: ""; position: absolute; inset: 2% 3% 0; border-radius: 8px; pointer-events: none;
-  transform: translateZ(calc(var(--T) * -1.3)); box-shadow: 0 12px 20px rgba(0, 0, 0, .5); transition: box-shadow .3s; }
-.store-pack.is-tilt .pack-3d::before, .pv-head .pack-art.is-tilt .pack-3d::before { box-shadow: 0 22px 26px rgba(0, 0, 0, .55); }
-.store-pack.is-short .pack-top, .store-pack.is-short .pack-body { filter: saturate(.55) brightness(.8); }
