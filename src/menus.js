@@ -409,8 +409,9 @@ function packTop(key) {
 const PACK_LOGO = { bigger: 'Bigger<br>Weapons',   // (v0.59, user: the pack itself on two lines: BIGGER / WEAPONS; it said GUNS for a while)
   magus: '<span class="pack-logo-sm">Ulti</span><br>Magus' };   // (v0.60: a small gold ULTI over a big MAGUS, like a magic-show bill)
 const PACK_COVER = new Set(['starter', 'bigger', 'magus', 'silica', 'tballs']);   // packs with their own cover art (style.css .has-cover)
-// (two slabs per layer, one cut like the seal and one like the body, so the diamonds where they interlock stay see-through)
-const PACK_SLABS = Array.from({ length: 7 }, (_, i) => `<span class="pack-slab is-seal" style="--i:${i + 1}"></span><span class="pack-slab is-body" style="--i:${i + 1}"></span>`).join('');
+// (two slabs per layer, one under the seal and one under the body, with the diamond band between them left empty so the diamonds stay
+// see-through; plain rectangles, no clip-paths: v0.72, user: "the animation is laggy")
+const PACK_SLABS = Array.from({ length: 4 }, (_, i) => `<span class="pack-slab is-seal" style="--i:${i + 1}"></span><span class="pack-slab is-body" style="--i:${i + 1}"></span>`).join('');
 function packArt(key, { big = false } = {}) {
   const name = PACK_LOGO[key] || PACKS[key].short, top = packTop(key), shade = '<span class="pack-shade"></span><span class="pack-holo"></span>';
   // v0.68 (user: "make the packs 3D so it looks real like a pack"): the seal and the body sit in `.pack-3d`, which turns in
@@ -595,21 +596,22 @@ const TILT = { max: 16 };
 // (v0.59, user: "the packs and the cards fake 3D again": `artSel` is what turns, a pack or a card face)
 function packTilt(root, find, artSel = '.pack-art') {
   if (!animOk) return;
-  let on = null;
+  let on = null, ev = null, raf = 0, frame = 0;
+  const heavy = artSel === '.pack-art';                // (v0.72, user: "the pack animation is laggy": a pack's turn is set every frame, but its shine numbers, which repaint its foil, every other one)
   const off = () => {
+    cancelAnimationFrame(raf); raf = 0; ev = null;
     if (!on) return;
     on.host.classList.remove('is-tilt');
     for (const v of ['--rx', '--ry', '--sx', '--mx', '--my', '--fx', '--fy', '--px', '--py', '--posx', '--posy', '--pos', '--hyp']) on.art.style.removeProperty(v);
     on = null;
   };
-  root.addEventListener('pointermove', e => {
-    if (e.pointerType === 'touch') return;
-    const host = find(e.target), art = host?.matches(artSel) ? host : host?.querySelector(artSel);
-    if (!art) { off(); return; }
-    if (on?.art !== art) { off(); on = { host, art }; host.classList.add('is-tilt'); }
-    const r = art.getBoundingClientRect(), x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+  const apply = () => {
+    raf = 0;
+    if (!ev || !on) return;
+    const { art } = on, e = ev, r = art.getBoundingClientRect(), x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
     art.style.setProperty('--ry', `${((x - 0.5) * 2 * TILT.max).toFixed(2)}deg`);
     art.style.setProperty('--rx', `${((0.5 - y) * 2 * TILT.max).toFixed(2)}deg`);
+    if (heavy && (frame++ & 1)) return;
     art.style.setProperty('--sx', `${((0.5 - x) * 2 * TILT.max * 0.8).toFixed(1)}px`);   // its shadow, falling away from the tilt
     art.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
     art.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
@@ -621,6 +623,14 @@ function packTilt(root, find, artSel = '.pack-art') {
     const posx = `${(37 + x * 26).toFixed(1)}%`, posy = `${(33 + y * 34).toFixed(1)}%`;
     art.style.setProperty('--posx', posx); art.style.setProperty('--posy', posy); art.style.setProperty('--pos', `${posx} ${posy}`);
     art.style.setProperty('--hyp', Math.min(1, Math.hypot(x - 0.5, y - 0.5) * 2).toFixed(3));
+  };
+  root.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch') return;
+    const host = find(e.target), art = host?.matches(artSel) ? host : host?.querySelector(artSel);
+    if (!art) { off(); return; }
+    if (on?.art !== art) { off(); on = { host, art }; host.classList.add('is-tilt'); }
+    ev = e;
+    if (!raf) raf = requestAnimationFrame(apply);      // (many pointer events a frame: only the last one counts)
   });
   root.addEventListener('pointerleave', off);
   root.addEventListener('click', off);                 // (it may be leaving the screen: don't stay turned)

@@ -3075,12 +3075,13 @@ body.in-archive .bossbar, body.in-archive .intro { visibility: hidden; }
   transition: transform .5s cubic-bezier(.2, .9, .25, 1.2); }
 .store-pack.is-tilt .pack-3d, .pv-head .pack-art.is-tilt .pack-3d { transition: transform .12s ease-out; }
 .pack-slab { position: absolute; left: -1px; right: -1px; pointer-events: none;
-  transform: translateZ(calc(var(--T) * var(--i) * -.143));
+  transform: translateZ(calc(var(--T) * var(--i) * -.25));
   background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 40%, #000), color-mix(in srgb, var(--pc) 62%, #000) 50%, color-mix(in srgb, var(--pc) 36%, #000));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 70%, rgba(255, 255, 255, .5)); }
-/* the slabs are cut like the seal and the body, so the diamonds where those two interlock stay see-through, as on the original pack */
-.pack-slab.is-seal { top: 0; height: 17%; border-radius: 6px 6px 0 0; clip-path: polygon(0 0, 100% 0, 100% 80%, 95% 100%, 90% 80%, 85% 100%, 80% 80%, 75% 100%, 70% 80%, 65% 100%, 60% 80%, 55% 100%, 50% 80%, 45% 100%, 40% 80%, 35% 100%, 30% 80%, 25% 100%, 20% 80%, 15% 100%, 10% 80%, 5% 100%, 0 80%); }
-.pack-slab.is-body { top: calc(17% - 3px); bottom: 0; border-radius: 0 0 8px 8px; clip-path: polygon(0 3%, 5% 0, 10% 3%, 15% 0, 20% 3%, 25% 0, 30% 3%, 35% 0, 40% 3%, 45% 0, 50% 3%, 55% 0, 60% 3%, 65% 0, 70% 3%, 75% 0, 80% 3%, 85% 0, 90% 3%, 95% 0, 100% 3%, 100% 100%, 0 100%); }
+/* a slab under the seal and one under the body; the band between them (the diamonds) is left empty, so the diamonds where the two interlock stay
+   see-through, as on the original pack. Plain rectangles: no clip-paths, which made the turn laggy (v0.72). */
+.pack-slab.is-seal { top: 0; height: 12.5%; border-radius: 6px 6px 0 0; }
+.pack-slab.is-body { top: 19%; bottom: 0; border-radius: 0 0 8px 8px; }
 .pack-art.is-ripping .pack-slab, .pack-art.is-ripping .pack-new { display: none; }
 /* the NEW ribbon (v0.72, user: "instead of a glow, a NEW banner, diagonal or a badge"): across the pack's top-left corner, set in the
    store editor. It sits on the pack's face, so it turns with it. */
@@ -3100,3 +3101,14 @@ body.in-archive .bossbar, body.in-archive .intro { visibility: hidden; }
 .maint-note { margin: 2px 0 0; font: 400 15px/1 var(--f-metal); letter-spacing: .24em; text-transform: uppercase; color: var(--logo-orange, #ff6a1c);
   text-shadow: 0 0 12px color-mix(in srgb, var(--logo-orange, #ff6a1c) 55%, transparent); }
 .maint-note[hidden] { display: none; }
+
+/* The turn, made light (v0.72, user: "the pack animation is laggy, it should behave like a card would"): a pack on the Packs screen or its page
+   no longer has a `filter` shadow (re-drawn every frame as it turned, with the holo's blend modes inside): its shadow is a plane behind it that
+   turns with it, and the unaffordable look is on the seal and body themselves. Its layer is promoted, and packTilt only sets its numbers once a frame. */
+.store-pack .pack-art, .store-pack.is-tilt .pack-art, .store-pack.is-short .pack-art, .store-pack.is-short.is-tilt .pack-art,
+.pv-head .pack-art, .pv-head .pack-art.is-tilt { filter: none; }
+.store-pack .pack-3d, .pv-head .pack-3d { will-change: transform; }
+.store-pack .pack-3d::before, .pv-head .pack-3d::before { content: ""; position: absolute; inset: 2% 3% 0; border-radius: 8px; pointer-events: none;
+  transform: translateZ(calc(var(--T) * -1.3)); box-shadow: 0 12px 20px rgba(0, 0, 0, .5); transition: box-shadow .3s; }
+.store-pack.is-tilt .pack-3d::before, .pv-head .pack-art.is-tilt .pack-3d::before { box-shadow: 0 22px 26px rgba(0, 0, 0, .55); }
+.store-pack.is-short .pack-top, .store-pack.is-short .pack-body { filter: saturate(.55) brightness(.8); }
