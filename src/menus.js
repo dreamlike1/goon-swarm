@@ -1005,15 +1005,21 @@ addEventListener('resize', () => requestAnimationFrame(() => {
 // "floating too like our packs and hoverable since they are 3 separate parts"). The demo's box takes turns: each piece
 // of news, then the fight, `every` s each (held while the pointer or focus is on it), with arrows and dots under it.
 // With no news it's only the fight, as before. Each news item is a slide; `packs` are [key, name] (style.css .pack-<key>).
+// v0.73 (user: "add a new content there saying NEW PACK! OUT NOW!, the background related to the pack"): a slide for every pack the store marks
+// NEW (the store editor's NEW tick; storeconfig.js), first in the box: the pack big in the middle on a background from its own cover and colours.
+const ANN_THEME = { tballs: ['#ff3346', '#c81f3a', '#ff8a5c'], starter: ['#9fb8ff', '#d6dcff', '#ff8ac8'], bigger: ['#ff9a3d', '#a8a866', '#ff5a3d'],
+  magus: ['#b28cff', '#ff5fc8', '#4a6bff'], silica: ['#ff8a4a', '#d0773a', '#ffcf8a'] };
+const ANN_COVER = { starter: 'standard_pack', bigger: 'bigger_guns_pack', magus: 'magus_pack', silica: 'silica_pack', tballs: 'tballs_pack' };
 const ANN = { every: 7, items: [
+  ...STORE_PACKS.filter(k => PACKS[k]?.isNew).map(k => ({ id: `new-${k}`, kicker: 'New pack!', word: 'Out now!', solo: k, packs: [[k, PACKS[k].short]] })),
   { id: 'upcoming', kicker: '2 new packs', word: 'Upcoming', packs: [['lantern', 'Lantern'], ['engineer', 'Engineer']] },
 ] };
 let annAt = 0, annT = 0, annHold = false;
 const annSlides = () => [...ANN.items.map(a => a.id), ...(game.practice?.demo ? ['demo'] : [])];
 // A pack that isn't in the store yet: the same pack as packArt draws, its own cover, name and PACK.
-function annPack(key, name) {
+function annPack(key, name, top = 'legendary') {
   const shade = '<span class="pack-shade"></span><span class="pack-holo"></span>';
-  return `<span class="pack-art pack-${key} top-legendary has-cover ann-tilt" aria-hidden="true"><span class="pack-top">${shade}</span>`
+  return `<span class="pack-art pack-${key} top-${top} has-cover ann-tilt" aria-hidden="true"><span class="pack-top">${shade}</span>`
     + `<span class="pack-body">${shade}<span class="pack-logo">${name}</span><span class="pack-word">Pack</span></span></span>`;
 }
 function renderAnn() {
@@ -1021,12 +1027,16 @@ function renderAnn() {
   $('ann').hidden = !items.length;
   if (!items.length) return;
   // three separate parts, each floating and turning toward the pointer on its own: the back pack, the front pack, the banner
-  $('ann-slides').innerHTML = items.map(a => `<article class="ann-slide ann-${a.id}" aria-roledescription="slide" aria-label="${a.word}: ${a.packs.map(p => p[1] + ' Pack').join(', ')}">`
+  $('ann-slides').innerHTML = items.map(a => {
+    const th = a.solo ? ANN_THEME[a.solo] || ['#ffd25a', '#ff7a2a', '#6a8bff'] : null;
+    const bgStyle = th ? ` style="--c1:${th[0]};--c2:${th[1]};--c3:${th[2]};--cover:${ANN_COVER[a.solo] ? `url(assets/img/${ANN_COVER[a.solo]}.webp)` : 'none'}"` : '';
+    return `<article class="ann-slide ann-${a.id}${a.solo ? ' is-newpack' : ''}"${bgStyle} aria-roledescription="slide" aria-label="${a.kicker} ${a.word}: ${a.packs.map(p => p[1] + ' Pack').join(', ')}">`
     + '<div class="ann-bg" aria-hidden="true"><i class="ann-rays"></i><i class="ann-blob ann-b1"></i><i class="ann-blob ann-b2"></i><i class="ann-blob ann-b3"></i><i class="ann-grid"></i></div>'
     + '<div class="ann-stage">'
-    + a.packs.map((p, i) => `<div class="ann-part ann-p${i + 1}"><div class="ann-float">${annPack(p[0], p[1])}</div></div>`).reverse().join('')
+    + (a.solo ? `<div class="ann-part ann-solo"><div class="ann-float">${annPack(a.solo, PACK_LOGO[a.solo] || PACKS[a.solo].short, packTop(a.solo))}</div></div>`
+      : a.packs.map((p, i) => `<div class="ann-part ann-p${i + 1}"><div class="ann-float">${annPack(p[0], p[1])}</div></div>`).reverse().join(''))
     + `<div class="ann-part ann-tag"><div class="ann-float"><div class="ann-banner ann-tilt"><span class="ann-kicker">${a.kicker}</span><span class="ann-word">${a.word}</span></div></div></div>`
-    + '</div></article>').join('');
+    + '</div></article>'; }).join('');
 }
 function annOpen() {
   if (!ANN.items.length) return;

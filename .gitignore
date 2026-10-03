@@ -19,3 +19,16 @@ src/admin-key.js
 
 # Original recordings and art (big .wav files, unused images): local only
 assets/raw/
+
+# Source art, not used by the game (it uses the .webp copies): the cards' and packs' big PNGs, the unused Android icons, the favicon download
+assets/img/cards/*/
+assets/img/cards/random.png
+assets/img/bigger_guns_pack.png
+assets/img/engineer.png
+assets/img/greenlantern.png
+assets/img/magus_pack.png
+assets/img/silica_packs.png
+assets/img/standard_pack.png
+assets/img/tballs_pack.png
+favicon/android-chrome-*.png
+favicon/*.zip
