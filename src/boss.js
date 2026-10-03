@@ -53,10 +53,10 @@ const toastEl = document.getElementById('toast');
 const introEl = document.getElementById('intro');
 let introTimer = 0;
 // The intro's words, on its own (a co-op guest plays just this, the host clears the arena).
-// `kind`: 'obi' for OBI ONE's (obi.js).
+// `kind`: 'obi' for OBI ONE's (obi.js), 'snek' for AWAS THE SNEK's (snek.js).
 function startIntroScene(kind) {
   clearTimeout(introTimer);
-  introEl.innerHTML = kind === 'obi' ? `<p class="intro-line is-obi">DO YOU FEEL THAT???</p>` : `<p class="intro-line">DO YOU HEAR THOSE FOOTSTEPS?</p>`;
+  introEl.innerHTML = kind === 'obi' ? `<p class="intro-line is-obi">DO YOU FEEL THAT???</p>` : kind === 'snek' ? SNEK_INTRO : `<p class="intro-line">DO YOU HEAR THOSE FOOTSTEPS?</p>`;
   introEl.hidden = false;
 }
 function startIntro() {
@@ -75,6 +75,7 @@ function startIntro() {
 }
 function updateIntro(dt) {
   if (game.intro.kind === 'obi') { updateObiIntro(dt); return; }
+  if (game.intro.kind === 'snek') { updateSnekIntro(dt); return; }
   const it = game.intro, { stomps, spawn } = BOSS.intro;
   it.t += dt;
   if (it.stomp < stomps.length && it.t >= stomps[it.stomp]) {
@@ -327,7 +328,7 @@ function updateEnemyShots(dt) {
       if (deflectHit()) { reflectShot(b, p); back = true; return; }   // DEFLECT mirrors it back (user)
       burst(b.x, b.y, COL.bad, 8, 150);
       p.flash = 0.2;
-      hurtPlayer(b.dmg);
+      hurtPlayer(b.dmg, b.apple ? 'AWAS THE SNEK' : 'Shooter shot');   // (AWAS's apples fly this way too)
     });
     if (hit && !back) game.eshots.splice(i, 1);
   }
@@ -366,7 +367,7 @@ function blowUp(e) {
     if (d > X.r + PLAYER.r) return;
     if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; return; }
     p.flash = 0.25; p.kx = (p.kx || 0) + dx / d * 300; p.ky = (p.ky || 0) + dy / d * 300;
-    hurtPlayer(X.dmg);
+    hurtPlayer(X.dmg, 'Exploder blast');
   });
   for (const o of game.enemies.slice()) {                   // … and every other enemy caught in it (user)
     if (o === e || o.dead || o.gone || o.boss || o.obi || o.makora || o.mrock || o.dummy || hitGap(o, e.x, e.y) > X.r) continue;
@@ -453,7 +454,7 @@ function updateRocks(dt) {
       if (game.shield > 0 || game.dash) { game.shieldHit = 0.15; continue; }
       p.flash = 0.2;
       if (k.big) game.shake = Math.max(game.shake, 0.25);
-      hurtPlayer(k.big ? BOSS.bigRock.dmg : BOSS.rockDmg);
+      hurtPlayer(k.big ? BOSS.bigRock.dmg : BOSS.rockDmg, 'SKURTOSAURUS rock');
     }
   }
 }
@@ -556,13 +557,15 @@ function updateDash(dt) {
   return true;
 }
 
-// The relic icons beside the HP bar: BULL's head, and DEFLECT's shield next to it (v0.48), each in a ring that fills
-// while it cools down and glows when ready, with its key in the corner. Tap one to use it on touch screens.
+// The relic icons beside the HP bar: BULL's head, DEFLECT's shield next to it (v0.48) and VAMPIRIC BALLSACK's sack
+// (v0.54), each in a ring that fills while it cools down (the sack's: then while it fills with kills) and glows when
+// ready, with its key in the corner. Tap one to use it on touch screens.
 function renderRelics() {
   if (!isLocal()) return;
   const chip = (id, icon, name, key, what, k, on) => `<button type="button" class="relic is-${id}${k >= 1 ? ' is-ready' : ''}${on ? ' is-on' : ''}" id="relic-${id}" style="--k: ${k}" title="${name}: ${key === 'SPC' ? 'Space' : key} to ${what}" aria-label="${name}: ${what} (${key === 'SPC' ? 'Space' : key})${on ? ', up' : k >= 1 ? ', ready' : ', recharging'}">`
     + `<span class="relic-icon" aria-hidden="true">${icon}</span><span class="relic-key" aria-hidden="true">${key}</span></button>`;
   const out = [];
+  if (game.relics.includes('sack')) out.push(chip('sack', SACK_ICON, SACK.name, SACK.key, 'drink', sackReady() ? 1 : sackK(), false).replace('class="relic is-sack', `class="relic is-sack${game.sackCd > 0 ? ' is-cool' : ''}`));
   if (game.relics.includes('deflect')) out.push(chip('deflect', DEFLECT_ICON, DEFLECT.name, DEFLECT.key, 'deflect', game.deflCd > 0 ? 1 - game.deflCd / DEFLECT.cd : 1, game.defl > 0));
   if (game.relics.includes('bull')) out.push(chip('bull', BULL_ICON, BULL.name, 'SPC', 'charge', game.dashCd > 0 ? 1 - game.dashCd / BULL.cd : 1, false));
   relicsEl.hidden = !out.length;
@@ -571,6 +574,7 @@ function renderRelics() {
 relicsEl.addEventListener('click', e => {
   if (e.target.closest('#relic-bull')) tryDash();   // tap to charge on touch screens (or to fight OBI ONE's pull)
   else if (e.target.closest('#relic-deflect')) tryDeflect();
+  else if (e.target.closest('#relic-sack')) trySack();
 });
 
 let toastTimer = 0;
@@ -584,6 +588,7 @@ function toast(text, kind) {
 
 function resetBoss() {
   resetObi();
+  resetSnek(); game.dying = null;
   game.boss = null; game.bossDue = false; game.bossDone = false;
   game.rocks = []; game.relics = []; game.dash = null; game.dashCd = 0; game.ghosts = []; game.hitstop = 0; game.intro = null; game.cracks = [];
   clearTimeout(introTimer);

@@ -10,12 +10,12 @@ const PLAYER = { speed: 230, r: 11, hp: 100, safe: 0.6 };   // `safe`: seconds w
 // `hp` never grows with level (v0.12). `hpPerLevel` / `hpPerLevelLate` are kept at 0 in case it's wanted back.
 // `from` is the first level a type can spawn.
 const ENEMY_TYPES = {
-  // v0.12 (user: the level scaling was a bit hard): HP no longer grows with level at all; only numbers, damage and
-  // speed do, so you out-grow them. Each stage brings in one new thing (placeholders):
+  // v0.12 (user: the level scaling was a bit hard): HP no longer grew with level at all; v0.55 it does again
+  // (enemyHpMul below). Each stage brings in one new thing (placeholders):
   //   1–3 red squares only · 4 splitters start (rare, SPLIT) · 7 fast triangles · 10 the boss · 11+ big squares
   //   (rare) and mini dinos (crabs since v0.46).
   square:   { name: 'Square',     shape: 'square',   hp: 3, hpPerLevel: 0, hpPerLevelLate: 0, speed: 130, r: 13, dmg: 10, weight: 6,   xp: 1, from: 1 },
-  triangle: { name: 'Triangle',   shape: 'triangle', hp: 2, hpPerLevel: 0, hpPerLevelLate: 0, speed: 200, r: 11, dmg: 5,  weight: 2,   xp: 1, from: 7 },
+  triangle: { name: 'Triangle',   shape: 'triangle', hp: 2, hpPerLevel: 0, hpPerLevelLate: 0, speed: 165, r: 11, dmg: 5,  weight: 2,   xp: 1, from: 7 },
   big:      { name: 'Big square', shape: 'square',   hp: 8, hpPerLevel: 0, hpPerLevelLate: 0, speed: 105, r: 20, dmg: 20, weight: 0.6, xp: 3, from: 11 },
   // v0.12: red and bigger (user); r 12 before
   // v0.46 (user): the mini dino is now a crab (same moves), half the size (r 18 before)
@@ -57,9 +57,18 @@ const ENEMY_SCALE = { dmgPerLevel: 0.05, dmgPerLevelLate: 0.15, dmgKnee2: 15, dm
 const enemyDmg = (type, level) => { const S = ENEMY_SCALE; return Math.round(ENEMY_TYPES[type].dmg
   * (1 + S.dmgPerLevel * (level - 1) + S.dmgPerLevelLate * Math.max(0, Math.min(level, S.dmgKnee2) - HP_KNEE) + S.dmgPerLevelLater * Math.max(0, level - S.dmgKnee2))); };
 const enemySpeedMul = level => Math.min(ENEMY_SCALE.speedMax, 1 + ENEMY_SCALE.speedPerLevel * (level - 1));
+// v0.55 (user: at level 10+ almost everything died in one hit): HP grows again, with your level (`perLevel` each,
+// more after HP_KNEE) and with your Base damage upgrades (`power` of them), so the swarm keeps up with you.
+// Placeholders.
+const ENEMY_HP_SCALE = { perLevel: 0.12, perLevelLate: 0.08, power: 0.35 };   // v0.55 (user: too tanky in the 20s): 0.18 and 0.6 before
+// v0.57: the stats part is flow.js FLOW.adapt now (all your damage output, a while later); `power` isn't used.
+const enemyHpMul = level => {
+  const S = ENEMY_HP_SCALE;
+  return (1 + S.perLevel * (Math.min(level, HP_KNEE) - 1) + S.perLevelLate * Math.max(0, level - HP_KNEE)) * adaptHp();
+};
 const enemyHp = (type, level) => {
   const T = ENEMY_TYPES[type];
-  return Math.round(T.hp + T.hpPerLevel * (Math.min(level, HP_KNEE) - 1) + T.hpPerLevelLate * Math.max(0, level - HP_KNEE));
+  return Math.max(1, Math.round((T.hp + T.hpPerLevel * (Math.min(level, HP_KNEE) - 1) + T.hpPerLevelLate * Math.max(0, level - HP_KNEE)) * enemyHpMul(level)));
 };
 
 // The swarm grows with the player's level. At level 1 there are always at least 5 on the field (the game
@@ -78,8 +87,26 @@ const lateLevels = level => Math.max(0, level - HP_KNEE);
 const swarmMin = level => Math.min(SWARM.cap, SWARM.min + Math.floor(SWARM.minPerLevel * (level - 1) + SWARM.minPerLevelLate * lateLevels(level)));
 const swarmMax = level => Math.min(SWARM.cap, SWARM.max + Math.floor(SWARM.maxPerLevel * (level - 1) + SWARM.maxPerLevelLate * lateLevels(level)));
 const spawnEvery = level => Math.max(SWARM.fastest, SWARM.every - SWARM.everyPerLevel * (level - 1));
-const AUG_EVERY = 10;        // every 10th level, after the 3 cards, one deck slot gets augmented (fires twice)
-const ECHO_DELAY = 0.12;     // seconds between an augmented slot's two shots
+const AUG_EVERY = 10;        // every 10th level, after the 3 cards, pick 1 of 3 augments; it lands on a random free deck slot
+const ECHO_DELAY = 0.12;     // seconds between a DUPE slot's two shots
+// Augments (v0.68, user): one per slot, no rarity. The tray shows each on its slot. All numbers are placeholders.
+//   dupe: fires twice (melee and ranged) · dmg: double damage · crit: every hit crits · big: shots, swings and blasts
+//   look and hit `big` times bigger · rush: the next card goes off straight after (`rush` s) · magnet: pulls in the XP
+//   orbs within `magnet` px (the normal pull, XP.magnet, was nerfed for it)
+const AUG = { big: 1.5, rush: 0.08, magnet: 340 };
+const AUGS = {
+  dupe:   { name: 'Dupe',   tag: '×2',   col: '--r-legendary', ink: 'r-legendary', text: 'Fires twice, melee and ranged.' },
+  dmg:    { name: 'DMG',    tag: 'DMG',  col: '--bad',         ink: 'bad', text: 'Its damage is doubled.' },
+  crit:   { name: 'Crit',   tag: 'CRIT', col: '--wheel-hi',    ink: 'wheelHi', text: 'Every hit is a crit.' },
+  big:    { name: 'Big',    tag: 'BIG',  col: '--r-epic',      ink: 'r-epic', text: 'Its shots, swings and blasts are huge, and hit a bigger area.' },
+  rush:   { name: 'Rush',   tag: 'RUSH', col: '--diamond',     ink: 'diamond', text: 'The next card fires straight after it.' },
+  magnet: { name: 'Magnet', tag: 'MAG',  col: '--xp',          ink: 'xp', text: 'Pulls in the XP orbs around you every time it fires.' },
+};
+// The augment flags of the play running right now ({ dmg, crit, big }, or null). Everything a play leaves on the floor
+// (a shot, a mine, a swing…) carries them as `aug` next to its `owner`, and usePlayerId (net.js) brings them back when
+// it hits later.
+let AUG_FX = null;
+const bigK = () => (AUG_FX?.big ? AUG.big : 1);   // how much bigger a play's sizes are right now
 // Health potions (user): enemies sometimes drop one; walking over it heals. All numbers are placeholders.
 const POTION = { drop: 0.01, heal: 25, r: 7, life: 20, max: 5 };   // 1% (was 2%, and 5% before that; user: fewer)
 // Diamond (user): a rare drop; picking it up pulls every XP orb on the floor to the player. Placeholders.
@@ -106,7 +133,7 @@ const XP = {
   first: 5, grow: 1.12, step: 2,   // XP needed = first × grow^(level−1) + step × (level−1): 5, 8, 10, 13, 16, 19, 22, 25, 28, 32 … 69 at level 15
                                    // (user: higher levels shouldn't be so hard to reach; the enemies get harder instead)
   drop: 0.8,              // chance an enemy drops an orb
-  magnet: 90,             // orbs within this many px fly to the player
+  magnet: 60,             // orbs within this many px fly to the player (v0.68: 90 → 60, user: nerfed for the MAGNET augment)
   chase: 360,             // a pulled orb's speed at the edge of the magnet (px/s; at least 1.4× the player's speed)
   snap: 1500,             // extra speed at point blank (user: super strong up close), rising with closeness²
   vacuum: { start: 600, accel: 5000, max: 2600 },   // a diamond's pull: faster still, from anywhere (px/s, px/s²)
@@ -134,11 +161,15 @@ const xpNeeded = level => {
 const css = getComputedStyle(document.documentElement);
 const tok = n => css.getPropertyValue(n).trim();
 const COL = {
-  floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), frozen: tok('--frozen'), lion: tok('--lion'), lionMane: tok('--lion-mane'), turtle: tok('--turtle'), turtleDark: tok('--turtle-dark'), turtleSkin: tok('--turtle-skin'), chimera: tok('--chimera'), chimeraWing: tok('--chimera-wing'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
+  floor: tok('--floor'), line: tok('--line'), player: tok('--player'), text: tok('--text'), bad: tok('--bad'), xp: tok('--xp'), hp: tok('--hp'), potion: tok('--potion'), diamond: tok('--diamond'), boss: tok('--boss'), bossDark: tok('--boss-dark'), bossEye: tok('--boss-eye'), makora: tok('--makora'), makoraDark: tok('--makora-dark'), makoraLine: tok('--makora-line'), makoraBand: tok('--makora-band'), makoraCloth: tok('--makora-cloth'), makoraClothDark: tok('--makora-cloth-dark'), makoraMouth: tok('--makora-mouth'), rift: tok('--rift'), riftDark: tok('--rift-dark'), wheel: tok('--wheel'), wheelDark: tok('--wheel-dark'), wheelHi: tok('--wheel-hi'), blade: tok('--blade'), ice: tok('--ice'), frozen: tok('--frozen'), rock: tok('--rock'), rockDark: tok('--rock-dark'), rockHi: tok('--rock-hi'), crack: tok('--crack'), relic: tok('--relic'),
   square: tok('--enemy'), big: tok('--enemy-big'), triangle: tok('--enemy-fast'), enemy: tok('--enemy'), raptor: tok('--crab'), crab: tok('--crab'), crabDark: tok('--crab-dark'), crabHi: tok('--crab-hi'), crabEye: tok('--crab-eye'), crabPupil: tok('--crab-pupil'),
   obiRobe: tok('--obi-robe'), obiRobeDark: tok('--obi-robe-dark'), obiUnder: tok('--obi-under'), obiBelt: tok('--obi-belt'), obiBoot: tok('--obi-boot'), obiSkin: tok('--obi-skin'), obiHair: tok('--obi-hair'), obiEye: tok('--obi-eye'), obiHilt: tok('--obi-hilt'), obiHiltDark: tok('--obi-hilt-dark'), saber: tok('--saber'), saberCore: tok('--saber-core'), saberBad: tok('--saber-2'), saberBadCore: tok('--saber-2-core'),
   shooter: tok('--enemy-shooter'), lunger: tok('--enemy-lunger'), lungerHi: tok('--enemy-lunger-hi'), boom: tok('--enemy-fast-split'), deflect: tok('--saber'),
-  knifeDark: tok('--knife-dark'), punchDark: tok('--punch-dark'), flash: tok('--black-flash'), flashHi: tok('--black-flash-hi'), flashAura: tok('--black-flash-aura'), knifeGuard: tok('--knife-guard'), fist: tok('--fist'), fistLine: tok('--fist-line'), sinGold: tok('--sin-gold'), tempestHi: tok('--tempest-hi'), tempestDark: tok('--tempest-dark'), sinTealHi: tok('--sin-teal-hi'),
+  knifeDark: tok('--knife-dark'), punchDark: tok('--punch-dark'), flash: tok('--black-flash'), flashHi: tok('--black-flash-hi'), flashAura: tok('--black-flash-aura'), knifeGuard: tok('--knife-guard'), fist: tok('--fist'), fistLine: tok('--fist-line'), sinGold: tok('--sin-gold'), tempestHi: tok('--tempest-hi'), tempestDark: tok('--tempest-dark'), sinTealHi: tok('--sin-teal-hi'), bshield: tok('--brick-shield'), brickDust: tok('--brick-dust'), slapHand: tok('--slap-hand'), cannonBall: tok('--cannon-ball'), cannonHi: tok('--cannon-hi'), vessel: tok('--vessel-aura'),
+  twinRed: tok('--twin-red'), twinHot: tok('--twin-hot'), arcanaHi: tok('--arcana-hi'), exploHot: tok('--explo-hot'), gravHi: tok('--grav-hi'), darkCore: tok('--dark-core'), vine: tok('--vine'), vineDark: tok('--vine-dark'), bear: tok('--bear'), bearDark: tok('--bear-dark'),   // the Ulti Magus pack (v0.60)
+  gearHi: tok('--gear-hi'), gearDark: tok('--gear-dark'), zap: tok('--zap'), glitchA: tok('--glitch-a'), glitchB: tok('--glitch-b'), bsod: tok('--bsod'), dragonFire: tok('--dragon-fire'), dragonDark: tok('--dragon-dark'), swDeep: tok('--sw-deep'), swHi: tok('--sw-hi'), oak: tok('--oak'), oakDark: tok('--oak-dark'), leaf: tok('--leaf'), leafHi: tok('--leaf-hi'), bloom: tok('--bloom'), bloomHi: tok('--bloom-hi'), missilesHi: tok('--missiles-hi'), missilesDeep: tok('--missiles-deep'), seed: tok('--seed'), blight: tok('--blight'), blightHi: tok('--blight-hi'),   // Gear Toss, Dragon Kick (v0.60)
+  hammerHead: tok('--hammer-head'), hammerHi: tok('--hammer-hi'), berserk: tok('--berserk'), fistoHi: tok('--fisto-hi'), chessDark: tok('--chess-dark'), chessGold: tok('--chess-gold'),
+  lcd: tok('--lcd'), lcdInk: tok('--lcd-ink'), snek: tok('--snek'), sack: tok('--sack'), edge: tok('--edge'),
   'square-split': tok('--enemy-split'), 'big-split': tok('--enemy-big-split'), 'triangle-split': tok('--enemy-fast-split'),
   ...Object.fromEntries(CARD_IDS.map(id => [id, tok(`--${id}`)])),
   ...Object.fromEntries(RARITIES.map(r => [`r-${r}`, tok(`--r-${r}`)])),

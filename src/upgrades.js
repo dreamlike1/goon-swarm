@@ -5,8 +5,8 @@
    Each level up offers 3 different stats, each with its own rolled
    rarity. Rarer = bigger: the Common amount times UP_MULT. Upgrades
    last for this run only. All numbers are placeholders.
-   Every 10th level, after the 3 cards, you also augment one deck slot
-   (1–7): whatever card is in that slot fires twice.
+   Every 10th level, after the 3 cards, you also pick 1 of 3 augments
+   (v0.68, config.js AUGS); it lands on a random deck slot that has none.
    ============================================================ */
 const UP_RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];   // no SSS for upgrades (user)
 const UP_WEIGHTS = { common: 60, uncommon: 25, rare: 10, epic: 4, legendary: 1 };
@@ -148,7 +148,7 @@ function openNext() {
   choiceEl.classList.toggle('is-aug', step.kind === 'aug');
   choiceEl.classList.toggle('is-wheel', step.kind === 'wheel');
   choiceEl.classList.toggle('is-relic', step.kind === 'relic');
-  const render = { stat: renderStatCards, aug: renderSlots, wheel: renderWheel, relic: renderRelic }[step.kind];
+  const render = { stat: renderStatCards, aug: renderAugCards, wheel: renderWheel, relic: renderRelic }[step.kind];
   render();
   choiceEl.hidden = false;
   if (animOk) {
@@ -170,7 +170,7 @@ function renderStatCards() {
         + `<span class="up-key" aria-hidden="true">${i + 1}</span>`
         + `<span class="up-rarity">Weapon</span>`
         + `<span class="up-name">Random weapon</span>`
-        + `<span class="up-gain">A random weapon you own joins your deck for this run</span>`
+        + `<span class="up-gain">Another copy of a weapon from your loadout joins your deck for this run</span>`
         + `<span class="up-change">${n} cards <span aria-hidden="true">→</span><span class="sr"> to </span> <b>${n + 1}</b></span>`
         + `</button></li>`;
     }
@@ -191,24 +191,75 @@ function renderStatCards() {
   setTimeout(() => SFX.flip(UP_RARITIES[best]), 120);
 }
 
-// Augment: the 7 deck slots, showing the card in each right now. Slots already augmented can't be picked again.
-function renderSlots() {
-  document.getElementById('up-title').textContent = 'Augment a slot';
+// Augment (v0.68, user): 3 different augments to pick from. The one you pick lands on a random deck slot that has none
+// yet (you see which after: the slots light up in turn and stop on it). One augment a slot.
+let augStep = null;    // { kinds: the 3 on screen, spinning }
+const freeSlots = () => [...Array(SEQUENCE_SIZE).keys()].filter(i => !game.aug.has(i));
+function renderAugCards() {
+  const pool = Object.keys(AUGS);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  augStep = { kinds: pool.slice(0, 3), spinning: false };
+  document.getElementById('up-title').textContent = 'Choose an augment';
   const sub = document.getElementById('up-sub');
   sub.hidden = false;
-  sub.textContent = 'Whatever card is in this slot fires twice, every sequence.';
-  document.getElementById('up-keys').textContent = 'Press 1 to 7 · hold a direction to move off the moment you pick';
-  const seq = (deck || mdeck).sequence;   // (slot n of both decks: the ranged deck's shown, or the melee one's)
+  sub.textContent = 'It goes on a random slot in your deck, for this run.';
+  document.getElementById('up-keys').textContent = 'Press 1, 2 or 3';
+  choiceCards.innerHTML = augStep.kinds.map((k, i) => `<li><button class="upcard augcard" type="button" data-aug="${k}" style="--rc: var(${AUGS[k].col})">`
+    + `<span class="up-key" aria-hidden="true">${i + 1}</span>`
+    + `<span class="up-rarity">Augment</span>`
+    + `<span class="up-name aug-tag">${AUGS[k].name}</span>`
+    + `<span class="up-gain">${AUGS[k].text}</span>`
+    + `<span class="up-change">Random slot</span>`
+    + `</button></li>`).join('');
+  SFX.flip('epic');
+}
+// The pick: the slots, then the one it lands on.
+function pickAug(n) {
+  const kind = augStep?.kinds[n], free = freeSlots();
+  if (!game.choosing || !step || step.kind !== 'aug' || !kind || augStep.spinning || !free.length) return;
+  augStep.spinning = true;
+  const slot = free[Math.floor(Math.random() * free.length)], seq = (deck || mdeck || wdeck).sequence;
+  document.getElementById('up-title').textContent = `${AUGS[kind].name} goes on…`;
+  document.getElementById('up-sub').textContent = AUGS[kind].text;
+  document.getElementById('up-keys').textContent = '';
+  choiceEl.classList.add('is-spin');
+  choiceCards.style.setProperty('--ac', `var(${AUGS[kind].col})`);
   choiceCards.innerHTML = seq.map((c, i) => {
-    const done = game.aug.has(i);
-    return `<li><button class="slotcard${done ? ' is-aug' : ''}" type="button" data-slot="${i}"${done ? ' disabled' : ''} style="--c: ${c ? `var(--${c})` : 'var(--muted)'}"`
-      + ` aria-label="Slot ${i + 1}${c ? `, now ${CARDS[c].name}` : ''}${done ? ', already augmented' : ''}">`
+    const k = augAt(i);
+    return `<li><span class="slotcard${k ? ' is-aug' : ''}" data-slot="${i}" style="--c: ${c ? `var(--${c})` : 'var(--muted)'}${k ? `; --ac: var(${AUGS[k].col})` : ''}">`
       + `<span class="slot-n">${i + 1}</span>`
       + `<span class="slot-now">${c ? CARDS[c].name : '?'}</span>`
-      + `<span class="slot-x2">${done ? '×2' : ''}</span>`
-      + `</button></li>`;
+      + `<span class="slot-x2">${k ? AUGS[k].tag : ''}</span>`
+      + `</span></li>`;
   }).join('');
-  SFX.flip('epic');
+  SFX.flip('legendary');
+  // The light runs round the free slots, slowing down, and stops on `slot` (straight there with less motion).
+  const hops = animOk ? free.length * 2 + free.indexOf(slot) + 1 : 1;
+  let h = 0;
+  const light = i => { for (const el of choiceCards.querySelectorAll('.slotcard')) el.classList.toggle('is-lit', Number(el.dataset.slot) === i); };
+  const hop = () => {
+    if (!augStep) return;
+    h++;
+    const i = animOk ? free[(h - 1) % free.length] : slot;
+    light(i);
+    if (h < hops) { SFX.wheelTick(); setTimeout(hop, 45 + 260 * (h / hops) ** 2.4); return; }
+    const el = choiceCards.querySelector(`.slotcard[data-slot="${slot}"]`);
+    if (el) { el.classList.add('is-aug', 'is-won'); el.style.setProperty('--ac', `var(${AUGS[kind].col})`); el.querySelector('.slot-x2').textContent = AUGS[kind].tag; }
+    addAug(slot, kind);
+    setTimeout(() => { choiceEl.classList.remove('is-spin'); augStep = null; openNext(); }, animOk ? 900 : 300);
+  };
+  setTimeout(hop, 120);
+}
+// Puts augment `kind` on deck slot `i` (co-op rolls both: coop.js).
+function addAug(i, kind) {
+  game.aug.set(i, kind);
+  SFX.upgrade(4);
+  celebrate(`SLOT ${i + 1} ${AUGS[kind].tag}`, COL[AUGS[kind].ink]);
+  renderTray(false);
+  for (const tray of Object.values(DECK_VIEWS).map(V => V.tray)) {
+    const li = tray.children[i];
+    if (li) { li.classList.remove('aug-new'); void li.offsetWidth; li.classList.add('aug-new'); }
+  }
 }
 
 /* ---------- weapon wheel (levels 5, 15, 25 …) ---------- */
@@ -332,13 +383,21 @@ function takeWheelXp() {
   openNext();
 }
 
-// The random weapon card: one of the weapons you own (user), rolled with the wheel's odds, straight into this run's deck.
+// The random weapon card: one of the weapons in your loadout (v0.57, user: "only from your current loadout, not other
+// cards you've unlocked"; any weapon you own before), rolled with the wheel's odds, straight into this run's deck.
 // (v0.53: only weapons for a deck you're playing, ranged or melee; a won card goes into its own deck)
 const playable = id => (isMelee(id) ? !!mdeck : !!deck);
 const runDeckOf = id => (isMelee(id) ? mdeck : deck);
-const ownedIds = () => { const ids = CARD_IDS.filter(id => (save.owned[id] || 0) > 0 && playable(id)); return ids.length ? ids : CARD_IDS.filter(playable); };
+// (the run's decks less what the wheel and this card added: the loadout you started with; co-op: this player's)
+function loadoutIds() {
+  const n = {};
+  for (const id of runDeckCards()) n[id] = (n[id] || 0) + 1;
+  for (const id of game.won || []) n[id] = (n[id] || 0) - 1;
+  const ids = Object.keys(n).filter(id => n[id] > 0 && playable(id));
+  return ids.length ? ids : CARD_IDS.filter(playable);
+}
 function takeRandomWeapon() {
-  const id = pickSlice(wheelSlices(ownedIds())).id;
+  const id = pickSlice(wheelSlices(loadoutIds())).id;
   runDeckOf(id).addCard(id);
   game.won.push(id);
   SFX.upgrade(Math.max(0, RARITIES.indexOf(CARDS[id].rarity)) + 1);
@@ -348,26 +407,36 @@ function takeRandomWeapon() {
 
 /* ---------- relic message (after the boss) ---------- */
 function renderRelic() {
-  const deflect = step.relic === 'deflect';                // OBI ONE's (v0.48); otherwise SKURTOSAURUS's BULL
-  document.getElementById('up-title').textContent = `Relic earned: ${deflect ? DEFLECT.name : BULL.name}`;
+  // BULL (SKURTOSAURUS), DEFLECT (OBI ONE, v0.48) or VAMPIRIC BALLSACK (AWAS THE SNEK, v0.54)
+  const R = {
+    bull: { name: BULL.name, from: BOSS.name, icon: BULL_ICON, cls: '', facts: [
+      `Press <kbd>Space</kbd>, or tap the bull icon by your HP bar, to <b>charge</b> a short way forward.`,
+      `You can't be hurt while charging, and every enemy you hit is <b>thrown aside</b>.`,
+      `The charge <b>scoops up</b> potions, diamonds and XP orbs on the way.`,
+      `It recharges in ${BULL.cd} seconds: the ring around the icon fills, then glows when it's ready.`,
+    ] },
+    deflect: { name: DEFLECT.name, from: OBI.name, icon: DEFLECT_ICON, cls: ' is-deflect', facts: [
+      `Press <kbd>${DEFLECT.key}</kbd>, or tap the shield icon by your HP bar, to raise a <b>deflect shield</b> for ${DEFLECT.time} seconds.`,
+      `It <b>stops the first hit</b> that would land on you, and shoves back whatever is close.`,
+      `<b>Perfect deflect:</b> raise it just before a hit lands (within ${DEFLECT.perfect} s) and <b>half its cooldown</b> comes back.`,
+      `It recharges in ${DEFLECT.cd} seconds: the ring around the icon fills, then glows when it's ready.`,
+    ] },
+    sack: { name: SACK.name, from: SNEK.name, icon: SACK_ICON, cls: ' is-sack', facts: [
+      `Every kill <b>fills the sack</b>: ${SACK.kills} kills fill it. Hitting a boss fills it too.`,
+      `Full? Press <kbd>${SACK.key}</kbd>, or tap the sack icon by your HP bar, to drink it: you get back <b>${Math.round(SACK.heal * 100)}% of your health</b>.`,
+      `Then it needs ${SACK.cd} seconds before it starts filling again (the ring shows it in dark red).`,
+      `It glows when it's ready, and so do you.`,
+    ] },
+  }[step.relic] || null;
+  if (!R) return;
+  document.getElementById('up-title').textContent = `Relic earned: ${R.name}`;
   const sub = document.getElementById('up-sub');
   sub.hidden = false;
-  sub.textContent = `${deflect ? OBI.name : BOSS.name} dropped it. It's yours for the rest of this run.`;
+  sub.textContent = `${R.from} dropped it. It's yours for the rest of this run.`;
   document.getElementById('up-keys').textContent = 'Press Enter to continue';
-  const facts = deflect ? [
-    `Press <kbd>${DEFLECT.key}</kbd>, or tap the shield icon by your HP bar, to raise a <b>deflect shield</b> for ${DEFLECT.time} seconds.`,
-    `It <b>stops the first hit</b> that would land on you, and shoves back whatever is close.`,
-    `<b>Perfect deflect:</b> raise it just before a hit lands (within ${DEFLECT.perfect} s) and <b>half its cooldown</b> comes back.`,
-    `It recharges in ${DEFLECT.cd} seconds: the ring around the icon fills, then glows when it's ready.`,
-  ] : [
-    `Press <kbd>Space</kbd>, or tap the bull icon by your HP bar, to <b>charge</b> a short way forward.`,
-    `You can't be hurt while charging, and every enemy you hit is <b>thrown aside</b>.`,
-    `The charge <b>scoops up</b> potions, diamonds and XP orbs on the way.`,
-    `It recharges in ${BULL.cd} seconds: the ring around the icon fills, then glows when it's ready.`,
-  ];
   choiceCards.innerHTML = `<li class="relic-box">`
-    + `<span class="relic-art${deflect ? ' is-deflect' : ''}" aria-hidden="true">${deflect ? DEFLECT_ICON : BULL_ICON}</span>`
-    + `<ul class="relic-facts">${facts.map(f => `<li>${f}</li>`).join('')}</ul>`
+    + `<span class="relic-art${R.cls}" aria-hidden="true">${R.icon}</span>`
+    + `<ul class="relic-facts">${R.facts.map(f => `<li>${f}</li>`).join('')}</ul>`
     + `<button class="start" type="button" id="btn-relic-ok">Got it</button>`
     + `</li>`;
   SFX.flip('legendary');
@@ -404,17 +473,6 @@ function pickChoice(i) {
   openNext();
 }
 
-function pickSlot(i) {
-  if (!game.choosing || !step || step.kind !== 'aug' || i < 0 || i >= SEQUENCE_SIZE || game.aug.has(i)) return;
-  game.aug.add(i);
-  SFX.upgrade(4);
-  celebrate(`SLOT ${i + 1} ×2`, COL['r-legendary']);
-  renderTray(false);
-  const li = trayEl.children[i];
-  if (li) { li.classList.remove('aug-new'); void li.offsetWidth; li.classList.add('aug-new'); }
-  openNext();
-}
-
 function celebrate(text, color) {
   const p = game.player;
   game.floaters = game.floaters.filter(f => !f.pick && !f.text.startsWith('LEVEL'));   // the newest pick's label replaces the last
@@ -425,6 +483,8 @@ function celebrate(text, color) {
 function closeChoice() {
   step = null;
   wheel = null;
+  augStep = null;
+  choiceEl.classList.remove('is-spin');
   game.choosing = false;
   game.shield = SHIELD.linger;           // a moment of safety as the fight starts again
   last = performance.now();              // the paused time isn't one long frame
@@ -435,13 +495,13 @@ function closeChoice() {
 choiceCards.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
-  if (b.classList.contains('upcard')) pickChoice(Number(b.dataset.i));
-  else if (b.classList.contains('slotcard')) pickSlot(Number(b.dataset.slot));
+  if (b.classList.contains('augcard')) pickAug(augStep?.kinds.indexOf(b.dataset.aug));
+  else if (b.classList.contains('upcard')) pickChoice(Number(b.dataset.i));
   else if (b.id === 'btn-spin') { if (wheel?.done) takeWheel(); else spinWheel(); }
   else if (b.id === 'btn-wheel-xp') takeWheelXp();
   else if (b.id === 'btn-relic-ok') closeRelic();
 });
-// Number keys pick: 1–3 for stat cards, 1–7 for slots (arena.js hands keys over while choosing).
+// Number keys pick: 1–3 for stat cards and augments (arena.js hands keys over while choosing).
 // Returns true if it used the key, so WASD and the arrows keep moving the player.
 function onChoiceKey(e) {
   if (step?.kind === 'relic') {
@@ -454,11 +514,11 @@ function onChoiceKey(e) {
     if (e.code === 'KeyX') { if (!e.repeat) takeWheelXp(); e.preventDefault(); return true; }
     return false;
   }
-  const m = /^(?:Digit|Numpad)([1-7])$/.exec(e.code);
+  const m = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
   if (!m) return false;
   if (e.repeat) return true;
   const n = Number(m[1]) - 1;
-  if (step?.kind === 'stat') pickChoice(n); else pickSlot(n);
+  if (step?.kind === 'stat') pickChoice(n); else if (step?.kind === 'aug') pickAug(n);
   e.preventDefault();
   return true;
 }

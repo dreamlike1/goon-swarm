@@ -6,4 +6,16 @@ docs/
 *.command
 src/devtools.js
 src/hitedit.js
+src/fxlab.js
+src/fxcards.js
+src/storeedit.js
+src/cardedit.js
+src/adminmenu.js
 tools/
+# The admin view and its key (localhost only)
+admin.html
+src/admin.js
+src/admin-key.js
+
+# Original recordings and art (big .wav files, unused images): local only
+assets/raw/

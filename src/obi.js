@@ -45,7 +45,9 @@ const OBI = {
     // v0.52 (user: if he throws 2–3 sabers in a row and you're still far, he pulls you in; both pulls stay): `pullAfter`
     // 2 → 2.5 s so the two don't land on top of each other
     pullThrows: [2, 3.99],
-    pull: { speed: 185, reach: 62, press: 0.12, decay: 0.25, dmg: 26, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
+    // v0.70 (user: nerf the SPACE smash): 5 presses break free (9 before: press 0.12), the ring drains more slowly
+    // (decay 0.25 before), he drags you in more slowly (185 before) and his cut hurts less (26 before)
+    pull: { speed: 140, reach: 62, press: 0.2, decay: 0.12, dmg: 18, knock: 620, stun: 1.2, shake: 0.07, max: 6 },
     rotation: ['smallSlash', 'stabDash', 'bigSlash'],  // up close, round and round
     smallSlash: { tele: 0.16, anim: 0.12, arc: 1.5, range: 105, dmg: 10, lunge: 80 },
     bigSlash: { tele: 0.45, anim: 0.3, arc: 3.1, range: 160, dmg: 26, lunge: 110 },
@@ -72,11 +74,11 @@ const OBI = {
   },
   xp: 30,
 };
-// DEFLECT (user): P, or tap its icon. `time`: how long the shield lasts; `perfect`: a hit this soon after raising it
+// DEFLECT (user): Q (P until v0.54, user), or tap its icon. `time`: how long the shield lasts; `perfect`: a hit this soon after raising it
 // is a perfect deflect, which gives back half the cooldown. `push`/`knock`: the shove to enemies nearby when it goes.
 // v0.52 (user: it stops one hit, then it's gone; the shield lasts 2 s, 5 before): no safe moment after it any more (`safe` 0.45 s before), and a
 // long-range attack it stops is mirrored back (`mirror`: that many times as fast, and as hard, as it came; deflectBack).
-const DEFLECT = { name: 'DEFLECT', key: 'P', time: 2, cd: 12, perfect: 0.3, push: 90, knock: 620, mirror: { speed: 2.2, dmg: 1.5 } };
+const DEFLECT = { name: 'DEFLECT', key: 'Q', time: 2, cd: 12, perfect: 0.3, push: 90, knock: 620, mirror: { speed: 2.2, dmg: 1.5 } };
 // A shield with a blade across it: the relic's icon by the HP bar (next to BULL) and in its message.
 const DEFLECT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">`
   + `<path d="M12 3l7 3v5.5c0 4.2-3 7.6-7 9.5-4-1.9-7-5.3-7-9.5V6z"/><path d="M8 15.5L16.5 7"/><path d="M6.5 17l1.5-1.5"/></svg>`;
@@ -747,7 +749,16 @@ function pullStep(o, dt) {
   return a;
 }
 // Is this player (the active one) being pulled? Their own walking stops (combat.js playerStep).
-const pulledNow = () => { const o = game.obi; return !!(o && o.pull && o.pull.id === ownerId()); };
+// v0.70 (user: "I freeze in place for a while while being force pulled"): only while he's really pulling (in the pull,
+// not stunned, not dying). A Soap Gun, Flashbang or Blowpipe stun skips his turn, so the pull used to sit there and
+// hold you still until it wore off; now the stun breaks it (obiLetGo, combat.js).
+const pulledNow = () => { const o = game.obi; return !!(o && o.pull && o.state === 'pull' && !(o.stun > 0) && !o.dead && o.pull.id === ownerId()); };
+// He lets go (stunned or dying mid-pull): you're free, and he takes a breath once he can move again.
+function obiLetGo(o) {
+  if (!o.pull) return;
+  o.pull = null;
+  if (o.state === 'pull') obiRest(o);
+}
 // A press of SPACE (or a tap) while you're being pulled. True if it went to the pull (then it isn't a BULL charge).
 function obiMash() {
   const o = game.obi;
@@ -954,13 +965,22 @@ function drawSaber(x, y, a, len, glow = 1, bad = false) {
   for (const k of [0.3, 0.55]) { const px = hx + (bx - hx) * k, py = hy + (by - hy) * k; ctx.beginPath(); ctx.moveTo(px - c * 0.6, py - s * 0.6); ctx.lineTo(px + c * 0.6, py + s * 0.6); ctx.stroke(); }
   ctx.lineCap = 'round';
 }
+// v0.71 (user: "revert back the dinosaur and obi; just the effects should be 3D"): OBI ONE is drawn flat, as before
+// v0.70, and once three.js is in, his effects are 3D on top (boss3d.js b3Obi): the cut's arc, the blade's trail, the
+// guard's shield, the dash streak, the force in his hand, the focus rings. Then the flat cut crescent and guard are off.
 function drawObi(o) {
+  if (typeof b3Ok !== 'function' || !b3Ok()) { drawObiFlat(o); return; }
+  drawObiFlat(o, 'lit');
+  b3Obi(o);
+}
+// `part`: 'all' (flat effects too) or 'lit' (the 3D ones are drawn on top: boss3d.js).
+function drawObiFlat(o, part = 'all') {
   const k = obiUnit(o), t = o.anim || 0, st = o.state, still = reducedMotion, face = o.face || 1;
   const la = o.aim ?? 0;
   // the warnings, on the floor under him (user: an indicator for the long-range ones)
   if (st === 'throwwind' && o.th) obiLane(o);
   if (st === 'dashwind') obiDashLine(o);
-  if (st === 'slice' && o.sl) obiCut(o);
+  if (st === 'slice' && o.sl) obiCut(o, part === 'all');
   if (o.phase >= 2 || st === 'focus') {                    // phase 2: a pale blue glow round him
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * 5), R = 44 * k * (1 + 0.1 * pulse);
     const g = ctx.createRadialGradient(o.x, o.y - 6 * k, 6 * k, o.x, o.y - 6 * k, R);
@@ -1010,6 +1030,8 @@ function drawObi(o) {
     ctx.fillStyle = skin; circle(tx, ty, open ? 2.8 : 2.5);
   };
   const bk = [ps.back[0], ps.back[1] + cy], fr = [ps.hand[0], ps.hand[1] + cy];
+  o.pins = {};                                                         // where the 3D effects go (boss3d.js fxPin)
+  fxPin(o, 'chest', 0, -6 + cy); fxPin(o, 'hand2', bk[0], bk[1]);
   arm(SH[0][0], SH[0][1], bk[0], bk[1], 1, ps.open);                   // the far arm, behind the body
 
   // the tunic's skirt, then the body
@@ -1044,13 +1066,15 @@ function drawObi(o) {
   ctx.beginPath(); ctx.moveTo(1, hy - 3 - frown * 0.2); ctx.lineTo(3.6, hy - 3 + frown); ctx.moveTo(5, hy - 3 + frown); ctx.lineTo(7.6, hy - 3.2 - frown * 0.2); ctx.stroke();   // brows
 
   // the near arm and the saber in its hand (the saber is its own piece, so it can swing, twirl or fly)
-  if (ps.saber) {
+  if (ps.saber && !o.noSaber) {                                        // (switched off as he dies: deaths.js)
     const glow = st === 'block' && !still ? 0.9 + 0.3 * Math.sin(t * 30) : 1;
     drawSaber(fr[0], fr[1], ps.sa, 36, glow, o.phase >= 2);
+    const c = Math.cos(ps.sa), sn = Math.sin(ps.sa);
+    fxPin(o, 'sabB', fr[0] + c * 4.5, fr[1] + sn * 4.5); fxPin(o, 'sabT', fr[0] + c * 40.5, fr[1] + sn * 40.5);
   }
   arm(SH[1][0], SH[1][1], fr[0], fr[1], -1, ps.open && !ps.saber);
   ctx.restore();
-  if (st === 'block') {                                                // the guard: a shimmer in front of him
+  if (st === 'block' && part === 'all') {                              // the guard: a shimmer in front of him
     const fl = still ? 0.5 : 0.5 + 0.5 * Math.sin(t * 22);
     ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = COL.saber; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.25 + 0.25 * fl;
@@ -1089,11 +1113,11 @@ function obiDashLine(o) {
   ctx.restore(); ctx.globalAlpha = 1;
 }
 // A slice: the red cone as he raises it (makora.js warnCone), then a blue crescent as it cuts.
-function obiCut(o) {
+function obiCut(o, crescent = true) {
   const s = o.sl, S = s.spec || OBI.slice, bad = o.phase >= 2;
   ctx.save(); ctx.translate(o.x, o.y - 6 * obiUnit(o)); ctx.rotate(s.a);
   if (!s.struck) warnCone(S.arc, S.range, Math.min(1, s.t / Math.max(0.01, s.tele)));
-  else {
+  else if (crescent) {   // (the 3D OBI ONE draws his own, boss3d.js)
     const q = Math.min(1, (s.t - s.tele) / S.anim), side = s.dir || 1;
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.8 * (1 - q); ctx.fillStyle = bad ? COL.saberBad : COL.saber;

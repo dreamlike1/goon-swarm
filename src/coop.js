@@ -114,6 +114,8 @@ function attachFast(conn) {
   conn.on('close', () => { if (g.fast === conn) g.fast = null; });
 }
 const cleanCards = cards => (Array.isArray(cards) ? [...cards.filter(c => CARDS[c] && !isMelee(c)).slice(0, DECK_LIMIT), ...cards.filter(isMelee).slice(0, DECK_LIMIT)] : ['bullet']);   // (each deck up to 31)
+// A friend's Wild deck (v0.62): up to 31 cards, all of one kind (its first card's).
+const cleanWild = cards => { const c = Array.isArray(cards) ? cards.filter(x => CARDS[x]) : []; return c.filter(x => kindOf(x) === kindOf(c[0])).slice(0, DECK_LIMIT); };
 function onHostMsg(conn, m) {
   if (!m || typeof m !== 'object') return;
   let g = NET.conns.get(conn);
@@ -123,7 +125,7 @@ function onHostMsg(conn, m) {
     if (NET.lobby.length >= COOP.max) return netSend(conn, { t: 'no', why: 'That game is full (4 players).' });
     const id = Math.max(...NET.lobby.map(p => p.id)) + 1;
     g = { id, name: String(m.name || 'Player').slice(0, 14), color: '', emoji: '', local: false, ping: null, conn, fast: null, ready: false,
-      cards: cleanCards(m.cards), seed: m.seed >>> 0 };
+      cards: cleanCards(m.cards), wild: cleanWild(m.wild), tiers: cleanTierMap(m.tiers), seed: m.seed >>> 0 };
     setLook(g, m.color, m.emoji);
     NET.conns.set(conn, g);
     NET.lobby.push(g);
@@ -134,7 +136,7 @@ function onHostMsg(conn, m) {
   if (!g) return;
   if (m.t === 'pong') { g.ping = Math.max(1, Math.round(performance.now() - m.ts)); const c = byId(g.id); if (c) c.ping = g.ping; if (!NET.run) lobbyChanged(); return; }
   // the room
-  if (m.t === 'cards') { if (!NET.run) { g.cards = cleanCards(m.cards); g.ready = false; cancelCount(); lobbyChanged(); } return; }
+  if (m.t === 'cards') { if (!NET.run) { g.cards = cleanCards(m.cards); g.wild = cleanWild(m.wild); g.tiers = cleanTierMap(m.tiers); g.ready = false; cancelCount(); lobbyChanged(); } return; }
   if (m.t === 'ready') { if (!NET.run) { g.ready = !!m.on; if (!g.ready) cancelCount(); lobbyChanged(); } return; }
   if (m.t === 'look') { if (!NET.run) { setLook(g, m.color, m.emoji); lobbyChanged(); } return; }
   // the run
@@ -145,6 +147,7 @@ function onHostMsg(conn, m) {
     // presses that must never go missing (v0.48): running counts, so a lost or late message still adds up
     if ((m.mash | 0) > c.net.mash) { c.net.mashQ += (m.mash | 0) - c.net.mash; c.net.mash = m.mash | 0; }   // fighting OBI ONE's pull
     if ((m.dfl | 0) > c.net.dfl) { c.net.dflQ += (m.dfl | 0) - c.net.dfl; c.net.dfl = m.dfl | 0; }       // DEFLECT
+    if ((m.sk | 0) > c.net.sk) { c.net.skQ += (m.sk | 0) - c.net.sk; c.net.sk = m.sk | 0; }             // VAMPIRIC BALLSACK
     const q = m.q | 0;
     if (q && q < c.net.seq) return;                        // an older one that arrived after a newer one: skip it
     c.net.seq = q;
@@ -177,7 +180,7 @@ function deckSummary(cards) {
 function lobbyChanged() {
   const count = NET.countEnd ? Math.max(0, (NET.countEnd - performance.now()) / 1000) : 0;
   NET.list = NET.lobby.map(p => ({ id: p.id, name: p.name, color: p.color, emoji: p.emoji || '', ping: p.ping, ready: p.local || !!p.ready,
-    deck: deckSummary(p.local ? runCards() : p.cards) }));
+    deck: deckSummary(p.local ? [...runCards(), ...runWild()] : [...(p.cards || []), ...(p.wild || [])]) }));
   for (const g of NET.conns.values()) netSend(g.conn, { t: 'lobby', list: NET.list, count });
   renderLobby();
 }
@@ -185,7 +188,7 @@ function lobbyChanged() {
 // Guest: join the room with this key.
 async function coopJoin(name, key) {
   coopReset();
-  Object.assign(NET, { on: true, guest: true, name, key, myCards: runCards(), mySeed: (Math.random() * 2 ** 32) >>> 0 });
+  Object.assign(NET, { on: true, guest: true, name, key, myCards: runCards(), myWild: runWild(), mySeed: (Math.random() * 2 ** 32) >>> 0 });
   let conn;
   if (netLocal()) conn = await localJoin(key);
   else {
@@ -205,7 +208,7 @@ async function coopJoin(name, key) {
   NET.conn = conn;
   conn.on('data', d => onGuestMsg(netRead(d)));
   conn.on('close', () => { if (NET.guest) { coopLeave(); toast('THE HOST LEFT', 'enrage'); } });
-  toHost({ t: 'hello', name, cards: NET.myCards, seed: NET.mySeed, color: myLook().color, emoji: myLook().emoji });
+  toHost({ t: 'hello', name, cards: NET.myCards, wild: NET.myWild, tiers: myTiers(), seed: NET.mySeed, color: myLook().color, emoji: myLook().emoji });
 }
 // Once we're in: a second channel for the pictures (if it can't open, they come on the main one).
 function openFast() {
@@ -317,7 +320,7 @@ function editLoadout() {
 function backFromLoadout() {
   $('btn-loadout-test').hidden = false;
   if (NET.host) lobbyChanged();
-  else if (NET.guest) { NET.myCards = runCards(); toHost({ t: 'cards', cards: NET.myCards }); }
+  else if (NET.guest) { NET.myCards = runCards(); NET.myWild = runWild(); toHost({ t: 'cards', cards: NET.myCards, wild: NET.myWild, tiers: myTiers() }); }
   openCoop();
 }
 
@@ -330,10 +333,10 @@ function coopStart() {
   NET.run = true;
   resize();
   const mine = NET.lobby.find(p => p.local);
-  const host = newCtx(1, NET.name, mine.color, true, runCards(), seed);
-  Object.assign(host, { body: game.player, deck, mdeck, stats, picks, emoji: mine.emoji || '' });   // the host's own run, as resetRun made it
+  const host = newCtx(1, NET.name, mine.color, true, runCards(), seed, runWild(), myTiers());
+  Object.assign(host, { body: game.player, deck, mdeck, wdeck, stats, picks, emoji: mine.emoji || '' });   // the host's own run, as resetRun made it
   for (const k of PKEYS) host[k] = game[k];
-  NET.players = [host, ...NET.lobby.filter(p => !p.local).map(g => Object.assign(newCtx(g.id, g.name, g.color, false, g.cards, g.seed),
+  NET.players = [host, ...NET.lobby.filter(p => !p.local).map(g => Object.assign(newCtx(g.id, g.name, g.color, false, g.cards, g.seed, g.wild || [], g.tiers || {}),
     { conn: g.conn, lobby: g, ping: g.ping, emoji: g.emoji || '' }))];
   NET.me = host; ACTIVE = host;
   NET.players.forEach((c, i) => { const a = (i / NET.players.length) * TAU; c.body.x = W / 2 + Math.cos(a) * 60; c.body.y = H / 2 + Math.sin(a) * 60; });
@@ -346,13 +349,13 @@ function guestStart(m) {
   NET.world = m.world;
   NET.run = true;
   resize();
-  [deck, mdeck] = splitDecks(NET.myCards, NET.mySeed);    // the same decks the host is playing for us
+  [deck, mdeck, wdeck] = splitDecks(NET.myCards, NET.mySeed, NET.myWild || []);    // the same decks the host is playing for us
   NET.roster = m.roster;
   const r = m.roster.find(x => x.id === m.you) || {};
   NET.me = { id: m.you, name: NET.name, local: true, body: game.player, down: false, rev: 0, color: r.color, emoji: r.emoji || '' };
   NET.players = [NET.me];
   Object.assign(game.player, { x: m.x, y: m.y });
-  Object.assign(NET, { view: [], pings: null, hist: new Map(), off: null, jit: 0, delay: 100, lastQ: 0, seqIn: 0, mashN: 0, deflN: 0, snapAt: performance.now() });
+  Object.assign(NET, { view: [], pings: null, hist: new Map(), off: null, jit: 0, delay: 100, lastQ: 0, seqIn: 0, mashN: 0, deflN: 0, sackN: 0, snapAt: performance.now() });
   coopEnter();
 }
 function coopEnter() {
@@ -398,6 +401,7 @@ function coopPlayersStep(dt) {
       if (c.net.dash) { c.net.dash = false; tryDash([c.net.mx, c.net.my]); }
       for (; c.net.mashQ > 0; c.net.mashQ--) obiMash();
       for (; c.net.dflQ > 0; c.net.dflQ--) tryDeflect();
+      for (; c.net.skQ > 0; c.net.skQ--) trySack();
       const px = p.x, py = p.y, mx = c.reviving ? 0 : c.net.mx, my = c.reviving ? 0 : c.net.my;
       playerStep(dt, mx, my);
       // the guest's own position wins, unless the host is moving them (a charge or a shove); carried on along their
@@ -435,9 +439,9 @@ function coopLevelUps(from, to) {
   eachPlayer(c => {
     for (let l = from + 1; l <= to; l++) {
       c.pickQ.push(l);
-      if (l % AUG_EVERY === 0) {                            // a random slot fires twice
+      if (l % AUG_EVERY === 0) {                            // a random augment on a random free slot (v0.68: no pick in co-op)
         const free = [...Array(SEQUENCE_SIZE).keys()].filter(i => !game.aug.has(i));
-        if (free.length) { const i = free[Math.floor(Math.random() * free.length)]; game.aug.add(i); celebrate(`SLOT ${i + 1} ×2`, COL['r-legendary']); if (c.local) renderTray(false); }
+        if (free.length) { const i = free[Math.floor(Math.random() * free.length)]; addAug(i, Object.keys(AUGS)[Math.floor(Math.random() * Object.keys(AUGS).length)]); if (c.local) renderTray(false); }
       }
     }
     nextPick(c);
@@ -531,8 +535,8 @@ function coopEvent(ev) { if (NET.host) for (const c of NET.players) if (!c.local
 
 /* ---------- pictures of the arena (host → guests) ---------- */
 const WORLD_KEYS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'beams', 'sweeps',
-  'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots', 'mrocks', 'melees', 'zones', 'kicks', 'sinfx'];
-const IDS = new Set(['enemies', 'projectiles', 'orbs', 'summons', 'sabers', 'bolts', 'boulders', 'eshots']);
+  'fields', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots', 'mrocks', 'melees', 'zones', 'kicks', 'sinfx'];
+const IDS = new Set(['enemies', 'projectiles', 'orbs', 'sabers', 'bolts', 'boulders', 'eshots']);
 const SNAP_DROP = new Set(['target', 'hits', 'trail', 'audio', 'conn', 'outbox', 'fn', 'queue', 'lobby', 'hitIds', 'bones']);
 const WHOLE = new Set(['x', 'y', 'vx', 'vy', 'kx', 'ky', 'hp', 'maxHp', 'mh', 'x0', 'y0', 'x1', 'y1', 'x2', 'y2', 'sx', 'sy', 'dmg']);
 function snapReplacer(k, v) {
@@ -557,9 +561,11 @@ function flushSnaps(force = false) {
   NET.seqOut = (NET.seqOut || 0) + 1;
   const world = { t: 's', q: NET.seqOut, ht: Math.round(now), lv: game.level, xp: game.xp, kills: game.kills, shake: game.shake, over: game.over,
     adapted: game.makoraAdapted ? [...game.makoraAdapted] : [],
-    cine: game.cine ? { kind: game.cine.kind, t: game.cine.t, step: game.cine.step } : null,
+    cine: game.cine ? { kind: game.cine.kind, t: game.cine.t, step: game.cine.step, run: game.cine.run, final: game.cine.final } : null,
+    clr: game.cleared || null,                              // MAKORA's run-cleared screen (v0.69, makora.js)
     intro: game.intro ? { kind: game.intro.kind || '', t: game.intro.t, stomp: game.intro.stomp } : null,
     flow: game.flow, rt: game.runT,
+    snek: game.snek, dying: game.dying,                     // AWAS THE SNEK (snek.js) and a boss's death (deaths.js)
     pl: NET.players.map(playerView) };
   for (const k of WORLD_KEYS) world[k] = game[k];
   // the heavy ones, trimmed: orbs only what's drawn, fewer particles, and the ground cracks (which don't move) only
@@ -575,15 +581,15 @@ function flushSnaps(force = false) {
   for (const c of NET.players) {
     if (c.local || !c.conn) continue;
     const g = k => (c === ACTIVE ? game[k] : c[k]);
-    const me = { cd: g('cooldown'), cdt: g('cdTotal'), mcd: g('mcool'), mcdt: g('mcdTotal'), bf: g('bflash'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd'),
-      defl: g('defl'), dfc: g('deflCd'), dfa: g('deflAge') };
+    const me = { cd: g('cooldown'), cdt: g('cdTotal'), mcd: g('mcool'), mcdt: g('mcdTotal'), wcd: g('wcool'), wcdt: g('wcdTotal'), bf: g('bflash'), aug: [...g('aug')], st: c.stats, pk: c.picks, relics: g('relics'), dashCd: g('dashCd'),
+      defl: g('defl'), dfc: g('deflCd'), dfa: g('deflAge'), sk: g('sack'), skc: g('sackCd'), skf: g('sackFx') };
     // … plus their own part. A friend whose connection is still busy with earlier pictures skips this one, so they
     // don't fall further and further behind.
     const ch = fastOf(c);
     if (backlog(ch) > COOP.backlog) c.skipped = (c.skipped || 0) + 1;
     else netSend(ch, base.slice(0, -1) + ',"me":' + JSON.stringify(me, snapReplacer) + '}');
     // their cards fired and their events (picks, gold, sounds …) never get skipped
-    if (c.fired || c.mfired || c.outbox.length) { netSend(c.conn, { t: 'ev', fired: c.fired, mfired: c.mfired, ev: c.outbox.splice(0) }); c.fired = c.mfired = 0; }
+    if (c.fired || c.mfired || c.wfired || c.outbox.length) { netSend(c.conn, { t: 'ev', fired: c.fired, mfired: c.mfired, wfired: c.wfired, ev: c.outbox.splice(0) }); c.fired = c.mfired = c.wfired = 0; }
   }
   NET.sfxN = 0; NET.sfxSeen = {};
   if (now - NET.lastPing > COOP.pingMs) { NET.lastPing = now; for (const c of NET.players) if (c.conn) netSend(c.conn, { t: 'ping', ts: now }); }
@@ -651,8 +657,9 @@ function applySnap(s) {
   game.boss = game.enemies.find(e => e.boss) || null;
   game.makora = game.enemies.find(e => e.makora) || (s.cine && game.makora) || null;
   game.obi = game.enemies.find(e => e.obi) || null;
-  game.makoraAdapted = new Set(s.adapted || []);
-  if (game.makora) renderMakoraBar(); else if (game.obi) renderObiBar(); else if (game.boss) renderBossBar(); else { bossBar.hidden = true; bossBar.classList.remove('is-makora', 'is-obi'); }
+  game.makoraAdapted = new Map((s.adapted || []).filter(Array.isArray));   // (card → times, v0.69)
+  game.snek = s.snek || null; game.dying = s.dying || null;
+  if (game.makora) renderMakoraBar(); else if (game.obi) renderObiBar(); else if (game.boss) renderBossBar(); else if (game.snek) renderSnekBar(); else { bossBar.hidden = true; bossBar.classList.remove('is-makora', 'is-obi', 'is-snek', 'is-huge'); rootEl.classList.remove('snek-fight'); }
   if (game.obi?.pull && game.obi.pull.id === NET.me.id) game.shake = Math.max(game.shake, OBI.phase2.pull.shake);   // OBI ONE's pull shakes your screen
   // the others, smoothed too
   NET.view = (s.pl || []).filter(v => v.id !== NET.me.id).map(v => { track('p' + v.id, s.ht, v.x, v.y); seen.add('p' + v.id); return v; });
@@ -675,8 +682,9 @@ function applySnap(s) {
   if (me) {
     game.cooldown = me.cd; game.cdTotal = me.cdt;
     game.mcool = me.mcd || 0; game.mcdTotal = me.mcdt || 1; game.bflash = me.bf || 0;   // the melee deck's timer, BLACK FLASH!
-    const aug = new Set(me.aug || []);
-    const augChanged = aug.size !== game.aug.size;
+    game.wcool = me.wcd || 0; game.wcdTotal = me.wcdt || 1;                               // … and the Wild deck's (v0.62)
+    const aug = new Map((me.aug || []).filter(Array.isArray));                     // (slot → augment, v0.68)
+    const augChanged = JSON.stringify([...aug]) !== JSON.stringify([...game.aug]);
     game.aug = aug;
     Object.assign(stats, me.st || {});
     for (const id in me.pk || {}) picks[id] = me.pk[id];
@@ -685,8 +693,10 @@ function applySnap(s) {
     const had = game.relics.join(), wasOn = game.defl > 0;
     game.relics = me.relics || []; game.dashCd = me.dashCd || 0;
     game.defl = me.defl || 0; game.deflCd = me.dfc || 0; game.deflAge = me.dfa ?? 9;
-    const cooling = game.dashCd > 0 || game.deflCd > 0;
-    if (had !== game.relics.join() || cooling || NET.wasCd || wasOn !== game.defl > 0) renderRelics();
+    const sackWas = Math.floor(game.sack || 0);
+    game.sack = me.sk || 0; game.sackCd = me.skc || 0; game.sackFx = me.skf || 0;
+    const cooling = game.dashCd > 0 || game.deflCd > 0 || game.sackCd > 0;
+    if (had !== game.relics.join() || cooling || NET.wasCd || wasOn !== game.defl > 0 || sackWas !== Math.floor(game.sack)) renderRelics();
     NET.wasCd = cooling;
     if (augChanged) renderTray(false);
   }
@@ -697,6 +707,7 @@ function guestEvents(m) {
   if (!NET.run) return;
   for (let k = 0; k < (m.fired || 0); k++) if (deck) onAttack(deck.draw());
   for (let k = 0; k < (m.mfired || 0); k++) if (mdeck) onMeleeAttack(mdeck.draw());   // … and our melee deck's (v0.53)
+  for (let k = 0; k < (m.wfired || 0); k++) if (wdeck) onWildAttack(wdeck.draw());     // … and our Wild deck's (v0.62)
   for (const ev of m.ev || []) guestEvent(ev);
 }
 function guestEvent(ev) {
@@ -709,6 +720,7 @@ function guestEvent(ev) {
   else if (ev.e === 'down' && ev.id === NET.me.id) { NET.me.down = true; closeRevive(); }
   else if (ev.e === 'revived' && (ev.id === NET.me.id || (ev.by || []).includes(NET.me.id))) SFX_RAW.levelUp();
   else if (ev.e === 'skip') skipIntro(true);
+  else if (ev.e === 'nextRun') { game.cleared = null; runClearPanel(false); endCine(); resetZoom(); }   // the host went on to the next run
   else if (ev.e === 'obiName') showObiName();
 }
 // SKURTOSAURUS's intro and MAKORA's scenes: the guest plays its own copy (the words, the wheel, the sounds), started
@@ -718,9 +730,11 @@ function guestScenes(s) {
   if (!s.intro) NET.introSeen = false;
   if (s.cine && !game.cine) {
     if (s.cine.kind === 'summon') startMakora();
-    else showAdaptScene(game.makora || { turns: 1 });
+    else { game.cine = { kind: 'clear', t: 0, step: 0, run: s.cine.run || 1, final: !!s.cine.final }; showClearScene(game.cine); }
     game.cine.t = s.cine.t; game.cine.step = 0;
   } else if (!s.cine && game.cine) endCine();
+  if (s.clr && !game.cleared) { game.cleared = s.clr; renderRunStats(); runClearPanel(true); }   // MAKORA's run-cleared screen
+  else if (!s.clr && game.cleared) { game.cleared = null; runClearPanel(false); }
 }
 function guestFrame(dt) {
   zoomStep(dt);
@@ -737,7 +751,7 @@ function guestFrame(dt) {
     NET.lastIn = now;
     const [mx, my] = rooted || NET.me.down ? [0, 0] : localInput();
     NET.seqIn = (NET.seqIn || 0) + 1;
-    toHostFast({ t: 'in', q: NET.seqIn, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, mx, my, rv: NET.holdE ? 1 : 0, dash: NET.wantDash ? 1 : 0, mash: NET.mashN || 0, dfl: NET.deflN || 0 });
+    toHostFast({ t: 'in', q: NET.seqIn, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, mx, my, rv: NET.holdE ? 1 : 0, dash: NET.wantDash ? 1 : 0, mash: NET.mashN || 0, dfl: NET.deflN || 0, sk: NET.sackN || 0 });
     NET.wantDash = false;
   }
   // everything else, a little in the past (see clockSample)

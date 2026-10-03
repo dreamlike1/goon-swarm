@@ -11,13 +11,17 @@ const trayEl = $('tray'), logEl = $('log'), checksEl = $('checks');
 const DECK_VIEWS = {
   ranged: { kind: 'ranged', get deck() { return deck; }, box: $('rbox'), tray: trayEl, rapid: $('rapid'), left: $('deckLeft'), status: $('deckStatus'), shuffle: $('shuffleIcon'), next: null, timer: 0 },
   melee:  { kind: 'melee', get deck() { return mdeck; }, box: $('mbox'), tray: $('mtray'), rapid: $('mrapid'), left: $('mdeckLeft'), status: $('mdeckStatus'), shuffle: $('mshuffleIcon'), next: null, timer: 0 },
+  // the Wild deck (v0.62): a third tray, on top
+  wild:   { kind: 'wild', get deck() { return wdeck; }, box: $('wbox'), tray: $('wtray'), rapid: $('wrapid'), left: $('wdeckLeft'), status: $('wdeckStatus'), shuffle: $('wshuffleIcon'), next: null, timer: 0 },
 };
 const selftest = selfTest(2000);
 const packtests = STORE_PACKS.filter(k => !PACKS[k].fixed).map(k => ({ k, ...packSelfTest(PACKS[k], 20000) }));
 const packtest = { ok: packtests.every(t => t.ok), packs: packtests.reduce((n, t) => n + t.packs, 0), rows: packtests.flatMap(t => t.rows) };
 
 function onAttack(ev) {
+  if (WILD) { onWildAttack(ev); return; }   // (the Wild deck's turn: combat.js wildTurn)
   if (NET.host && NET.run && ACTIVE && !ACTIVE.local) { ACTIVE.fired++; return; }   // a friend's card: their screen shows it (coop.js)
+  tallyPlay(ev.card);                       // (the online run log, flow.js)
   record.current.push(ev.card);            // what combat fired
   record.passFired.push(ev.card);
   let fresh = false;
@@ -44,10 +48,31 @@ function onAttack(ev) {
 }
 // The melee deck's card (combat.js fireMelee): only its tray changes (the log and checks follow the ranged deck).
 function onMeleeAttack(ev) {
+  if (WILD) { onWildAttack(ev); return; }
   if (NET.host && NET.run && ACTIVE && !ACTIVE.local) { ACTIVE.mfired++; return; }   // a friend's: their screen shows it
+  tallyPlay(ev.card);
   if (ev.reshuffle) { flashShuffle(DECK_VIEWS.melee); SFX.shuffle(); }
   renderTrayOf(DECK_VIEWS.melee, !!ev.sequence, ev.sequence ? null : ev.filled, true);
 }
+// The Wild deck's card (v0.62), the same way: only its tray changes.
+function onWildAttack(ev) {
+  if (NET.host && NET.run && ACTIVE && !ACTIVE.local) { ACTIVE.wfired++; return; }
+  tallyPlay(ev.card);
+  if (ev.reshuffle) { flashShuffle(DECK_VIEWS.wild); SFX.shuffle(); }
+  renderTrayOf(DECK_VIEWS.wild, !!ev.sequence, ev.sequence ? null : ev.filled, true);
+}
+
+// v0.57 (user): your stats only while Tab is held, and N hides the decks (kept for next time).
+const showStats = on => document.body.classList.toggle('show-stats', !!on);
+let glideT = 0;
+function toggleDecks(hide = !document.body.classList.contains('hide-decks')) {
+  document.body.classList.add('hud-glide');                 // (the bars glide while it plays: style.css)
+  clearTimeout(glideT);
+  glideT = setTimeout(() => document.body.classList.remove('hud-glide'), 320);
+  document.body.classList.toggle('hide-decks', hide);
+  try { localStorage.setItem('rogue.hideDecks', hide ? '1' : ''); } catch (err) { /* no storage */ }
+}
+try { if (localStorage.getItem('rogue.hideDecks')) document.body.classList.add('hide-decks'); } catch (err) { /* no storage */ }
 
 // Player HP bar. `hit` flashes it red for a moment.
 function renderHp(hit) {
@@ -55,7 +80,10 @@ function renderHp(hit) {
   const p = game.player, el = $('hp');
   $('hp-fill').style.transform = `scaleX(${p.hp / maxHp()})`;
   el.setAttribute('aria-valuemax', maxHp());
-  $('hp-num').textContent = Math.ceil(p.hp);
+  const sh = game.bshield, shEl = $('hp-shield');            // Brickshot's shield (v0.58): on the end of your health
+  shEl.hidden = !sh;
+  if (sh) Object.assign(shEl.style, { left: `${Math.min(100, p.hp / maxHp() * 100)}%`, width: `${sh.hp / maxHp() * 100}%`, opacity: String(Math.min(1, sh.t / 0.4)) });
+  $('hp-num').textContent = Math.ceil(p.hp) + (sh ? ` +${Math.ceil(sh.hp)}` : '');
   el.setAttribute('aria-valuenow', Math.ceil(p.hp));
   if (hit) { el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
 }
@@ -67,9 +95,7 @@ function renderXp(up) {
   fill.style.transform = `scaleX(${game.xp / need})`;
   if (up) void fill.offsetWidth, fill.style.transition = '';
   $('xp-lv').textContent = game.level;
-  const max = game.level >= MAKORA.level;                 // the last level: the bar stays full
-  if (max) fill.style.transform = 'scaleX(1)';
-  $('xp-num').textContent = max ? 'MAX' : `${Math.floor(game.xp)}/${need}`;
+  $('xp-num').textContent = `${Math.floor(game.xp)}/${need}`;   // (v0.57: no last level any more)
   el.setAttribute('aria-valuenow', Math.floor(game.xp));
   el.setAttribute('aria-valuemax', need);
   el.setAttribute('aria-valuetext', `Level ${game.level}, ${Math.floor(game.xp)} of ${need} XP`);
@@ -122,15 +148,17 @@ function trayFace(c, i, isNew) {
 function renderTray(fresh, filled = null) {
   renderTrayOf(DECK_VIEWS.ranged, fresh, filled);
   renderTrayOf(DECK_VIEWS.melee, fresh, null);
+  renderTrayOf(DECK_VIEWS.wild, fresh, null);
 }
 // One deck's tray. A new sequence rebuilds the cards in its order; later attacks only update their state.
 // `filled`: slots the shuffle just dealt into, which flip face up where they are. `played`: a card just fired.
 function renderTrayOf(V, fresh, filled = null, played = false) {
   const d = V.deck, tray = V.tray;
-  const two = !!(deck && mdeck);
-  if (V.box.hidden !== !d || document.body.classList.contains('two-decks') !== two) {
+  const n = [deck, mdeck, wdeck].filter(Boolean).length, two = n >= 2, three = n >= 3;   // (the HUD above moves up for each)
+  if (V.box.hidden !== !d || document.body.classList.contains('two-decks') !== two || document.body.classList.contains('three-decks') !== three) {
     V.box.hidden = !d;
     document.body.classList.toggle('two-decks', two);
+    document.body.classList.toggle('three-decks', three);
     resize();                                // the HUD moved: how far down you can go changes with it (arena.js)
   }
   if (!d) { tray.innerHTML = ''; V.next = null; return; }
@@ -153,9 +181,12 @@ function renderTrayOf(V, fresh, filled = null, played = false) {
   [...tray.children].forEach((li, i) => {
     li.classList.toggle('is-fired', i < pos);
     li.classList.toggle('is-next', i === pos);
-    li.classList.toggle('is-aug', game.aug.has(i));   // augmented slot: its card fires twice
+    const ak = game.aug.get(i);                         // its augment (v0.68): its tag on the card, in its colour
+    li.classList.toggle('is-aug', !!ak);
+    if (ak) { li.dataset.augTag = AUGS[ak].tag; li.style.setProperty('--ac', `var(${AUGS[ak].col})`); }
+    else if (li.dataset.augTag) { delete li.dataset.augTag; li.style.removeProperty('--ac'); }
     li.setAttribute('aria-label', seq[i] === null ? `${i + 1}: face down, dealt at the next shuffle`
-      : `${i + 1}: ${CARDS[seq[i]].name}${game.aug.has(i) ? ', fires twice' : ''}${li.classList.contains('is-combo') ? ', part of a combo' : ''}${i < pos ? ', fired' : i === pos ? ', next' : ''}`);
+      : `${i + 1}: ${CARDS[seq[i]].name}${ak ? `, ${AUGS[ak].name} augment` : ''}${li.classList.contains('is-combo') ? ', part of a combo' : ''}${i < pos ? ', fired' : i === pos ? ', next' : ''}`);
   });
   V.next = tray.querySelector('.is-next');
   renderRapid(V, seq, pos);
@@ -163,7 +194,7 @@ function renderTrayOf(V, fresh, filled = null, played = false) {
 
   // Deck counter: cards left to fire before the next shuffle, out of the whole deck.
   V.left.innerHTML = `<b>${d.left}</b>/${d.size}`;
-  V.status.setAttribute('aria-label', `${V.kind === 'melee' ? 'Melee' : 'Ranged'} deck: ${d.left} of ${d.size} cards left before the next shuffle`);
+  V.status.setAttribute('aria-label', `${{ melee: 'Melee', wild: 'Wild', ranged: 'Ranged' }[V.kind]} deck: ${d.left} of ${d.size} cards left before the next shuffle`);
   if (V.kind !== 'ranged') return;
 
   // The tray must show exactly the deck's current sequence, with fired cards matching what combat fired.
@@ -268,7 +299,7 @@ function renderChecks() {
   if (record.passesOk !== record.passes) fails.push('shuffle');
   if (!record.trayOk) fails.push('deck display');
   if (!record.logOk) fails.push('log');
-  checksEl.className = 'check ' + (fails.length ? 'bad' : 'ok');
+  checksEl.className = 'check dev-only ' + (fails.length ? 'bad' : 'ok');   // (dev-only: the test version shows it, v0.55)
   checksEl.title = `Deck self-test: ${selftest.ok} of ${selftest.passes} simulated shuffles dealt every card once, in sequences of exactly ${SEQUENCE_SIZE}.\n`
     + `Pack self-test: ${packtest.packs.toLocaleString()} store packs, ` + packtest.rows.map(o => `${RARITY_NAME[o.rarity]} ${(o.got * 100).toFixed(1)}% (odds ${(o.chance * 100).toFixed(1)}%)`).join(', ') + '.\n'
     + `Live: ${valid} of ${done} sequences valid; ${record.passesOk} of ${record.passes} shuffles fired each of their cards once. `

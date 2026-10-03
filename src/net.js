@@ -33,16 +33,16 @@ const cam = { x: 0, y: 0 };
 
 /* ---------- players ---------- */
 // What each player has of their own; the game keeps the active player's copy in `game`.
-const PKEYS = ['cooldown', 'cdTotal', 'mcool', 'mcdTotal', 'mprimed', 'bflash', 'sguard', 'aug', 'echoes', 'shield', 'shieldHit', 'dash', 'dashCd', 'muzzle', 'relics', 'frost', 'defl', 'deflCd', 'deflAge'];
+const PKEYS = ['cooldown', 'cdTotal', 'mcool', 'mcdTotal', 'mprimed', 'wcool', 'wcdTotal', 'wprimed', 'bflash', 'sguard', 'aug', 'echoes', 'shield', 'shieldHit', 'dash', 'dashCd', 'muzzle', 'relics', 'frost', 'defl', 'deflCd', 'deflAge', 'sack', 'sackCd', 'sackFx', 'tballs', 'tshield', 'twild', 'tbAng', 'tbSync'];
 function usePlayer(c) {
   if (!c || c === ACTIVE) return;
   if (ACTIVE) for (const k of PKEYS) ACTIVE[k] = game[k];
   ACTIVE = c;
   for (const k of PKEYS) game[k] = c[k];
-  game.player = c.body; deck = c.deck; mdeck = c.mdeck; stats = c.stats; picks = c.picks;
+  game.player = c.body; deck = c.deck; mdeck = c.mdeck; wdeck = c.wdeck; stats = c.stats; picks = c.picks;
 }
 const byId = id => NET.players.find(c => c.id === id) || null;
-const usePlayerId = id => { if (NET.run) usePlayer(byId(id) || NET.me); };
+const usePlayerId = (id, aug = null) => { AUG_FX = aug; if (NET.run) usePlayer(byId(id) || NET.me); };   // (and the augments it was played with, v0.68)
 const ownerId = () => (NET.run && ACTIVE ? ACTIVE.id : 0);
 const isLocal = () => !NET.run || NET.guest || ACTIVE === NET.me;   // DOM (HP bar, tray, relic chip) only follows your own player
 const living = () => NET.players.filter(c => !c.down);
@@ -83,11 +83,13 @@ const coopBossHp = () => 1 + COOP.boss * (coopN() - 1);   // SKURTOSAURUS, OBI O
 
 function freshStats() { const s = {}; for (const id of STAT_IDS) s[id] = BASE_STATS[id] || 0; return s; }
 function freshPicks() { const s = {}; for (const id of STAT_IDS) s[id] = { n: 0, best: -1 }; return s; }
-function newCtx(id, name, color, local, cards, seedN) {
+// `wild`: their Wild deck's cards; `tiers`: their cards' upgrades (v0.62, tiers.js: id → tier).
+function newCtx(id, name, color, local, cards, seedN, wild = [], tiers = {}) {
   return { id, name, color, local, body: { x: W / 2, y: H / 2, flash: 0, hp: PLAYER.hp, safe: 0, kx: 0, ky: 0 },
-    ...(([deck, mdeck]) => ({ deck, mdeck }))(splitDecks(cards, seedN)), stats: freshStats(), picks: freshPicks(),
-    cooldown: ATTACK_INTERVAL, cdTotal: ATTACK_INTERVAL, mcool: ATTACK_INTERVAL, mcdTotal: ATTACK_INTERVAL, mprimed: true, bflash: 0, sguard: null, aug: new Set(), echoes: [], shield: 0, shieldHit: 0, dash: null, dashCd: 0,
-    muzzle: null, relics: [], frost: null, defl: 0, deflCd: 0, deflAge: 9,
+    ...(([deck, mdeck, wdeck]) => ({ deck, mdeck, wdeck }))(splitDecks(cards, seedN, wild)), stats: freshStats(), picks: freshPicks(), tiers,
+    cooldown: ATTACK_INTERVAL, cdTotal: ATTACK_INTERVAL, mcool: ATTACK_INTERVAL, mcdTotal: ATTACK_INTERVAL, mprimed: true,
+    wcool: ATTACK_INTERVAL * WILD_OFFSET, wcdTotal: ATTACK_INTERVAL, wprimed: true, wfired: 0, bflash: 0, sguard: null, aug: new Map(), echoes: [], shield: 0, shieldHit: 0, dash: null, dashCd: 0,
+    muzzle: null, relics: [], frost: null, defl: 0, deflCd: 0, deflAge: 9, sack: 0, sackCd: 0, sackFx: 0, tballs: [], tshield: null, twild: 0, tbAng: 0, tbSync: 0,
     down: false, rev: 0, reviving: false, ping: 0, fired: 0, mfired: 0, outbox: [], pickQ: [], pick: null,
-    net: { mx: 0, my: 0, x: null, y: null, dash: false, rv: false, at: 0, seq: 0, mash: 0, mashQ: 0, dfl: 0, dflQ: 0 } };
+    net: { mx: 0, my: 0, x: null, y: null, dash: false, rv: false, at: 0, seq: 0, mash: 0, mashQ: 0, dfl: 0, dflQ: 0, sk: 0, skQ: 0 } };
 }

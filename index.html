@@ -7,72 +7,128 @@
 <link rel="apple-touch-icon" href="favicon/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Black+Ops+One&family=Cinzel+Decorative:wght@700;900&family=Mr+Dafoe&family=Russo+One&family=Chakra+Petch:wght@500;600;700&family=Silkscreen:wght@400;700&display=swap">
 <link rel="stylesheet" href="style.css">
-<link rel="preload" as="image" href="assets/PS.webp" type="image/webp">
+<link rel="preload" as="image" href="assets/img/packssilica.webp" type="image/webp">
 <!-- The game is split across style.css and src/*.js: classic scripts, loaded in order, sharing globals.
      They are plain scripts rather than ES modules so the page still works when opened straight from disk. -->
 
-<div class="arena" id="arena"><canvas id="cv" aria-label="Arena"></canvas><canvas id="cv-text" aria-hidden="true"></canvas></div>
+<div class="arena" id="arena"><canvas id="cv" aria-label="Arena"></canvas><canvas id="cv-text" aria-hidden="true"></canvas><div class="lcd-grid" id="lcd-grid" hidden></div></div>
 
 <div class="menu" id="menu">
-  <section class="screen" id="scr-title" aria-labelledby="t-title">
-    <!-- The logo (user's art, PS.png; PS.webp is a trimmed copy of it, PS_px.png a small one for the CRT filter) -->
+  <canvas class="title-warp" id="title-warp" aria-hidden="true" hidden></canvas>   <!-- v0.57: the title's stars flying out (warp.js) -->
+  <section class="screen is-loading" id="scr-title" aria-labelledby="t-title">   <!-- (is-loading: hidden until its logo and fonts are in, menus.js) -->
+    <!-- The logo (v0.57, user's new art, packssilica.png in assets/raw; packssilica.webp is a trimmed copy, packssilica_px.png a small one for the CRT filter) -->
     <h1 class="title-logo" id="t-title">
-      <img class="logo-hd" src="assets/PS.webp" alt="Packs Silica" width="1666" height="808" decoding="async" fetchpriority="high">
-      <img class="logo-px" src="assets/PS_px.png" alt="Packs Silica" width="360" height="175">
+      <img class="logo-hd" src="assets/img/packssilica.webp" alt="Packs Silica" width="1737" height="813" decoding="async" fetchpriority="high">
+      <img class="logo-px" src="assets/img/packssilica_px.png" alt="Packs Silica" width="360" height="168">
+      <span class="title-tag">Overall Overhaul!!</span>
     </h1>
-    <p class="title-tag">THE COMBAT UPDATE!</p>
-    <button class="start" id="btn-title" type="button">Start</button>
+    <div class="nav title-nav">
+      <button class="start" id="btn-title" type="button">Start</button>
+    </div>
+    <p class="maint-note" id="maint-note" hidden>Maintenance</p>   <!-- (src/maintenance.js: shown, with Start disabled, while the site is locked) -->
     <p class="gold" id="title-note" hidden></p>
+    <p class="disclaimer">This game was made using AI, and the majority of its assets are made with AI.</p>
   </section>
 
+  <!-- v0.57 (user): Settings, from the main menu (not the title screen any more): a code to enter, and Reset data -->
+  <section class="screen" id="scr-settings" aria-labelledby="set-title" hidden>
+    <p class="eyebrow">Options</p>
+    <h1 id="set-title">Settings</h1>
+    <form class="set-card" id="code-form" autocomplete="off">
+      <label class="co-field"><span>Enter a code</span><input id="code-in" type="text" maxlength="24" spellcheck="false" autocapitalize="characters" placeholder="CODE"></label>
+      <button class="start" id="btn-code" type="submit">Redeem</button>
+      <p class="sub small set-msg" id="code-msg" role="status"></p>
+    </form>
+    <div class="set-card">
+      <p class="co-label">Your data</p>
+      <div class="reset">
+        <button class="back" id="btn-reset" type="button">Reset data</button>
+        <div class="reset-confirm" id="reset-confirm" hidden>
+          <p class="sub small"><b>Really reset?</b> This deletes your cards, deck and gold on this computer, and your name and scores on the leaderboard. It can't be undone. You'll start again with the Standard pack.</p>
+          <div class="row">
+            <button class="danger" id="btn-reset-yes" type="button">Reset</button>
+            <button id="btn-reset-no" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button class="back" id="btn-settings-back" type="button">Back</button>
+  </section>
+
+  <!-- v0.56 (user): your name, the first time you press Start (online.js). One per PC; Reset data deletes it. -->
+  <section class="screen" id="scr-name" aria-labelledby="n-title" hidden>
+    <p class="eyebrow">Player</p>
+    <h2 id="n-title">Your name</h2>
+    <p class="sub">It's yours on the leaderboard. One name per PC.</p>
+    <form class="name-form" id="name-form">
+      <label class="co-field"><span>Name</span><input id="name-in" type="text" minlength="2" maxlength="14" autocomplete="nickname" spellcheck="false" placeholder="Player" required></label>
+      <button class="start" id="btn-name-go" type="submit">Play</button>
+    </form>
+    <p class="sub small name-status" id="name-status" aria-live="polite"></p>
+    <div class="row">
+      <button class="back" id="btn-name-back" type="button">Back</button>
+      <button class="back" id="btn-name-offline" type="button" hidden>Play offline</button>
+    </div>
+  </section>
+
+  <!-- The pack to rip open: the starter pack, and (v0.56, user) a pack you've just bought, zoomed in from the store -->
   <section class="screen" id="scr-pack" aria-labelledby="k-title" hidden>
-    <p class="eyebrow">New player</p>
-    <h2 id="k-title">Your starter pack</h2>
-    <p class="sub">5 Bullets and 5 Cannons for your ranged deck, 10 Knife Stabs and 10 Punches for your melee deck.</p>
-    <button class="pack-open" id="btn-starter" type="button" aria-label="Open the starter pack"></button>
+    <p class="eyebrow" id="k-eyebrow">New player</p>
+    <h2 id="k-title">Your Standard pack</h2>
+    <p class="sub" id="k-sub">One pack to start you off, 10 cards, with much better odds than the store's: any Common or Uncommon, Brickshot and Hammer (Rare), and with luck Blowpipe (Epic), The Iron Fistopheles (Legendary) or En Passant (Triple S).</p>
+    <button class="pack-open" id="btn-starter" type="button" aria-label="Open the pack"></button>
     <p class="sub small hint-keys">Click the pack, or press Space, to rip it open</p>
     <p class="sub small hint-touch">Tap the pack to rip it open</p>
+    <button class="back" id="btn-pack-skipall" type="button">Skip all</button>
   </section>
 
   <section class="screen" id="scr-reveal" aria-labelledby="r-title" hidden>
-    <p class="eyebrow" id="r-eyebrow">Starter pack</p>
+    <p class="eyebrow" id="r-eyebrow">Standard pack</p>
     <h2 id="r-title">Your first cards</h2>
+    <p class="reveal-count" id="reveal-count"></p>
     <ol class="preview reveal" id="reveal" aria-label="Cards from the pack"></ol>
     <p class="sub" id="reveal-tip">Opening… <span class="hint-keys">press Space to speed it up</span></p>
     <p class="sub small" id="reveal-note" hidden></p>
     <div class="row">
       <button id="btn-reveal-all" type="button">Skip</button>
+      <button id="btn-reveal-skipall" type="button" hidden>Skip all</button>
+      <button class="start" id="btn-reveal-next" type="button" hidden>Next</button>
+      <button id="btn-reveal-again" type="button" hidden>Buy again</button>
       <button class="start" id="btn-reveal-done" type="button" hidden>Continue</button>
     </div>
     <p class="sub small warn" id="save-warn" hidden>This browser isn't letting the game save, so these cards will be gone after a reload.</p>
   </section>
 
   <section class="screen" id="scr-main" aria-label="Main menu" hidden>
+    <!-- v0.57 (user): the menu on the left, and on the right a little fight playing itself with your loadout (menus.js menu demo) -->
+    <div class="home-col">
     <div class="menu-logo">
-      <img class="logo-hd" src="assets/PS.webp" alt="Packs Silica" width="1666" height="808" decoding="async">
-      <img class="logo-px" src="assets/PS_px.png" alt="Packs Silica" width="360" height="175">
+      <img class="logo-hd" src="assets/img/packssilica.webp" alt="Packs Silica" width="1737" height="813" decoding="async">
+      <img class="logo-px" src="assets/img/packssilica_px.png" alt="Packs Silica" width="360" height="168">
     </div>
-    <p class="gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b class="gold-n">0</b> gold</p>
-    <!-- v0.53 (user): Start first, at the top -->
+    <!-- v0.53 (user): Start first, at the top. (v0.57, user: no gold here) -->
     <div class="nav">
       <button class="start" id="btn-play" type="button">Start</button>
       <button id="btn-loadout" type="button">Loadout</button>
-      <button id="btn-store" type="button">Store</button>
+      <button id="btn-store" type="button">Packs</button>
+      <button id="btn-archives" type="button">Archives</button>
       <button id="btn-coop" type="button">Co-op</button>
+      <button id="btn-main-settings" type="button">Settings</button>
     </div>
-    <p class="sub small">Earn 1 gold for every 15 enemies you defeat in a run, +10 for beating SKURTOSAURUS and +15 every time MAKORA goes down.</p>
     <button class="back" id="btn-main-back" type="button">Back</button>
-    <div class="reset">
-      <button class="back" id="btn-reset" type="button">Reset data</button>
-      <div class="reset-confirm" id="reset-confirm" hidden>
-        <p class="sub small"><b>Really reset?</b> This deletes your cards, deck and gold on this computer, and can't be undone. You'll start again with the starter pack.</p>
-        <div class="row">
-          <button class="danger" id="btn-reset-yes" type="button">Reset</button>
-          <button id="btn-reset-no" type="button">Cancel</button>
+    </div>
+    <div class="menu-sim" id="menu-sim">
+      <!-- v0.71 (user): a carousel in the demo's box when there's news (menus.js ANN): the news, then the demo fight -->
+      <section class="ann" id="ann" aria-roledescription="carousel" aria-label="News" hidden>
+        <div class="ann-slides" id="ann-slides"></div>
+        <div class="ann-nav">
+          <button class="ann-arrow" id="ann-prev" type="button" aria-label="Previous"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <div class="ann-dots" id="ann-dots"></div>
+          <button class="ann-arrow" id="ann-next" type="button" aria-label="Next"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
         </div>
-      </div>
+      </section>
     </div>
   </section>
 
@@ -125,28 +181,38 @@
       <aside class="deck-panel" id="deck-panel" aria-label="Your decks">
         <!-- v0.53 (user): two decks, both played at once in a run. Pick which one you're building; either can be empty. -->
         <div class="deck-tabs" role="tablist" aria-label="Deck">
-          <button type="button" role="tab" class="deck-tab" data-kind="ranged" aria-selected="true">Ranged <span class="deck-tab-n"><b id="deck-n-ranged">0</b>/<span class="deck-max">31</span></span></button>
-          <button type="button" role="tab" class="deck-tab is-melee" data-kind="melee" aria-selected="false">Melee <span class="deck-tab-n"><b id="deck-n-melee">0</b>/<span class="deck-max">31</span></span></button>
+          <button type="button" role="tab" class="deck-tab" data-kind="ranged" aria-selected="true"><span class="deck-tab-kind" aria-hidden="true">R</span>Ranged <span class="deck-tab-n"><b id="deck-n-ranged">0</b>/<span class="deck-max" id="deck-max-ranged">31</span></span></button>
+          <button type="button" role="tab" class="deck-tab is-melee" data-kind="melee" aria-selected="false"><span class="deck-tab-kind" aria-hidden="true">M</span>Melee <span class="deck-tab-n"><b id="deck-n-melee">0</b>/<span class="deck-max" id="deck-max-melee">31</span></span></button>
         </div>
         <!-- …and a switch under each: a deck that's off keeps its cards but sits out of runs (melee only / ranged only) -->
         <div class="deck-switches">
           <button type="button" class="deck-use" data-kind="ranged" role="switch" aria-checked="true"><span class="deck-use-knob" aria-hidden="true"></span><span class="deck-use-text">On</span></button>
           <button type="button" class="deck-use is-melee" data-kind="melee" role="switch" aria-checked="true"><span class="deck-use-knob" aria-hidden="true"></span><span class="deck-use-text">On</span></button>
         </div>
+        <!-- v0.63 (user): the Wild deck doubles one deck, ranged or melee: up to 62 cards, played as two decks -->
+        <div class="wild-row" id="wild-row">
+          <span class="wild-kind-label" id="wild-label">Wild</span>
+          <div class="wild-kind" id="wild-kind" role="radiogroup" aria-labelledby="wild-label">
+            <button type="button" role="radio" data-wkind="" aria-checked="true">Off</button>
+            <button type="button" role="radio" data-wkind="ranged" aria-checked="false">Ranged</button>
+            <button type="button" role="radio" data-wkind="melee" aria-checked="false">Melee</button>
+          </div>
+        </div>
+        <p class="wild-note" id="wild-note"></p>
         <ol class="deck-list" id="deck-list"></ol>
         <p class="deck-empty" id="deck-empty" hidden>Drag cards here, or click one to add it.</p>
         <p class="deck-warn" id="deck-warn" role="status" hidden></p>
         <div class="deck-tools">
-          <button type="button" id="btn-auto" title="Build a deck from your best cards">Auto</button>
+          <button type="button" id="btn-auto" title="Fill the rest of the deck with your best cards (the ones in it stay)">Auto</button>
           <button type="button" id="btn-clear" title="Take every card out of the deck">Clear</button>
         </div>
       </aside>
       <div class="coll-panel" id="coll-panel">
         <div class="coll-head">
           <h2 id="l-title">Loadout</h2>
-          <p class="sub small" id="loadout-hint">Click or drag a card to add it. Click a deck row, or drag it out, to take one off.</p>
+          <p class="sub small" id="loadout-hint">Click a card to see it and upgrade it. Drag it onto your deck to add it. Click a deck row, or drag it out, to take one off.</p>
         </div>
-        <div class="coll-filters" id="coll-filters" role="group" aria-label="Show cards from"></div>
+        <div class="coll-filters" id="coll-filters" aria-label="Filter and sort your cards"></div>
         <div class="coll-grid" id="coll" role="list" aria-label="Your cards"></div>
       </div>
     </div>
@@ -154,21 +220,62 @@
       <button class="back" id="btn-loadout-back" type="button">Back</button>
       <button id="btn-loadout-test" type="button">Test loadout</button>
     </div>
+    <!-- v0.62 (user: "clicking on a card also view the card. below the card a 'upgrade' button"): the card, big, with its
+         upgrade bar and Upgrade button under it; what it is and what each tier gives beside it (menus.js openCardView) -->
+    <div class="cview" id="cview" role="dialog" aria-modal="true" aria-labelledby="cv-name" hidden>
+      <div class="cview-box">
+        <div class="cview-left">
+          <div class="cview-card" id="cv-card"></div>
+          <div class="cv-bar" id="cv-bar" role="meter" aria-label="Upgrade bar" aria-valuemin="0">
+            <span class="cv-bar-fill" id="cv-bar-fill"></span>
+            <span class="cv-bar-text" id="cv-bar-text"></span>
+          </div>
+          <button type="button" class="start cv-upgrade" id="cv-upgrade">Upgrade</button>
+          <button type="button" class="cv-feedall" id="cv-feedall">Use all spare copies</button>
+          <p class="cv-why" id="cv-why"></p>
+        </div>
+        <div class="cview-right">
+          <p class="cv-eyebrow" id="cv-eyebrow"></p>
+          <h3 class="cv-name" id="cv-name"></h3>
+          <p class="cv-desc" id="cv-desc"></p>
+          <dl class="cv-stats" id="cv-stats"></dl>
+          <p class="cv-head">Tiers</p>
+          <ol class="cv-plan" id="cv-plan"></ol>
+          <p class="cv-own" id="cv-own"></p>
+          <div class="cv-deck">
+            <button type="button" id="cv-add">Add to deck</button>
+            <button type="button" id="cv-take">Take one out</button>
+          </div>
+          <button type="button" class="back cv-close" id="cv-close">Close</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="screen" id="scr-store" aria-labelledby="s-title" hidden>
-    <p class="eyebrow">Store</p>
-    <h2 id="s-title">Card packs</h2>
-    <p class="gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b class="gold-n">0</b> gold</p>
+    <!-- (v0.67, user: the title on the left, "Packs" and the coins beside it) -->
+    <div class="store-head"><h2 id="s-title">Packs</h2>
+      <p class="gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b class="gold-n">0</b> gold</p></div>
     <div class="store-packs" id="store-packs"></div>
-    <p class="sub small">Artillery, Magus and Powerwash have 5 cards, rolled one by one. Silica (Legendary) always gives 5 of each of its 3 weapons, and Sins (Triple S) 2 of each of its 4. Pick a pack to see what's inside and to test its weapons.</p>
     <button class="back" id="btn-store-back" type="button">Back</button>
   </section>
 
   <section class="screen" id="scr-packview" aria-labelledby="pv-title" hidden>
-    <p class="eyebrow">Store</p>
+    <button class="pv-back" id="btn-pv-back" type="button">Back</button>
     <div class="pv" id="pv"></div>
-    <button class="back" id="btn-pv-back" type="button">Back to store</button>
+  </section>
+
+  <!-- v0.56 (user): Start shows your loadout first, then Fight goes on to the deck preview and the arena -->
+  <section class="screen" id="scr-overview" aria-labelledby="o-title" hidden>
+    <p class="eyebrow">Ready?</p>
+    <h2 id="o-title">Your loadout</h2>
+    <div class="ov" id="ov"></div>
+    <p class="sub small warn" id="ov-warn" hidden></p>
+    <div class="row">
+      <button class="back" id="btn-ov-back" type="button">Back</button>
+      <button id="btn-ov-edit" type="button">Edit loadout</button>
+      <button class="start" id="btn-ov-go" type="button">Fight</button>
+    </div>
   </section>
 
   <section class="screen" id="scr-preview" aria-labelledby="p-title" hidden>
@@ -182,26 +289,41 @@
     </p>
   </section>
 
-  <!-- Changelog: on the side of the title screen and main menu (below them on narrow screens) -->
-  <aside class="news" id="news" aria-labelledby="news-t"><h3 id="news-t">What's new</h3><ul class="news-list"></ul></aside>
+  <!-- v0.56 (user): the leaderboard, top right of the title screen and main menu (online.js); the changelog is a
+       button in the bottom left that opens it in a window -->
+  <aside class="board" id="board" aria-labelledby="board-t">
+    <h3 id="board-t"><svg class="board-trophy" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a4 4 0 0 1-3.5 4M7 5H4v2a4 4 0 0 0 3.5 4"/></svg>Leaderboard</h3>
+    <ol class="board-list" id="board-list"></ol>
+    <p class="board-me" id="board-me" hidden></p>
+  </aside>
+  <button class="news-btn" id="news-btn" type="button" aria-haspopup="dialog" aria-controls="news-dialog">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>
+    Changelog <span class="news-btn-ver" id="news-btn-ver"></span>
+  </button>
 </div>
+
+<dialog class="news-dialog" id="news-dialog" aria-labelledby="news-t">
+  <header><h3 id="news-t">Changelog</h3><button class="back" id="news-close" type="button" aria-label="Close">Close</button></header>
+  <ul class="news-list"></ul>
+</dialog>
 
 <div class="hud">
   <div class="stats">
-    <span>Sequence <b id="cycle">1</b></span>
+    <span class="dev-only">Sequence <b id="cycle">1</b></span>
     <span>On field <b id="alive">0</b></span>
     <span>Defeated <b id="kills">0</b></span>
     <button id="pause" type="button">Pause</button>
   </div>
   <div class="side">
-    <ol class="log" id="log" aria-label="Attack log, newest first"></ol>
-    <p class="check" id="checks"></p>
+    <p class="run-gold" id="run-gold" aria-label="Gold"><span class="coin" aria-hidden="true"></span><b id="run-gold-n">0</b></p>
+    <ol class="log dev-only" id="log" aria-label="Attack log, newest first"></ol>
+    <p class="check dev-only" id="checks"></p>
   </div>
 </div>
 
 <!-- v0.52 (user): the run's progress, top centre: three stretches, one per stage, each ending at its boss (flow.js) -->
 <div class="runbar" id="runbar" role="progressbar" aria-label="Run progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-  <p class="rb-head"><span class="rb-now">SWARM</span><span class="rb-time">0:00</span></p>
+  <p class="rb-head"><span class="rb-run run-badge" role="img" aria-label="Run 1"></span><span class="rb-now">SWARM</span><span class="rb-time">0:00</span></p>
   <div class="rb-track"></div>
 </div>
 <ol class="statpanel" id="statpanel" aria-label="Your stats"></ol>
@@ -233,6 +355,18 @@
 <!-- Your decks (v0.53, THE COMBAT UPDATE!: ranged and melee, both playing at once), bottom centre, melee on top.
      hud.js shows only the ones you have. -->
 <div class="decks" id="decks">
+  <!-- the Wild deck (v0.63: the second half of a doubled deck), when it plays: on top -->
+  <div class="deckbox is-wild" id="wbox" hidden>
+    <div class="deck-status" id="wdeckStatus">
+      <span class="deck-kind">Wild</span><span id="wdeckLeft"></span>
+      <span class="shuffle-icon" id="wshuffleIcon" hidden aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+        Shuffling
+      </span>
+    </div>
+    <ol class="deck" id="wtray" aria-label="Wild deck order"></ol>
+    <div class="rapid" id="wrapid" aria-hidden="true"></div>
+  </div>
   <div class="deckbox is-melee" id="mbox" hidden>
     <div class="deck-status" id="mdeckStatus">
       <span class="deck-kind">Melee</span><span id="mdeckLeft"></span>
@@ -258,7 +392,7 @@
 </div>
 
 <div class="hp" id="hp" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
-  <div class="hp-bar"><span id="hp-fill"></span></div>
+  <div class="hp-bar"><span id="hp-fill"></span><span id="hp-shield" hidden></span></div>
   <span class="hp-num" id="hp-num">100</span>
 </div>
 
@@ -269,7 +403,7 @@
 </div>
 
 <p class="hint" id="hint">
-  <span class="hint-keys">WASD or arrows to move · Esc to pause · M to mute</span>
+  <span class="hint-keys">WASD or arrows to move · Esc to pause · hold Tab for stats · N hides cards · M to mute</span>
   <span class="hint-touch">Hold and drag to move</span>
 </p>
 
@@ -282,13 +416,33 @@
   <div class="pr-tabs" id="pr-tabs" role="group" aria-label="Weapon"></div>
   <div class="pr-fire" id="pr-fire" role="group" aria-label="Attack"></div>
   <p class="pr-dmg">Damage dealt <b id="pr-dmg">0</b><span id="pr-dps" hidden> · per second <b id="pr-dps-n">–</b></span></p>
-  <p class="pr-keys hint-keys" id="pr-keys"><kbd>1</kbd>–<kbd>3</kbd> choose · <kbd>Space</kbd> fire · <kbd>Q</kbd> <kbd>E</kbd> weapon · <kbd>Esc</kbd> back</p>
-  <p class="pr-keys hint-keys" id="pr-keys-lo" hidden>Your deck fires on its own · <kbd>WASD</kbd> move · <kbd>R</kbd> restart count · <kbd>Esc</kbd> back</p>
   <button class="back" id="btn-pr-back" type="button">Back to pack</button>
+</div>
+<!-- v0.57 (user: the controls bigger, on the left; the weapons on the right): test mode's keys (menus.js renderPractice) -->
+<aside class="pr-controls" id="pr-controls" aria-label="Controls"><div class="pr-pack" id="pr-pack"></div><div class="pr-keys" id="pr-keys"></div></aside>
+
+<!-- v0.61 (user): the Weapon Archive (archive.js): every weapon down the left, the chosen one playing its skills in
+     the middle in front of a target, its details and skills down the right -->
+<div class="archive" id="archive" role="region" aria-labelledby="arc-title" hidden>
+  <div class="arc-list" id="arc-list">
+    <div class="arc-head"><h2 class="arc-title" id="arc-title">Archives</h2>
+      <div class="arc-tabs" id="arc-tabs" role="tablist" aria-label="Archives">
+        <button type="button" role="tab" data-tab="weapons" aria-selected="true">Weapons <b id="arc-tab-w"></b></button>
+        <button type="button" role="tab" data-tab="enemies" aria-selected="false">Enemies <b id="arc-tab-e"></b></button>
+      </div></div>
+    <div class="arc-rows" id="arc-rows" role="listbox" aria-label="Weapons"></div>
+    <p class="arc-keys"><span><kbd>↑</kbd><kbd>↓</kbd> next · <kbd>←</kbd><kbd>→</kbd> group</span><span><kbd>1</kbd>–<kbd>3</kbd> fire · <kbd>Q</kbd><kbd>E</kbd> tab · <kbd>Esc</kbd> back</span></p>
+  </div>
+  <div class="arc-detail" id="arc-detail">
+    <div class="arc-info" id="arc-info"></div>
+    <p class="prc-head" id="arc-skills-head"></p>
+    <div class="arc-skills" id="arc-skills" role="group" aria-label="Skills"></div>
+    <button class="back" id="btn-arc-back" type="button">Back</button>
+  </div>
 </div>
 
 <!-- The end of a run (v0.52, user: the stats, then Retry or Back): how long, how far, what you beat, your best weapons -->
-<div class="pause" id="defeat" role="dialog" aria-labelledby="d-title" hidden>
+<div class="pause" id="defeat" role="dialog" aria-labelledby="d-title" tabindex="-1" hidden>
   <section class="screen over">
     <p class="eyebrow" id="d-eyebrow">Run over</p>
     <h2 id="d-title">Defeated</h2>
@@ -302,9 +456,11 @@
     <p class="gold" id="d-gold"></p>
     <p class="sub small" id="d-wait" hidden>Waiting for the host to start the next run…</p>
     <div class="nav">
+      <button class="start" id="btn-next-run" type="button" hidden>Continue</button>
       <button class="start" id="btn-retry" type="button">Retry</button>
       <button id="btn-room" type="button" hidden>Back to the room</button>
       <button id="btn-defeat-menu" type="button">Back</button>
+      <button id="btn-end-run" type="button" hidden>End run here</button>
     </div>
   </section>
 </div>
@@ -358,7 +514,9 @@
 
 <script src="src/deck.js"></script>
 <script src="src/cards.js"></script>
+<script src="src/storeconfig.js"></script>
 <script src="src/packs.js"></script>
+<script src="src/tiers.js"></script>
 <script src="src/save.js"></script>
 <script src="src/config.js"></script>
 <script src="src/hitboxes.js"></script>
@@ -371,16 +529,29 @@
 <script src="src/combos.js"></script>
 <script src="src/melee.js"></script>
 <script src="src/sins.js"></script>
+<script src="src/tballs.js"></script>
+<script src="src/chess.js"></script>
+<script src="src/magus.js"></script>
 <script src="src/boss.js"></script>
 <script src="src/makora.js"></script>
+<script src="src/makora3d.js"></script>
 <script src="src/obi.js"></script>
+<script src="src/snek.js"></script>
+<script src="src/deaths.js"></script>
+<script src="src/boss3d.js"></script>
 <script src="src/flow.js"></script>
 <script src="src/silica.js"></script>
 <script src="src/draw.js"></script>
 <script src="src/hud.js"></script>
 <script src="src/upgrades.js"></script>
+<script src="src/cardart.js"></script>
+<script src="src/cardface.js"></script>
 <script src="src/menus.js"></script>
+<script src="src/archive.js"></script>
+<script src="src/warp.js"></script>
 <script src="src/coop.js"></script>
 <script src="src/main.js"></script>
-<!-- The test panel (src/devtools.js): loaded only on localhost, and never pushed to GitHub -->
-<script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.write('<script src="src/devtools.js"><\/script><script src="src/hitedit.js"><\/script>');</script>
+<script src="src/online.js"></script>
+<script src="src/maintenance.js"></script>
+<!-- The test panel (src/devtools.js), the hitbox editor, the effects lab and the store editor: loaded only on localhost, and never pushed to GitHub -->
+<script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.write('<script src="src/devtools.js"><\/script><script src="src/hitedit.js"><\/script><script src="src/fxlab.js"><\/script><script src="src/fxcards.js"><\/script><script src="src/storeedit.js"><\/script><script src="src/cardedit.js"><\/script><script src="src/adminmenu.js"><\/script>');</script>

@@ -4,22 +4,25 @@
 /* ---------- canvas ---------- */
 const arena = document.getElementById('arena');
 const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d');   // (let: a dying boss is drawn on its own layer for a moment, deaths.js)
 const tcv = document.getElementById('cv-text'), tctx = tcv.getContext('2d');   // floating numbers, drawn crisp on top
 let W = 0, H = 0, playH = 0, first = true;
 
 function resize() {
   const r = arena.getBoundingClientRect();
   // The CRT filter (display.js) draws the arena at 1/CRT.pixel resolution; the page scales it up with hard edges.
-  const dpr = display.crt ? 1 / CRT.pixel : Math.min(window.devicePixelRatio || 1, 2);
+  // AWAS THE SNEK's phone screen (snek.js) is coarser still: exactly NOKIA.px px to one of its big pixels
+  const lcd = typeof nokiaNow === 'function' && nokiaNow();
+  const dpr = lcd ? 1 / NOKIA.px : display.crt ? 1 / CRT.pixel : Math.min(window.devicePixelRatio || 1, 2);
   // the layout size, not the on-screen one: the CRT switch-on squashes the whole page for a moment
   // VW × VH is the view; W × H is the world. They're the same, except in co-op, where the world is bigger and
   // the view follows you round it (coop.js).
   VW = Math.max(1, arena.clientWidth); VH = Math.max(1, arena.clientHeight);
   // (single player: the world's size depends on the view, zoomed out, or a square boss arena: see VIEW below)
   if (NET.run && NET.world) { W = NET.world.w; H = NET.world.h; } else { const sz = worldSize(arenaMode); W = sz.w; H = sz.h; }
-  cv.width = Math.max(1, Math.round(VW * dpr)); cv.height = Math.max(1, Math.round(VH * dpr));
-  ctx.setTransform(cv.width / VW, 0, 0, cv.height / VH, 0, 0);
+  cv.width = Math.max(1, Math[lcd ? 'ceil' : 'round'](VW * dpr)); cv.height = Math.max(1, Math[lcd ? 'ceil' : 'round'](VH * dpr));
+  if (lcd) ctx.setTransform(dpr, 0, 0, dpr, 0, 0); else ctx.setTransform(cv.width / VW, 0, 0, cv.height / VH, 0, 0);
+  arena.style.setProperty('--lcd-px', `${VW / cv.width}px`);   // the screen's pixel grid over it (style.css .lcd-grid)
   // the text layer stays at full resolution, so numbers read even under the CRT filter
   const tdpr = Math.min(window.devicePixelRatio || 1, 2);
   tcv.width = Math.round(VW * tdpr); tcv.height = Math.round(VH * tdpr);
@@ -44,13 +47,14 @@ new ResizeObserver(resize).observe(arena);
 // rate: how fast the zoom eases; cam: how fast the view follows; edge: how far past a boss arena's wall the view can go
 const VIEW = { normal: 1, boss: 1.15, side: 1.05, rate: 2.4, cam: 9, edge: 90 };   // v0.51.1 (user): 0.7 / 1 / 1.3 before
 let viewZoom = VIEW.normal, arenaMode = 'normal';
-const bossArena = () => !game.practice && !game.inMenu && !!(game.intro || game.boss || game.obi || game.makora || game.cine);
-const modeNow = () => (game.practice ? 'plain' : bossArena() ? 'boss' : 'normal');
-const zoomFor = m => (m === 'plain' ? 1 : m === 'boss' ? VIEW.boss : VIEW.normal);
+const bossArena = () => !game.practice && !game.inMenu && !!(game.intro || game.boss || game.obi || game.makora || game.cine || game.dying);
+// AWAS THE SNEK (v0.54) has an arena of its own: the normal view, with its grid inside it (snek.js snekBox)
+const modeNow = () => (game.practice ? 'plain' : game.snek && !game.inMenu ? 'snek' : bossArena() ? 'boss' : 'normal');
+const zoomFor = m => (m === 'plain' || m === 'snek' ? 1 : m === 'boss' ? VIEW.boss : VIEW.normal);
 // The world for a mode (single player): the view ÷ its zoom, or the boss's square. `playH`: how far down you can go.
 function worldSize(m) {
   if (m === 'boss') { const s = Math.round(Math.max(VW, VH) * VIEW.side); return { w: s, h: s, playH: s }; }
-  const z = zoomFor(m);
+  const z = zoomFor(m === 'snek' ? 'normal' : m);
   return { w: VW / z, h: VH / z, playH: (NET.viewSafe || VH) / z };
 }
 function zoomStep(dt) {
@@ -75,13 +79,13 @@ function resetZoom() { arenaMode = modeNow(); viewZoom = zoomFor(arenaMode); res
 let camSnap = true;
 // Moves everything in the arena by (dx, dy), then keeps what must stay inside inside.
 const WORLD_LISTS = ['enemies', 'projectiles', 'orbs', 'potions', 'diamonds', 'mines', 'rocks', 'cracks', 'rings', 'floaters', 'particles',
-  'beams', 'sprays', 'trails', 'fields', 'summons', 'bombs', 'bites', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots'];
+  'beams', 'sprays', 'trails', 'fields', 'muzzles', 'ghosts', 'swooshes', 'sabers', 'bolts', 'debris', 'boulders', 'eshots'];
 const PAIRS = [['x', 'y'], ['x0', 'y0'], ['x1', 'y1'], ['x2', 'y2'], ['sx', 'sy'], ['px', 'py']];
 function shiftObj(o, dx, dy) {
   if (!o || typeof o !== 'object') return;
   for (const [a, b] of PAIRS) if (typeof o[a] === 'number') { o[a] += dx; o[b] += dy; }
   if (Array.isArray(o.trail)) for (let i = 0; i + 1 < o.trail.length; i += 2) { o.trail[i] += dx; o.trail[i + 1] += dy; }
-  for (const k of ['leap', 'kick']) if (o[k] && typeof o[k] === 'object') shiftObj(o[k], dx, dy);   // the lion's leap, MAKORA's kick
+  for (const k of ['kick']) if (o[k] && typeof o[k] === 'object') shiftObj(o[k], dx, dy);   // MAKORA's kick
 }
 function shiftWorld(dx, dy) {
   if (!dx && !dy) return;
@@ -106,6 +110,8 @@ function bottomSafeY(arenaRect) {
 }
 
 function clampTo(o, r) {
+  const b = game.snek && !game.snek.huge ? game.snek.box : null;   // AWAS THE SNEK's grid (snek.js): everything stays on it (not once it's huge)
+  if (b) { o.x = Math.min(b.x + b.w - r, Math.max(b.x + r, o.x)); o.y = Math.min(b.y + b.h - r, Math.max(b.y + r, o.y)); return; }
   o.x = Math.min(W - r, Math.max(r, o.x));
   o.y = Math.min((playH || H) - r, Math.max(r, o.y));
 }
@@ -120,9 +126,12 @@ addEventListener('keydown', e => {
   if (e.target.matches && e.target.matches('input')) return;      // the volume slider handles its own keys
   if (e.code === 'KeyM') { toggleMute(); return; }
   if (game.inMenu) { onMenuKey(e); return; }
-  if (game.over) return;
+  if (e.code === 'Tab' && !game.paused) { if (!e.repeat) showStats(true); e.preventDefault(); return; }   // v0.57 (user): hold Tab for your stats
+  if (e.code === 'KeyN' && !game.paused) { if (!e.repeat) toggleDecks(); e.preventDefault(); return; }    // … and N hides the decks (hud.js)
+  if (game.over) { if (e.code === 'Space') e.preventDefault(); return; }   // (v0.57, user: Space never presses Retry)
   if (game.practice && onPracticeKey(e)) return;   // the store's test mode: 1–3 fire, Esc goes back
-  if (NET.run && e.code === 'KeyE') { NET.holdE = true; e.preventDefault(); return; }   // co-op: hold E to revive a friend who's down
+  // co-op: hold E to revive a friend who's down (with nobody down by you, E is VAMPIRIC BALLSACK, as on your own)
+  if (NET.run && e.code === 'KeyE') { NET.holdE = true; if (!e.repeat && !reviveNear()) trySack(); e.preventDefault(); return; }
   if (NET.run && !e.repeat) {                      // co-op: 1–3 pick a level-up card
     const d = /^(?:Digit|Numpad)([1-3])$/.exec(e.code);
     if (d && pickNow) { choosePick(+d[1] - 1); e.preventDefault(); return; }
@@ -132,17 +141,18 @@ addEventListener('keydown', e => {
   if (game.cine?.kind === 'summon' && !game.paused && (e.code === 'Space' || e.code === 'Enter')) { if (!e.repeat) skipIntro(); e.preventDefault(); return; }   // skip MAKORA's intro (user)
   if (MOVE[e.code]) { keys.add(e.code); e.preventDefault(); }
   if (e.code === 'Space') { if (!e.repeat) tryDash(); e.preventDefault(); }   // BULL relic (user: Space)
-  if (e.code === 'KeyP') { if (!e.repeat) tryDeflect(); e.preventDefault(); }   // DEFLECT relic (user, v0.48: P)
+  if (e.code === 'KeyQ') { if (!e.repeat) tryDeflect(); e.preventDefault(); }   // DEFLECT relic (v0.54, user: Q; P before)
+  if (e.code === 'KeyE') { if (!e.repeat) trySack(); e.preventDefault(); }      // VAMPIRIC BALLSACK (v0.54, user: E)
   if (e.code === 'Escape') { togglePause(); e.preventDefault(); }             // pause (user: Esc)
 });
-addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyE') NET.holdE = false; });
-addEventListener('blur', () => { keys.clear(); NET.holdE = false; autoPause(); });
+addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyE') NET.holdE = false; if (e.code === 'Tab') showStats(false); if (game.over && e.code === 'Space') e.preventDefault(); });
+addEventListener('blur', () => { keys.clear(); NET.holdE = false; showStats(false); autoPause(); });
 // Alt-tab, another window or a hidden tab pauses the run (user).
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); else releaseHold(); });
 addEventListener('focus', releaseHold);
 function autoPause() {
   if (NET.run) return;                               // co-op: the fight goes on for everyone
-  if (game.inMenu || game.over || game.choosing || game.paused || game.practice || !(deck || mdeck)) return;
+  if (game.inMenu || game.over || game.choosing || game.paused || game.practice || !(deck || mdeck || wdeck)) return;
   // During MAKORA's black-screen scenes it just holds, with no pause menu, and carries on when you come back
   // (v0.33, user: alt-tab there froze the scene, or a click landed on the pause menu hidden behind it)
   if (game.cine) { game.cineHold = true; return; }
@@ -173,7 +183,7 @@ const pauseMenu = document.getElementById('pause-menu');
 pauseBtn.addEventListener('click', togglePause);
 document.getElementById('btn-resume').addEventListener('click', togglePause);
 document.getElementById('btn-exit').addEventListener('click', () => exitToTitle());
-function togglePause() { if (!game.over && !game.choosing) setPaused(!game.paused); }
+function togglePause() { if (!game.over && !game.choosing && !game.cleared) setPaused(!game.paused); }   // (game.cleared: MAKORA's run-cleared screen, v0.69)
 function setPaused(on) {
   game.paused = on;
   pauseBtn.textContent = on ? 'Resume' : 'Pause';

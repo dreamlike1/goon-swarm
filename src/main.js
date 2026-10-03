@@ -23,14 +23,18 @@ function frame(now) {
     // co-op (coop.js): a guest only draws what the host sends; the host runs the fight for everyone, even with its
     // pause menu open, and sends each friend a picture of it
     if (NET.guest && NET.run) { if (!game.inMenu && !game.over) guestFrame(dt); }
-    else if ((!game.paused || NET.run) && !game.cineHold && !game.inMenu && !game.over && !game.choosing && (deck || mdeck || game.practice)) {
+    else if (game.practice?.demo) { audio.quiet = true; try { menuDemoFrame(dt); } finally { audio.quiet = false; } }   // the main menu's fight, silent (menus.js)
+    else if ((!game.paused || NET.run) && !game.cineHold && !game.inMenu && !game.over && !game.choosing && !game.cleared && (deck || mdeck || wdeck || game.practice)) {   // (game.cleared: MAKORA's run-cleared screen, v0.69)
       update(dt);
       if (NET.run) { usePlayer(NET.me); pickTimeouts(); tickPick(); reviveHud(); }
     }
     if (NET.host && NET.run) flushSnaps();
+    archiveSeen();                                   // a new enemy met unlocks in the Archives (archive.js)
     const R = DECK_VIEWS.ranged.next, Me = DECK_VIEWS.melee.next;   // each deck's next card fills as its timer runs
     if (R) R.style.setProperty('--p', game.enemies.length ? 1 - Math.max(0, game.cooldown) / game.cdTotal : 0);
     if (Me) Me.style.setProperty('--p', 1 - Math.max(0, game.mcool) / (game.mcdTotal || 1));   // (the melee deck never waits)
+    const Wi = DECK_VIEWS.wild.next;                 // the Wild deck's (v0.62): a melee one never waits, a ranged one does
+    if (Wi) Wi.style.setProperty('--p', wdeck && !isMelee(Wi.dataset.card) && !game.enemies.length ? 0 : 1 - Math.max(0, game.wcool) / (game.wcdTotal || 1));
     draw();
     syncMusic(dt);
   } catch (err) { console.error(err); }
@@ -41,7 +45,7 @@ requestAnimationFrame(frame);
 // For poking at the game from the browser console. resetSave() wipes this computer's progress
 // (the starter pack can then be opened again), so it is a testing tool only.
 window.__swarm = {
-  get deck() { return deck; }, get mdeck() { return mdeck; }, get seed() { return seed; }, get save() { return save; },
+  get deck() { return deck; }, get mdeck() { return mdeck; }, get wdeck() { return wdeck; }, get seed() { return seed; }, get save() { return save; },
   game, record, sameMix, rollPack, PACKS, gainXp, xpNeeded, stats, picks, upOdds, pickChoice,
   resetSave() { if (!game.inMenu) exitToTitle(); resetData(); },
 };
