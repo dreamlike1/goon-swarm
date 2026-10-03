@@ -59,7 +59,17 @@ const PACKS = {
                cards: ['tball', 'tballm'], event: true, any: true },
 };
 // v0.60 (user): the store's order and prices live in storeconfig.js (the store editor on localhost writes it).
-for (const [k, pk] of Object.entries(PACKS)) { pk.size = PACK_SIZE; pk.price = STORE_CONFIG.prices[k] ?? pk.price ?? PACK_PRICE; }
+// v0.72 (user: "discounts and a NEW banner on any pack"): the store editor also sets a discount (% off, 0–95) and a NEW flag per
+// pack. `base` is the price before the discount, `price` what's charged (everything reads `price`), `isNew` shows the ribbon.
+function setStorePricing(k, base, discount = 0, isNew = false) {
+  const pk = PACKS[k], off = Math.min(95, Math.max(0, Math.round(Number(discount) || 0)));
+  pk.base = base; pk.discount = off; pk.isNew = !!isNew;
+  pk.price = off ? Math.max(0, Math.round(base * (100 - off) / 100)) : base;
+}
+for (const [k, pk] of Object.entries(PACKS)) {
+  pk.size = PACK_SIZE;
+  setStorePricing(k, STORE_CONFIG.prices[k] ?? pk.price ?? PACK_PRICE, STORE_CONFIG.discounts?.[k], STORE_CONFIG.new?.[k]);
+}
 PACKS.tballs.weights = TBALL_ODDS;
 const STORE_PACKS = STORE_CONFIG.order.filter(k => PACKS[k]);   // the packs in the store, left to right (the editor reorders it in place)
 const STARTER = PACKS.starter;

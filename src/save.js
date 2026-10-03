@@ -21,7 +21,7 @@ const COPY_LIMIT = 14;         // copies of one card a deck can hold (v0.52, use
 // the deck needs at least `others` cards that aren't that one.
 const BALANCE = { over: 7, others: 7 };
 const OWN_LIMIT = 999;         // copies of one card you can own (v0.46, user: packs kept stopping at 5)
-const START_GOLD = 500;      // v0.70 (user: "default money is 500"): 500 (900 in v0.64, 1000 in v0.55, 350 in v0.53)
+const START_GOLD = 350;      // v0.72 (user: "edit starting money to 350"): 350 (500 in v0.70, 900 in v0.64, 1000 in v0.55, 350 in v0.53)
 // v0.53 (user: "reset the data of coins"): every save's gold goes back to START_GOLD once, when it next loads.
 const GOLD_RESET = 2;        // v0.55: 2, every save gets at least START_GOLD once
 const GOLD_PER = 15;           // 1 gold for every 15 enemies defeated in a run, paid when you die or quit (user; 50 until v0.43)

@@ -2104,14 +2104,7 @@ body.show-stats .statpanel { opacity: 1; translate: 0 0; }
   background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 35%, transparent), transparent 100%);
   filter: blur(3px); opacity: .55;
 }
-/* The T-Balls pack is the Event pack, so it glows (v0.67, user: "make the T-Balls pack glow a bit"): a bigger, brighter red
-   light behind it that breathes, and a red rim on the pack itself. */
-#store-packs .store-pack.pack-tballs:not(.is-short)::before { top: calc(6px - var(--w) * .11); width: calc(var(--w) * 1.5); height: calc(var(--w) * 1.62); opacity: .85; }
-.store-pack.pack-tballs:not(.is-short) .pack-art { filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .45)) drop-shadow(0 0 9px rgba(255, 51, 70, .6)); }
-.store-pack.pack-tballs.is-tilt:not(.is-short) .pack-art { filter: drop-shadow(var(--sx) 22px 18px rgba(0, 0, 0, .55)) drop-shadow(0 0 14px rgba(255, 51, 70, .8)); }
-#store-packs .store-pack.pack-tballs.is-tilt:not(.is-short)::before { opacity: 1; }
-@keyframes tball-glow { from { opacity: .55; scale: .95; } to { opacity: .95; scale: 1.06; } }
-@media (prefers-reduced-motion: no-preference) { #store-packs .store-pack.pack-tballs:not(.is-short):not(.is-tilt)::before { animation: tball-glow 2.4s ease-in-out infinite alternate; } }
+/* (v0.72, user: "instead of a glow to the new, add a NEW banner": the T-Balls pack's extra red glow is gone; a pack marked new wears the diagonal NEW ribbon, .pack-new below) */
 /* the store's title on the left, the coins beside it */
 .store-head { align-self: stretch; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 22px; text-align: left; padding-inline: 4px; }
 .store-head h2 { margin: 0; }
@@ -3081,11 +3074,27 @@ body.in-archive .bossbar, body.in-archive .intro { visibility: hidden; }
 .store-pack .pack-3d, .pv-head .pack-3d { --rx: 0deg; transform: rotateX(calc(var(--rx) + var(--swx))) rotateY(calc(var(--ry) + var(--sway)));
   transition: transform .5s cubic-bezier(.2, .9, .25, 1.2); }
 .store-pack.is-tilt .pack-3d, .pv-head .pack-art.is-tilt .pack-3d { transition: transform .12s ease-out; }
-.pack-slab { position: absolute; inset: 1px -1px 0; border-radius: 7px 7px 9px 9px; pointer-events: none;
+.pack-slab { position: absolute; left: -1px; right: -1px; pointer-events: none;
   transform: translateZ(calc(var(--T) * var(--i) * -.143));
   background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 40%, #000), color-mix(in srgb, var(--pc) 62%, #000) 50%, color-mix(in srgb, var(--pc) 36%, #000));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 70%, rgba(255, 255, 255, .5)); }
-.pack-art.is-ripping .pack-slab { display: none; }
+/* the slabs are cut like the seal and the body, so the diamonds where those two interlock stay see-through, as on the original pack */
+.pack-slab.is-seal { top: 0; height: 17%; border-radius: 6px 6px 0 0; clip-path: polygon(0 0, 100% 0, 100% 80%, 95% 100%, 90% 80%, 85% 100%, 80% 80%, 75% 100%, 70% 80%, 65% 100%, 60% 80%, 55% 100%, 50% 80%, 45% 100%, 40% 80%, 35% 100%, 30% 80%, 25% 100%, 20% 80%, 15% 100%, 10% 80%, 5% 100%, 0 80%); }
+.pack-slab.is-body { top: calc(17% - 3px); bottom: 0; border-radius: 0 0 8px 8px; clip-path: polygon(0 3%, 5% 0, 10% 3%, 15% 0, 20% 3%, 25% 0, 30% 3%, 35% 0, 40% 3%, 45% 0, 50% 3%, 55% 0, 60% 3%, 65% 0, 70% 3%, 75% 0, 80% 3%, 85% 0, 90% 3%, 95% 0, 100% 3%, 100% 100%, 0 100%); }
+.pack-art.is-ripping .pack-slab, .pack-art.is-ripping .pack-new { display: none; }
+/* the NEW ribbon (v0.72, user: "instead of a glow, a NEW banner, diagonal or a badge"): across the pack's top-left corner, set in the
+   store editor. It sits on the pack's face, so it turns with it. */
+.pack-new { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 6px 6px 8px 8px; transform: translateZ(2px); }
+.pack-new b { position: absolute; left: calc(var(--w) * -.27); top: calc(var(--w) * .13); width: calc(var(--w) * .8); padding: calc(var(--w) * .025) 0 calc(var(--w) * .02);
+  transform: rotate(-45deg); text-align: center; font: 400 calc(var(--w) * .1) / 1 var(--f-metal); letter-spacing: .2em; text-indent: .2em; text-transform: uppercase; color: #fff;
+  background: linear-gradient(180deg, #ff6a6a, #e2192e 55%, #a30d1f); box-shadow: 0 2px 5px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -1px 0 rgba(0, 0, 0, .3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.se-row .pack-new { display: none; }
+/* a pack on sale (v0.72): the new price, the old one struck through, and how much off */
+.pack-price.is-sale { gap: 7px; }
+.pack-was { color: var(--muted); font-weight: 600; font-size: .85em; text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: color-mix(in srgb, #ff4d5e 80%, transparent); opacity: .85; }
+.pack-off { padding: 2px 6px 1px; border-radius: 4px; font: 700 11px/1 var(--f-num); letter-spacing: .06em; color: #fff; background: linear-gradient(180deg, #ff5566, #c4162b); }
+#btn-buy .pack-was { margin-left: 8px; font-size: .78em; }
 
 /* v0.71 the maintenance note under the title's Start button (src/maintenance.js) */
 .maint-note { margin: 2px 0 0; font: 400 15px/1 var(--f-metal); letter-spacing: .24em; text-transform: uppercase; color: var(--logo-orange, #ff6a1c);

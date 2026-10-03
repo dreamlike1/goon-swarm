@@ -409,7 +409,8 @@ function packTop(key) {
 const PACK_LOGO = { bigger: 'Bigger<br>Weapons',   // (v0.59, user: the pack itself on two lines: BIGGER / WEAPONS; it said GUNS for a while)
   magus: '<span class="pack-logo-sm">Ulti</span><br>Magus' };   // (v0.60: a small gold ULTI over a big MAGUS, like a magic-show bill)
 const PACK_COVER = new Set(['starter', 'bigger', 'magus', 'silica', 'tballs']);   // packs with their own cover art (style.css .has-cover)
-const PACK_SLABS = Array.from({ length: 7 }, (_, i) => `<span class="pack-slab" style="--i:${i + 1}"></span>`).join('');
+// (two slabs per layer, one cut like the seal and one like the body, so the diamonds where they interlock stay see-through)
+const PACK_SLABS = Array.from({ length: 7 }, (_, i) => `<span class="pack-slab is-seal" style="--i:${i + 1}"></span><span class="pack-slab is-body" style="--i:${i + 1}"></span>`).join('');
 function packArt(key, { big = false } = {}) {
   const name = PACK_LOGO[key] || PACKS[key].short, top = packTop(key), shade = '<span class="pack-shade"></span><span class="pack-holo"></span>';
   // v0.68 (user: "make the packs 3D so it looks real like a pack"): the seal and the body sit in `.pack-3d`, which turns in
@@ -419,6 +420,7 @@ function packArt(key, { big = false } = {}) {
     + `<span class="pack-top">${shade}</span>`
     + `<span class="pack-body">${shade}<svg class="pack-emblem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PACK_EMBLEM[key]}</svg>`
     + `<span class="pack-logo">${name}</span><span class="pack-word">Pack</span></span>`   // (v0.59, user: no "10 cards" on the packs any more; v0.60, user: every one ends in PACK, all lined up)
+    + (PACKS[key].isNew ? '<span class="pack-new" aria-hidden="true"><b>New</b></span>' : '')   // (v0.72: the diagonal NEW ribbon, set in the store editor)
     + `</span></span>`;
 }
 
@@ -567,6 +569,11 @@ function showBoughtPack(k, from) {
 }
 
 /* ---------- store ---------- */
+// A pack's price (v0.72): the discounted one, with the old price struck through and "−20%" beside it when it's on sale.
+function priceHtml(pk) {
+  const sale = pk.discount ? `<s class="pack-was">${pk.base}</s><b class="pack-off">−${pk.discount}%</b>` : '';
+  return `<span class="pack-price${pk.discount ? ' is-sale' : ''}"><span class="coin" aria-hidden="true"></span>${pk.price}${sale}</span>`;
+}
 function renderStore() {
   renderGold();
   // v0.55 (user: minimal text, the pack first): only the pack and its price (the pack shows its name and size).
@@ -574,9 +581,9 @@ function renderStore() {
   const packs = STORE_PACKS;
   $('store-packs').innerHTML = packs.map((k, i) => {
     const pk = PACKS[k], short = save.gold < pk.price;
-    return `<button class="store-pack pack-${k}${short ? ' is-short' : ''}" type="button" data-pack="${k}" style="--i: ${i}" aria-label="${pk.name}, ${pk.price} gold: see what's inside">`
+    return `<button class="store-pack pack-${k}${short ? ' is-short' : ''}" type="button" data-pack="${k}" style="--i: ${i}" aria-label="${pk.name}, ${pk.price} gold${pk.discount ? ` (${pk.discount}% off)` : ''}: see what's inside">`
       + packArt(k)
-      + `<span class="pack-price"><span class="coin" aria-hidden="true"></span>${pk.price}</span>`
+      + priceHtml(pk)
       + `</button>`;
   }).join('');
 }
@@ -707,7 +714,7 @@ function renderPackView() {
   // v0.59 (user): no "Store" over it; your gold big at the top right; the list (and the details) fit the height of the
   // pack and its buttons, scrolling inside if they must; the details without a frame
   $('pv').innerHTML = `<div class="pv-head"><div class="pv-side">${packArt(k)}`
-    + `<div class="pv-buy"><button class="start" type="button" id="btn-buy"${afford ? '' : ' disabled'}>Buy <span class="coin" aria-hidden="true"></span>${pk.price}</button>`
+    + `<div class="pv-buy"><button class="start" type="button" id="btn-buy"${afford ? '' : ' disabled'}>Buy <span class="coin" aria-hidden="true"></span>${pk.price}${pk.discount ? `<s class="pack-was">${pk.base}</s>` : ''}</button>`
     + `<button type="button" class="pv-testpack" id="btn-testpack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${CARD_ICON.sniper}</svg>Test pack</button>`
     + (afford ? '' : `<span class="sub small">${pk.price - save.gold} more gold to go</span>`) + `</div></div>`
     // (v0.59, user's mockup: the title with your gold beside it, nothing under it; the list straight after)
